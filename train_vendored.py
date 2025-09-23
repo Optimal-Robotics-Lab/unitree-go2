@@ -93,8 +93,9 @@ def main(argv=None):
 
     action_scale = 0.5
 
+    flat_terrain = 'scene_sabotaged_mjx.xml'
     # flat_terrain = 'scene_vendored_mjx.xml'
-    flat_terrain = 'scene_mjx.xml'
+    # flat_terrain = 'scene_mjx.xml'
 
     environment_config = {
         "filename": flat_terrain,

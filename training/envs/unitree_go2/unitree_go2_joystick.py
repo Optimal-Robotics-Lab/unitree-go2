@@ -606,6 +606,14 @@ class UnitreeGo2Env(PipelineEnv):
         )
         return reward_air_time
 
+    def _air_time_variance_penalty(
+        self,
+        last_air_time: jax.Array,
+        last_contact_time: jax.Array,
+    ) -> jax.Array:
+        # Penalize variance in foot air time
+        return jnp.var(jnp.clip(last_air_time, max=0.5)) + jnp.var(jnp.clip(last_contact_time, max=0.5))
+
     def _reward_foot_slip(
         self,
         pipeline_state: base.State,

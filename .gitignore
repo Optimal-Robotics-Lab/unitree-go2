@@ -299,3 +299,6 @@ user.bazelrc
 
 # ONNX Models:
 # *.onnx
+
+# ONNX Virtual Environment:
+onnx_env/

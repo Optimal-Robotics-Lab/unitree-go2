@@ -1,5 +1,4 @@
 jax[cuda12]
-jax2onnx
 mujoco
 mujoco-mjx
 flax

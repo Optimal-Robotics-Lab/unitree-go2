@@ -40,17 +40,15 @@ def controller(
 def main(argv=None):
     filename = 'scene_mjx.xml'
     action_scale = 0.5
-    time_window = 5
 
     env = unitree_go2.UnitreeGo2Env(
         filename=filename,
         action_scale=action_scale,
-        time_window=time_window,
     )
 
     model_path = os.path.join(
         os.path.dirname(__file__),
-        f'{env.filename}',
+        f'training/envs/unitree_go2/{env.filename}',
     )
     model = mujoco.MjModel.from_xml_path(
         model_path,
