@@ -67,7 +67,7 @@ class UnitreeGo2Env(PipelineEnv):
         self.mode_time = reward_config.mode_time
         self.command_threshold = reward_config.command_threshold
         self.velocity_threshold = reward_config.velocity_threshold
-        self.foot_height = reward_config.foot_height
+        self.target_foot_height = reward_config.target_foot_height
         self.foot_clearance_velocity_scale = reward_config.foot_clearance_velocity_scale
         self.foot_clearance_sigma = reward_config.foot_clearance_sigma
         reward_config_dict = flax.serialization.to_state_dict(reward_config)
@@ -76,7 +76,7 @@ class UnitreeGo2Env(PipelineEnv):
         del reward_config_dict['mode_time']
         del reward_config_dict['command_threshold']
         del reward_config_dict['velocity_threshold']
-        del reward_config_dict['foot_height']
+        del reward_config_dict['target_foot_height']
         del reward_config_dict['foot_clearance_velocity_scale']
         del reward_config_dict['foot_clearance_sigma']
         self.reward_config = reward_config_dict
@@ -334,6 +334,7 @@ class UnitreeGo2Env(PipelineEnv):
         state.info['previous_contact_time'] = jnp.where(
             ~contact, state.info['feet_contact_time'], state.info['previous_contact_time'],
         )
+
         state.info['feet_air_time'] *= ~contact
         state.info['feet_contact_time'] *= contact
 
@@ -345,7 +346,8 @@ class UnitreeGo2Env(PipelineEnv):
         )
 
         # Body Velocity:
-        body_velocity = self.get_global_linvel(pipeline_state)
+        global_body_velocity = self.get_global_linvel(pipeline_state)
+        local_body_velocity = self.get_local_linvel(pipeline_state)
 
         # Observation data:
         observation = self.get_observation(
@@ -363,13 +365,13 @@ class UnitreeGo2Env(PipelineEnv):
         # Rewards:
         rewards = {
             'tracking_linear_velocity': (
-                self._reward_tracking_velocity(state.info['command'], body_velocity)
+                self._reward_tracking_velocity(state.info['command'], local_body_velocity)
             ),
             'tracking_angular_velocity': (
                 self._reward_tracking_yaw_rate(state.info['command'], self.get_gyro(pipeline_state))
             ),
             'linear_z_velocity': self._reward_vertical_velocity(
-                body_velocity,
+                global_body_velocity,
             ),
             'angular_xy_velocity': self._reward_angular_velocity(
                 self.get_global_angvel(pipeline_state),
@@ -392,14 +394,18 @@ class UnitreeGo2Env(PipelineEnv):
                 state.info['feet_air_time'],
                 state.info['feet_contact_time'],
                 state.info['command'],
-                body_velocity,
+                global_body_velocity,
                 self.mode_time,
                 self.command_threshold,
                 self.velocity_threshold,
             ),
+            'gait_variance': self._reward_gait_variance_penalty(
+                state.info['previous_air_time'],
+                state.info['previous_contact_time'],
+            ),
             'foot_clearance': self._reward_foot_clearance(
                 pipeline_state,
-                self.target_height,
+                self.target_foot_height,
                 self.foot_clearance_velocity_scale,
                 self.foot_clearance_sigma,
             ),
@@ -661,7 +667,7 @@ class UnitreeGo2Env(PipelineEnv):
         velocity_threshold: float = 0.5,
     ) -> jax.Array:
         # Calculate Mode Timing Reward
-        t_max = jnp.max([air_time, contact_time])
+        t_max = jnp.maximum(air_time, contact_time)
         t_min = jnp.clip(t_max, max=mode_time)
         stance_reward = jnp.clip(contact_time - air_time, -mode_time, mode_time)
         # Command and Body Velocity:
@@ -675,7 +681,7 @@ class UnitreeGo2Env(PipelineEnv):
         )
         return jnp.sum(reward)
 
-    def _air_time_variance_penalty(
+    def _reward_gait_variance_penalty(
         self,
         previous_air_time: jax.Array,
         previous_contact_time: jax.Array,
@@ -692,13 +698,13 @@ class UnitreeGo2Env(PipelineEnv):
     def _reward_foot_clearance(
         self,
         pipeline_state: base.State,
-        target_height: float = 0.1,
+        target_foot_height: float = 0.1,
         velocity_scale: float = 2.0,
         sigma: float = 0.05,
     ) -> jax.Array:
         foot_position = pipeline_state.site_xpos[self.feet_site_idx]
         foot_height = foot_position[..., -1]
-        foot_error = jnp.square(foot_height - target_height)
+        foot_error = jnp.square(foot_height - target_foot_height)
         foot_velocity = self.get_feet_velocity(pipeline_state)[..., :2]
         foot_velocity_norm = jnp.linalg.norm(foot_velocity)
         foot_velocity_tanh = jnp.tanh(velocity_scale * foot_velocity_norm)

@@ -53,7 +53,7 @@ def main(argv=None):
         tracking_linear_velocity=1.5,
         tracking_angular_velocity=0.75,
         # Orientation Regularization Terms:
-        orientation_regularization=-5.0,
+        orientation_regularization=-2.5,
         linear_z_velocity=-2.0,
         angular_xy_velocity=-0.05,
         # Energy Regularization Terms:
@@ -65,9 +65,18 @@ def main(argv=None):
         termination=-1.0,
         # Gait Reward Terms:
         foot_slip=-0.25,
-        air_time=0.2,
+        air_time=0.75,
+        foot_clearance=0.5,
+        gait_variance=-1.0,
         # Gait Hyperparameters:
         target_air_time=0.25,
+        mode_time=0.3,
+        command_threshold=0.0,
+        velocity_threshold=0.5,
+        # Foot Clearance Reward Terms:
+        target_foot_height=0.1,
+        foot_clearance_velocity_scale=2.0,
+        foot_clearance_sigma=0.05,
         # Hyperparameter for exponential kernel:
         kernel_sigma=0.25,
     )
@@ -93,9 +102,9 @@ def main(argv=None):
 
     action_scale = 0.5
 
-    flat_terrain = 'scene_sabotaged_mjx.xml'
+    # flat_terrain = 'scene_sabotaged_mjx.xml'
     # flat_terrain = 'scene_vendored_mjx.xml'
-    # flat_terrain = 'scene_mjx.xml'
+    flat_terrain = 'scene_mjx.xml'
 
     environment_config = {
         "filename": flat_terrain,

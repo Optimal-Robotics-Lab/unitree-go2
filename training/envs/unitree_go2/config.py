@@ -26,11 +26,17 @@ class RewardConfig:
     # Gait Reward Terms:
     foot_slip: float = -0.1
     air_time: float = 0.25
+    foot_clearance: float = 0.5
+    gait_variance: float = -1.0
     # Gait Hyperparameters:
     target_air_time: float = 0.5
     mode_time: float = 0.3
     command_threshold: float = 0.0
     velocity_threshold: float = 0.5
+    # Foot Clearance Reward Terms:
+    target_foot_height: float = 0.1
+    foot_clearance_velocity_scale: float = 2.0
+    foot_clearance_sigma: float = 0.05
     # Hyperparameter for exponential kernel:
     kernel_sigma: float = 0.25
 
