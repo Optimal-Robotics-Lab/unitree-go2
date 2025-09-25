@@ -28,6 +28,9 @@ class RewardConfig:
     air_time: float = 0.25
     # Gait Hyperparameters:
     target_air_time: float = 0.5
+    mode_time: float = 0.3
+    command_threshold: float = 0.0
+    velocity_threshold: float = 0.5
     # Hyperparameter for exponential kernel:
     kernel_sigma: float = 0.25
 
