@@ -151,6 +151,18 @@ class UnitreeGo2Env(PipelineEnv):
         assert not any(id_ == -1 for id_ in [imu_site_idx]), 'IMU site not found.'
         self.imu_site_idx = np.array(imu_site_idx)
 
+        calf_joint = [
+            "front_right_calf_joint",
+            "front_left_calf_joint",
+            "hind_right_calf_joint",
+            "hind_left_calf_joint",
+        ]
+        calf_joint_idx = [
+            mujoco.mj_name2id(sys.mj_model, mujoco.mjtObj.mjOBJ_JOINT.value, j)
+            for j in calf_joint
+        ]
+        self.calf_joint_idx = np.array(calf_joint_idx)
+
         # Sensors:
         self.feet_position_sensor = [
             "fr_pos",
@@ -173,7 +185,7 @@ class UnitreeGo2Env(PipelineEnv):
         self,
         rng: jax.Array,
     ) -> jax.Array:
-        _, command_key, stand_still_key = jax.random.split(rng, 3)
+        _, command_key, single_command_key, stand_still_key = jax.random.split(rng, 4)
 
         command = jax.random.uniform(
             command_key,
@@ -181,12 +193,24 @@ class UnitreeGo2Env(PipelineEnv):
             minval=-self.command_config.command_range,
             maxval=self.command_config.command_range,
         )
+        single_command_mask = jax.random.choice(
+            single_command_key,
+            a=jnp.array([
+                [1.0, 1.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0],
+            ]),
+            p=jnp.array([
+                1.0 - self.command_config.single_command_probability,
+                self.command_config.single_command_probability / 3.0,
+                self.command_config.single_command_probability / 3.0,
+                self.command_config.single_command_probability / 3.0
+            ]),
+        )
         stand_still_mask = jax.random.bernoulli(
             stand_still_key,
             p=self.command_config.command_mask_probability,
-            shape=(1,),
         )
 
+        command = single_command_mask * command
         command = stand_still_mask * command
 
         return command
@@ -408,6 +432,9 @@ class UnitreeGo2Env(PipelineEnv):
                 self.target_foot_height,
                 self.foot_clearance_velocity_scale,
                 self.foot_clearance_sigma,
+            ),
+            'unwanted_contact': self._reward_unwanted_contact(
+                pipeline_state,
             ),
             'termination': jnp.float64(
                 self._reward_termination(done)
@@ -723,6 +750,14 @@ class UnitreeGo2Env(PipelineEnv):
         foot_velocity_xy = foot_velocity[..., :2]
         velocity_xy_sq = jnp.sum(jnp.square(foot_velocity_xy), axis=-1)
         return jnp.sum(velocity_xy_sq * contact) * (command_norm > 0.1)
+    
+    def _reward_unwanted_contact(
+        self,
+        pipeline_state: base.State,
+    ) -> jax.Array:
+        # Surrogate collision penalty using joint xpos
+        calf_positions = pipeline_state.xanchor[self.calf_joint_idx]
+        return jnp.sum(calf_positions[..., 2] < 0.01)
 
     def _reward_termination(self, done: jax.Array) -> jax.Array:
         return done

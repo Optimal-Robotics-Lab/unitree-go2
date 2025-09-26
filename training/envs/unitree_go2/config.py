@@ -23,6 +23,7 @@ class RewardConfig:
     # Auxilary Terms:
     stand_still: float = -1.0
     termination: float = -1.0
+    unwanted_contact: float = -0.5
     # Gait Reward Terms:
     foot_slip: float = -0.1
     air_time: float = 0.25
@@ -67,9 +68,8 @@ class CommandConfig:
     command_range: jax.Array = flax.struct.field(
         default_factory=lambda: jnp.array([1.5, 1.0, 1.2]),
     )
-    command_mask_probability: jax.Array = flax.struct.field(
-        default_factory=lambda: jnp.array([0.8]),
-    )
+    single_command_probability: float = 0.9
+    command_mask_probability: float = 0.8
     command_frequency: list[float] = flax.struct.field(
         default_factory=lambda: [1.0, 5.0],
     )
