@@ -53,7 +53,7 @@ def main(argv=None):
         tracking_linear_velocity=1.5,
         tracking_angular_velocity=0.75,
         # Orientation Regularization Terms:
-        orientation_regularization=-2.5,
+        orientation_regularization=-5.0,
         linear_z_velocity=-2.0,
         angular_xy_velocity=-0.05,
         # Energy Regularization Terms:
@@ -64,7 +64,7 @@ def main(argv=None):
         stand_still=-1.0,
         termination=-1.0,
         # Gait Reward Terms:
-        foot_slip=-0.25,
+        foot_slip=-0.5,
         air_time=0.75,
         foot_clearance=0.5,
         gait_variance=-1.0,
