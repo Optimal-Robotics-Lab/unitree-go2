@@ -58,14 +58,14 @@ def main(argv=None):
         angular_xy_velocity=-0.05,
         # Energy Regularization Terms:
         torque=-2e-4,
-        action_rate=-0.01,
-        acceleration=-2.5e-5,
+        action_rate=-0.1,
+        acceleration=-2.5e-4,
         # Auxilary Terms:
         stand_still=-1.0,
         termination=-1.0,
         unwanted_contact=-0.5,
         # Gait Reward Terms:
-        foot_slip=-0.25,
+        foot_slip=-0.5,
         air_time=0.75,
         foot_clearance=0.5,
         gait_variance=-1.0,
@@ -96,7 +96,7 @@ def main(argv=None):
     )
 
     # Default Command Config:
-    command_config = config.CommandConfig()
+    # command_config = config.CommandConfig()
 
     # Long Horizon Command Config:
     # command_config = config.CommandConfig(
@@ -123,12 +123,12 @@ def main(argv=None):
     # )
 
     # Fast Command Tracking:
-    # command_config = config.CommandConfig(
-    #     command_range=jax.numpy.array([1.5, 1.0, 3.14]),
-    #     single_command_probability=0.0,
-    #     command_mask_probability=0.9,
-    #     command_frequency=[0.5, 2.0],
-    # )
+    command_config = config.CommandConfig(
+        command_range=jax.numpy.array([1.5, 1.0, 3.14]),
+        single_command_probability=0.0,
+        command_mask_probability=0.9,
+        command_frequency=[0.5, 2.0],
+    )
 
     # command_config = config.CommandConfig(
     #     command_range=jax.numpy.array([2.0, 1.5, 3.14]),

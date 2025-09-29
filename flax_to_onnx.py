@@ -9,7 +9,9 @@ import tf2onnx
 import tensorflow as tf
 from tensorflow.keras import layers
 
-from training.envs.unitree_go2.unitree_go2_joystick import UnitreeGo2Env
+# from training.envs.unitree_go2.unitree_go2_joystick import UnitreeGo2Env
+from training.envs.unitree_go2_velocity_control.unitree_go2_joystick import UnitreeGo2Env
+
 from training.algorithms.ppo.load_utilities import load_policy
 
 os.environ["MUJOCO_GL"] = "egl"
