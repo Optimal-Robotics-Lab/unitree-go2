@@ -25,11 +25,12 @@ from mujoco.mjx._src import math as mjx_math
 
 from training.envs.utilities import collisions
 
-from training.envs.unitree_go2.config import (
+from training.envs.unitree_go2_velocity_control.config import (
     RewardConfig,
     NoiseConfig,
     DisturbanceConfig,
     CommandConfig,
+    EnvironmentConfig,
 )
 
 # Types:
@@ -41,23 +42,22 @@ class UnitreeGo2Env(PipelineEnv):
 
     def __init__(
         self,
-        filename: str = 'scene_mjx.xml',
+        env_config: EnvironmentConfig = EnvironmentConfig(),
         reward_config: RewardConfig = RewardConfig(),
         noise_config: NoiseConfig = NoiseConfig(),
         disturbance_config: DisturbanceConfig = DisturbanceConfig(),
         command_config: CommandConfig = CommandConfig(),
-        action_scale: float = 0.5,
         **kwargs,
     ):
-        self.filename = f'mjcf/{filename}'
+        self.filename = f'mjcf/{env_config.filename}'
         self.filepath = os.path.join(
             os.path.dirname(__file__),
             self.filename,
         )
         sys = mjcf.load(self.filepath)
 
-        self.step_dt = 0.02
-        sys = sys.tree_replace({'opt.timestep': 0.004})
+        self.step_dt = env_config.control_timestep
+        sys = sys.tree_replace({'opt.timestep': env_config.optimizer_timestep})
 
         n_frames = kwargs.pop('n_frames', int(self.step_dt / sys.opt.timestep))
         super().__init__(sys, backend='mjx', n_frames=n_frames)
@@ -91,7 +91,7 @@ class UnitreeGo2Env(PipelineEnv):
         )
         self.base_link_mass = self.sys.mj_model.body_subtreemass[self.base_idx]
 
-        self.action_scale = action_scale
+        self.action_scale = env_config.action_scale
         self.init_q = jnp.array(sys.mj_model.keyframe('home').qpos)
         self.init_qd = jnp.zeros(sys.nv)
         self.default_pose = jnp.array(sys.mj_model.keyframe('home').qpos[7:])
@@ -935,53 +935,6 @@ class UnitreeGo2Env(PipelineEnv):
             'state': observation,
             'privileged_state': np.zeros((self.num_privileged_observations,)),
         }
-
-    def hardware_observation(
-        self,
-        imu_state: Any,
-        motor_state: Any,
-        command: np.ndarray,
-        previous_action: np.ndarray,
-    ) -> np.ndarray:
-        # Numpy implementation of the observation function:
-        def rotate(vec: np.ndarray, quat: np.ndarray) -> np.ndarray:
-            if len(vec.shape) != 1:
-                raise ValueError('vec must have no batch dimensions.')
-            s, u = quat[0], quat[1:]
-            r = 2 * (np.dot(u, vec) * u) + (s * s - np.dot(u, u)) * vec
-            r = r + 2 * s * np.cross(u, vec)
-            return r
-
-        def quat_inv(q: np.ndarray) -> np.ndarray:
-            return q * np.array([1, -1, -1, -1])
-
-        # Set to Correct Data Type:
-        base_rotation = np.asarray(imu_state.quaternion, dtype=np.float32)
-        gyroscope = np.asarray(imu_state.gyroscope, dtype=np.float32)
-        joint_positions = np.asarray(motor_state.q, dtype=np.float32)
-        joint_velocities = np.asarray(motor_state.qd, dtype=np.float32)
-
-        # Calculate Projected Gravity:
-        inverse_base_rotation = quat_inv(base_rotation)
-        projected_gravity = rotate(
-            np.array([0.0, 0.0, -1.0]),
-            inverse_base_rotation,
-        )
-
-        observation = np.concatenate([
-            gyroscope,
-            projected_gravity,
-            joint_positions - self.default_ctrl,
-            joint_velocities,
-            previous_action,
-            command,
-        ])
-
-        return {
-            'state': observation,
-            'privileged_state': np.zeros((self.num_privileged_observations,)),
-        }
-
 
 envs.register_environment('unitree_go2', UnitreeGo2Env)
 

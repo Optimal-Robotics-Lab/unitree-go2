@@ -73,3 +73,10 @@ class CommandConfig:
     command_frequency: list[float] = flax.struct.field(
         default_factory=lambda: [1.0, 5.0],
     )
+
+@flax.struct.dataclass
+class EnvironmentConfig:
+    filename: str = "scene_mjx.xml"
+    action_scale: float = 0.5
+    control_timestep: float = 0.02
+    optimizer_timestep: float = 0.004

@@ -58,8 +58,8 @@ def main(argv=None):
         angular_xy_velocity=-0.05,
         # Energy Regularization Terms:
         torque=-2e-4,
-        action_rate=-0.01,
-        acceleration=-2.5e-5,
+        action_rate=-0.1,
+        acceleration=-2.5e-4,
         # Auxilary Terms:
         stand_still=-1.0,
         termination=-1.0,
@@ -96,7 +96,7 @@ def main(argv=None):
     )
 
     # Default Command Config:
-    command_config = config.CommandConfig()
+    # command_config = config.CommandConfig()
 
     # Long Horizon Command Config:
     # command_config = config.CommandConfig(
@@ -123,12 +123,12 @@ def main(argv=None):
     # )
 
     # Fast Command Tracking:
-    # command_config = config.CommandConfig(
-    #     command_range=jax.numpy.array([1.5, 1.0, 3.14]),
-    #     single_command_probability=0.0,
-    #     command_mask_probability=0.9,
-    #     command_frequency=[0.5, 2.0],
-    # )
+    command_config = config.CommandConfig(
+        command_range=jax.numpy.array([1.5, 1.0, 3.14]),
+        single_command_probability=0.0,
+        command_mask_probability=0.9,
+        command_frequency=[0.5, 2.0],
+    )
 
     # command_config = config.CommandConfig(
     #     command_range=jax.numpy.array([2.0, 1.5, 3.14]),
@@ -137,35 +137,36 @@ def main(argv=None):
     #     command_frequency=[0.5, 2.0],
     # )
 
-    action_scale = 0.5
+    filename = "scene_mjx.xml"
+    # filename = 'scene_sabotaged_mjx.xml'
 
-    flat_terrain = 'scene_sabotaged_mjx.xml'
-    # flat_terrain = 'scene_mjx.xml'
+    env_config = config.EnvironmentConfig(
+        filename=filename,
+        action_scale=0.5,
+        control_timestep=0.01,
+        optimizer_timestep=0.002,
+    )
 
     environment_config = {
-        "filename": flat_terrain,
-        "reward_config": reward_config,
+        "env_config": env_config,
         "noise_config": noise_config,
         "disturbance_config": disturbance_config,
         "command_config": command_config,
-        "action_scale": action_scale,
     }
 
     env = unitree_go2_joystick.UnitreeGo2Env(
-        filename=flat_terrain,
+        env_config=env_config,
         reward_config=reward_config,
         noise_config=noise_config,
         disturbance_config=disturbance_config,
         command_config=command_config,
-        action_scale=action_scale,
     )
     eval_env = unitree_go2_joystick.UnitreeGo2Env(
-        filename=flat_terrain,
+        env_config=env_config,
         reward_config=reward_config,
         noise_config=noise_config,
         disturbance_config=disturbance_config,
-        command_config=command_config,
-        action_scale=action_scale,
+        command_config=command_config
     )
 
     # Metadata:

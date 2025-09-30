@@ -26,6 +26,29 @@ def _get_observation_size(
     return jax.tree.flatten(observation_size)[0][-1]
 
 
+class Encoder(nn.Module):
+    input_shape: Sequence[int]
+    layer_sizes: Sequence[int]
+    activation: ActivationFn = nn.tanh
+    kernel_init: Initializer = jax.nn.initializers.lecun_uniform()
+    bias: bool = True
+    layer_normalization: bool = False
+
+    @nn.compact
+    def __call__(self, x: jax.Array):
+        for i, layer_size in enumerate(self.layer_sizes):
+            x = nn.Conv(
+                features=layer_size,
+                kernel_init=self.kernel_init,
+                use_bias=self.bias,
+                name=f"conv_{i}",
+            )(x)
+            x = self.activation(x)
+            if self.layer_normalization:
+                x = nn.LayerNorm(name=f"layer_norm_{i}")(x)
+        return x
+
+
 class MLP(nn.Module):
     layer_sizes: Sequence[int]
     activation: ActivationFn = nn.tanh
