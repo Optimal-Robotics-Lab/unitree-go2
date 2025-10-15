@@ -1,5 +1,5 @@
 <mujoco model="go2-mjx scene">
-  <include file="go2_mjx.xml"/>
+  <include file="go2_mjx_position_control.xml"/>
 
   <statistic center="0 0 0.1" extent="0.8"/>
 
