@@ -477,7 +477,12 @@ class UnitreeGo2Env(PipelineEnv):
         self, qpos: jax.Array,
     ) -> jax.Array:
         # Reward for Handstand/Footstand Pose:
-        weight = jnp.array([1.0, 1.0, 0.1] * 4) / 12.0
+        weight = jnp.array([
+            0.1, 0.1, 0.1,
+            0.1, 0.1, 0.1,
+            1.0, 1.0, 0.1,
+            1.0, 1.0, 0.1,
+        ]) / 12.0
         # error = jnp.sum(jnp.square(qpos - self.default_pose) * weight)
         error = jnp.sum(jnp.square(qpos - self.footstand_pose) * weight)
         return jnp.exp(-error)
