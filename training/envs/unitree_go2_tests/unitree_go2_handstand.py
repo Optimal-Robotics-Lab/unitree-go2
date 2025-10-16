@@ -99,7 +99,7 @@ class UnitreeGo2Env(PipelineEnv):
         self.footstand_q = jnp.array(sys.mj_model.keyframe('footstand').qpos)
         self.footstand_pose = jnp.array(sys.mj_model.keyframe('footstand').qpos[7:])
         self.desired_height = 0.53
-        self.forward_vector = jnp.array([0.0, 0.0, 1.0])
+        self.desired_forward_vector = jnp.array([0.0, 0.0, 1.0])
 
         # Sites and Bodies:
         feet_geom = [
@@ -170,8 +170,8 @@ class UnitreeGo2Env(PipelineEnv):
         ]
 
         # Observation Size:
-        self.num_observations = 57
-        self.num_privileged_observations = self.num_observations + 103
+        self.num_observations = 42
+        self.num_privileged_observations = self.num_observations + 56
 
     def reset(self, rng: PRNGKey) -> State:  # pytype: disable=signature-mismatch
         # Initial Position:
@@ -263,7 +263,7 @@ class UnitreeGo2Env(PipelineEnv):
         return state
 
     def step(self, state: State, action: jax.Array) -> State:  # pytype: disable=signature-mismatch
-        rng, cmd_key, cmd_frequency_key = jax.random.split(state.info['rng'], 3)
+        rng, key = jax.random.split(state.info['rng'])
 
         # Disturbance: (Force based)
         state = self.maybe_apply_perturbation(state)
@@ -278,6 +278,7 @@ class UnitreeGo2Env(PipelineEnv):
         joint_angles = pipeline_state.q[7:]
         joint_velocities = pipeline_state.qd[6:]
         base_velocity = pipeline_state.qd[:6]
+        forward_vector = pipeline_state.site_xmat[self.imu_site_idx] @ jnp.array([1.0, 0.0, 0.0])
 
         # Foot contact data based on z-position:
         contact = jnp.array([
@@ -301,7 +302,7 @@ class UnitreeGo2Env(PipelineEnv):
                 self._reward_tracking_base_pose(imu_height)
             ),
             'tracking_orientation': self._reward_orientation_regularization(
-                self.get_upvector(pipeline_state),
+                forward_vector,
             ),
             'tracking_joint_pose': self._reward_joint_pose(
                 joint_angles,
@@ -312,11 +313,12 @@ class UnitreeGo2Env(PipelineEnv):
                 pipeline_state.qacc,
             ),
             'base_velocity': self._cost_base_velocity(
-                base_velocity,
+                forward_vector, base_velocity,
             ),
             'stand_still': self._cost_stand_still(
-                joint_angles,
+                forward_vector, joint_angles,
             ),
+            'feet_contact': self._cost_feet_contact(contact, alpha=1.0),
             'unwanted_contact': self._cost_unwanted_contact(
                 pipeline_state,
             ),
@@ -419,18 +421,18 @@ class UnitreeGo2Env(PipelineEnv):
             noisy_projected_gravity,                    # 3
             noisy_joint_positions - self.default_pose,  # 12
             noisy_joint_velocities,                     # 12
-            state_info['previous_action'],              # 24
-            state_info['command'],                      # 3
-        ])
+            state_info['previous_action'],              # 12
+        ]) # Size: 42
 
         accelerometer = self.get_accelerometer(pipeline_state)
         linear_velocity = self.get_local_linvel(pipeline_state)
         global_angular_velocity = self.get_global_angvel(pipeline_state)
         actuator_force = pipeline_state.actuator_force
         feet_velocity = self.get_feet_velocity(pipeline_state).ravel()
+        imu_height = pipeline_state.site_xpos[self.imu_site_idx][2]
 
         privileged_observation = jnp.concatenate([
-            observation,                                                                                # 57
+            observation,                                                                                # 42
             accelerometer,                                                                              # 3
             gyroscope,                                                                                  # 3
             projected_gravity,                                                                          # 3
@@ -439,19 +441,10 @@ class UnitreeGo2Env(PipelineEnv):
             q - self.default_pose,                                                                      # 12
             qd,                                                                                         # 12
             actuator_force,                                                                             # 12
-            feet_velocity,                                                                              # 12
+            imu_height,                                                                                 # 1
             state_info['previous_contact'],                                                             # 4
-            state_info['feet_air_time'],                                                                # 4
-            state_info['feet_contact_time'],                                                            # 4
-            state_info['previous_air_time'],                                                            # 4
-            state_info['previous_contact_time'],                                                        # 4
-            state_info['swing_peak'],                                                                   # 4
-            pipeline_state.xfrc_applied[self.base_idx, :3],                                             # 3
-            jnp.asarray([
-                state_info['steps_since_previous_disturbance'] >= state_info['steps_until_next_disturbance']
-            ]),                                                                                         # 1
         ])
-        # Size: 91
+        # Size: 56
 
         return {
             'state': observation,
@@ -466,10 +459,10 @@ class UnitreeGo2Env(PipelineEnv):
         return jnp.exp(-error / self.kernel_sigma)
 
     def _reward_orientation_regularization(
-        self, upvector: jax.Array,
+        self, forward_vector: jax.Array,
     ) -> jax.Array:
         # Reward Handstand/Footstand Orientation:
-        dot_product = jnp.dot(self.forward_vector, upvector)
+        dot_product = jnp.dot(forward_vector, self.desired_forward_vector)
         normalized = 0.5 * dot_product + 0.5
         return jnp.square(normalized)
 
@@ -480,9 +473,10 @@ class UnitreeGo2Env(PipelineEnv):
         weight = jnp.array([
             0.1, 0.1, 0.1,
             0.1, 0.1, 0.1,
-            1.0, 1.0, 0.1,
-            1.0, 1.0, 0.1,
-        ]) / 12.0
+            1.0, 1.0, 1.0,
+            1.0, 1.0, 1.0,
+        ])
+        weight = weight / jnp.sum(weight)
         # error = jnp.sum(jnp.square(qpos - self.default_pose) * weight)
         error = jnp.sum(jnp.square(qpos - self.footstand_pose) * weight)
         return jnp.exp(-error)
@@ -497,12 +491,6 @@ class UnitreeGo2Env(PipelineEnv):
         # Penalize changes in actions
         return jnp.sum(jnp.square(action - previous_action))
 
-    def _reward_mechanical_power(
-        self, qd: jax.Array, torques: jax.Array
-    ) -> jax.Array:
-        # Penalize mechanical power
-        return jnp.sum(jnp.abs(torques) * jnp.abs(qd))
-
     def _cost_acceleration(
         self, qacc: jax.Array,
     ) -> jax.Array:
@@ -511,13 +499,38 @@ class UnitreeGo2Env(PipelineEnv):
 
     def _cost_stand_still(
         self,
-        commands: jax.Array,
+        forward_vector: jax.Array,
         joint_angles: jax.Array,
     ) -> jax.Array:
-        # Penalize motion at zero commands
-        command_norm = jnp.linalg.norm(commands)
-        return jnp.sum(jnp.abs(joint_angles - self.default_pose)) * (command_norm < 0.1)
-    
+        # Penalize motion at target pose
+        dot_product = jnp.dot(forward_vector, self.desired_forward_vector)
+        target_pose = dot_product >= 0.85
+        return jnp.sum(jnp.abs(joint_angles - self.default_pose)) * (target_pose)
+
+    def _cost_base_velocity(
+        self,
+        forward_vector: jax.Array,
+        base_velocity: jax.Array,
+    ) -> jax.Array:
+        # Penalize base velocity at target pose
+        dot_product = jnp.dot(forward_vector, self.desired_forward_vector)
+        target_pose = dot_product >= 0.85
+        linear_velocity_xy_error = jnp.sum(jnp.square(base_velocity[:2]))
+        angular_velocity_z_error = jnp.square(base_velocity[5])
+        return (linear_velocity_xy_error + angular_velocity_z_error) * (target_pose)
+
+    def _cost_feet_contact(
+        self,
+        contact: jax.Array,
+        alpha: float = 1.0,
+    ) -> jax.Array:
+        # Reward Correct Feet Contact and Penalize Incorrect Feet Contact
+        correct_contact = jnp.sum(jnp.array([0, 0, 1, 1]) * contact)
+        incorrect_contact = jnp.sum(jnp.array([1, 1, 0, 0]) * contact)
+        # linear_reward = correct_contact - incorrect_contact
+        exponential_reward = jnp.exp(alpha * (correct_contact - incorrect_contact)) - 1.0
+        return exponential_reward
+
     def _cost_unwanted_contact(
         self,
         pipeline_state: base.State,
