@@ -1,5 +1,5 @@
 <mujoco model="go2-mjx scene">
-  <include file="go2_sabotaged_mjx.xml"/>
+  <include file="go2_mjx_full_collision.xml"/>
 
   <statistic center="0 0 0.1" extent="0.8"/>
 
@@ -22,9 +22,24 @@
     <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
   </worldbody>
 
+  <!-- Add Task Specific Contacts -->
+  <include file="handstand_contacts.xml"/>
+
+  <!-- Add Task Specific Sensors -->
+  <include file="foot_to_floor_collision_sensor.xml"/>
+  <include file="front_foot_to_hind_hip_collision_sensor.xml"/>
+  <include file="hind_calf_to_floor_collision_sensor.xml"/>
+  <include file="hind_thigh_to_floor_collision_sensor.xml"/>
+
   <keyframe>
     <key name="home" qpos="0 0 0.3 1 0 0 0 0.0 0.9 -1.8 0.0 0.9 -1.8 0.0 0.9 -1.8 0.0 0.9 -1.8"
-      ctrl="0 0.9 -1.8 0 0.9 -1.8 0 0.9 -1.8 0 0.9 -1.8 0 0 0 0 0 0 0 0 0 0 0 0"/>
+      ctrl="0 0.9 -1.8 0 0.9 -1.8 0 0.9 -1.8 0 0.9 -1.8"/>
+    <key name="footstand" qpos="0 0 0.54 0.8 0 -0.8 0 0 1.8 -1.6 0 1.8 -1.68 0 2.21 -1.4 0.0 2.21 -1.4"
+      ctrl="0 1.8 -1.6 0 1.8 -1.68 0 2.21 -1.4 0.0 2.21 -1.4"/>
+    <!-- <key name="footstand_original" qpos="0 0 0.55 0.8 0 -0.8 0 0 0.82 -1.6 0 0.82 -1.68 0 1.82 -1.16 0.0 1.82 -1.16"
+      ctrl="0 0.82 -1.6 0 0.82 -1.68 0 1.82 -1.16 0.0 1.82 -1.16"/>
+    <key name="footstand_tuned_original" qpos="0 0 0.54 0.8 0 -0.8 0 0 0.82 -1.6 0 0.82 -1.68 0 2.21 -1.4 0.0 2.21 -1.4"
+      ctrl="0 0.82 -1.6 0 0.82 -1.68 0 2.21 -1.4 0.0 2.21 -1.4"/> -->
   </keyframe>
 
 </mujoco>

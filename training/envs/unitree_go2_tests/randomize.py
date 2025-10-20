@@ -15,6 +15,7 @@ def domain_randomize(sys: System, rng: PRNGKey) -> tuple[System, System]:
         # Body IDs:
         FLOOR_BODY_ID = 0
         TORSO_BODY_ID = 1
+        NUM_JOINTS = sys.nv - 6
 
         # Floor Friction:
         rng, key = jax.random.split(rng)
@@ -24,14 +25,14 @@ def domain_randomize(sys: System, rng: PRNGKey) -> tuple[System, System]:
         # Joint Friction:
         rng, key = jax.random.split(rng)
         frictionloss = sys.dof_frictionloss[6:] * jax.random.uniform(
-            key, shape=(12,), minval=0.9, maxval=1.1,
+            key, shape=(NUM_JOINTS,), minval=0.9, maxval=1.1,
         )
         dof_frictionloss = sys.dof_frictionloss.at[6:].set(frictionloss)
 
         # Armature:
         rng, key = jax.random.split(rng)
         armature = sys.dof_armature[6:] * jax.random.uniform(
-            key, shape=(12,), minval=1.0, maxval=1.05,
+            key, shape=(NUM_JOINTS,), minval=1.0, maxval=1.05,
         )
         dof_armature = sys.dof_armature.at[6:].set(armature)
 
@@ -63,7 +64,7 @@ def domain_randomize(sys: System, rng: PRNGKey) -> tuple[System, System]:
         # Joint reference randomization:
         rng, key = jax.random.split(rng)
         qpos0 = sys.qpos0
-        delta = jax.random.uniform(key, shape=(12,), minval=-0.05, maxval=0.05)
+        delta = jax.random.uniform(key, shape=(NUM_JOINTS,), minval=-0.05, maxval=0.05)
         qpos0 = qpos0.at[7:].set(qpos0[7:] + delta)
 
         return (

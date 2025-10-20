@@ -8,15 +8,10 @@
 	<default>
         <default class="go2">
             <geom friction="0.6" contype="0" conaffinity="0" type="mesh"/>
-            <joint axis="0 1 0" armature="0.01"/>
+            <joint axis="0 1 0" damping="0.5" armature="0.01"/>
+            <position forcerange="-23.7 23.7" inheritrange="2" kp="35.0"/>
             <default class="go2/abduction">
                 <joint axis="1 0 0" range="-1.0472 1.0472" frictionloss="0.35"/>
-				<default class="go2/abduction/position">
-					<position forcerange="-23.7 23.7" inheritrange="2" kp="35.0"/>
-				</default>
-				<default class="go2/abduction/velocity">
-					<velocity forcerange="-23.7 23.7" ctrlrange="-3.14 3.14" kv="0.5"/>
-				</default>
             </default>
             <default class="go2/hip">
                 <default class="go2/front_hip">
@@ -25,21 +20,10 @@
                 <default class="go2/back_hip">
                     <joint range="-0.5236 4.5379" frictionloss="0.35"/>
                 </default>
-				<default class="go2/hip/position">
-					<position forcerange="-23.7 23.7" inheritrange="2" kp="35.0"/>
-				</default>
-				<default class="go2/hip/velocity">
-					<velocity forcerange="-23.7 23.7" ctrlrange="-3.14 3.14" kv="0.5"/>
-				</default>
             </default>
             <default class="go2/knee">
                 <joint range="-2.7227 -0.83776" frictionloss="1.35"/>
-				<default class="go2/knee/position">
-					<position forcerange="-45.43 45.43" inheritrange="2" kp="35.0"/>
-				</default>
-				<default class="go2/knee/velocity">
-					<velocity forcerange="-45.43 45.43" ctrlrange="-3.14 3.14" kv="0.5"/>
-				</default>
+                <position forcerange="-45.43 45.43"/>
             </default>
             <default class="go2/foot">
                 <site pos="-0.002 0 -0.213"/>
@@ -202,38 +186,25 @@
 	</worldbody>
 
 	<contact>
-        <pair name="right_front_foot_floor_contact" geom1="front_right" geom2="floor" solref="0.01 1" solimp="0.9 .95 0.022" condim="3" friction="0.8 0.8 0.02 0.01 0.01"/>
-		<pair name="right_hind_foot_floor_contact" geom1="hind_right" geom2="floor" solref="0.01 1" solimp="0.9 .95 0.022" condim="3" friction="0.8 0.8 0.02 0.01 0.01"/>
-		<pair name="left_front_foot_floor_contact" geom1="front_left" geom2="floor" solref="0.01 1" solimp="0.9 .95 0.022" condim="3" friction="0.8 0.8 0.02 0.01 0.01"/>
-		<pair name="left_hind_foot_floor_contact" geom1="hind_left" geom2="floor" solref="0.01 1" solimp="0.9 .95 0.022" condim="3" friction="0.8 0.8 0.02 0.01 0.01"/>
+        <pair name="front_right_foot_floor_contact" geom1="front_right" geom2="floor" solref="0.01 1" solimp="0.9 .95 0.022" condim="3" friction="0.8 0.8 0.02 0.01 0.01"/>
+		<pair name="hind_right_foot_floor_contact" geom1="hind_right" geom2="floor" solref="0.01 1" solimp="0.9 .95 0.022" condim="3" friction="0.8 0.8 0.02 0.01 0.01"/>
+		<pair name="front_left_foot_floor_contact" geom1="front_left" geom2="floor" solref="0.01 1" solimp="0.9 .95 0.022" condim="3" friction="0.8 0.8 0.02 0.01 0.01"/>
+		<pair name="hind_left_foot_floor_contact" geom1="hind_left" geom2="floor" solref="0.01 1" solimp="0.9 .95 0.022" condim="3" friction="0.8 0.8 0.02 0.01 0.01"/>
     </contact>
 
 	<actuator>
-        <position class="go2/abduction/position" name="front_right_hip_position" joint="front_right_hip_joint"/>
-        <position class="go2/hip/position" name="front_right_thigh_position" joint="front_right_thigh_joint"/>
-        <position class="go2/knee/position" name="front_right_calf_position" joint="front_right_calf_joint"/>
-        <position class="go2/abduction/position" name="front_left_hip_position" joint="front_left_hip_joint"/>
-        <position class="go2/hip/position" name="front_left_thigh_position" joint="front_left_thigh_joint"/>
-        <position class="go2/knee/position" name="front_left_calf_position" joint="front_left_calf_joint"/>
-        <position class="go2/abduction/position" name="hind_right_hip_position" joint="hind_right_hip_joint"/>
-        <position class="go2/hip/position" name="hind_right_thigh_position" joint="hind_right_thigh_joint"/>
-        <position class="go2/knee/position" name="hind_right_calf_position" joint="hind_right_calf_joint"/>
-        <position class="go2/abduction/position" name="hind_left_hip_position" joint="hind_left_hip_joint"/>
-        <position class="go2/hip/position" name="hind_left_thigh_position" joint="hind_left_thigh_joint"/>
-        <position class="go2/knee/position" name="hind_left_calf_position" joint="hind_left_calf_joint"/>
-
-		<velocity class="go2/abduction/velocity" name="front_right_hip_velocity" joint="front_right_hip_joint"/>
-		<velocity class="go2/hip/velocity" name="front_right_thigh_velocity" joint="front_right_thigh_joint"/>
-		<velocity class="go2/knee/velocity" name="front_right_calf_velocity" joint="front_right_calf_joint"/>
-		<velocity class="go2/abduction/velocity" name="front_left_hip_velocity" joint="front_left_hip_joint"/>
-		<velocity class="go2/hip/velocity" name="front_left_thigh_velocity" joint="front_left_thigh_joint"/>
-		<velocity class="go2/knee/velocity" name="front_left_calf_velocity" joint="front_left_calf_joint"/>
-		<velocity class="go2/abduction/velocity" name="hind_right_hip_velocity" joint="hind_right_hip_joint"/>
-		<velocity class="go2/hip/velocity" name="hind_right_thigh_velocity" joint="hind_right_thigh_joint"/>
-		<velocity class="go2/knee/velocity" name="hind_right_calf_velocity" joint="hind_right_calf_joint"/>
-		<velocity class="go2/abduction/velocity" name="hind_left_hip_velocity" joint="hind_left_hip_joint"/>
-		<velocity class="go2/hip/velocity" name="hind_left_thigh_velocity" joint="hind_left_thigh_joint"/>
-		<velocity class="go2/knee/velocity" name="hind_left_calf_velocity" joint="hind_left_calf_joint"/>
+        <position class="go2/abduction" name="front_right_hip" joint="front_right_hip_joint"/>
+        <position class="go2/hip" name="front_right_thigh" joint="front_right_thigh_joint"/>
+        <position class="go2/knee" name="front_right_calf" joint="front_right_calf_joint"/>
+        <position class="go2/abduction" name="front_left_hip" joint="front_left_hip_joint"/>
+        <position class="go2/hip" name="front_left_thigh" joint="front_left_thigh_joint"/>
+        <position class="go2/knee" name="front_left_calf" joint="front_left_calf_joint"/>
+        <position class="go2/abduction" name="hind_right_hip" joint="hind_right_hip_joint"/>
+        <position class="go2/hip" name="hind_right_thigh" joint="hind_right_thigh_joint"/>
+        <position class="go2/knee" name="hind_right_calf" joint="hind_right_calf_joint"/>
+        <position class="go2/abduction" name="hind_left_hip" joint="hind_left_hip_joint"/>
+        <position class="go2/hip" name="hind_left_thigh" joint="hind_left_thigh_joint"/>
+        <position class="go2/knee" name="hind_left_calf" joint="hind_left_calf_joint"/>
 	</actuator>
 
 	<sensor>
@@ -253,11 +224,7 @@
 		<framepos name="fl_pos" objtype="site" objname="front_left_foot" reftype="site" refname="imu"/>
 		<framepos name="hr_pos" objtype="site" objname="hind_right_foot" reftype="site" refname="imu"/>
 		<framepos name="hl_pos" objtype="site" objname="hind_left_foot" reftype="site" refname="imu"/>
-		<framelinacc name="fr_linacc" objtype="site" objname="front_right_foot"/>
-		<framelinacc name="fl_linacc" objtype="site" objname="front_left_foot"/>
-		<framelinacc name="hr_linacc" objtype="site" objname="hind_right_foot"/>
-		<framelinacc name="hl_linacc" objtype="site" objname="hind_left_foot"/>
-		
+
 		<!-- Globals: -->
 		<framezaxis name="upvector" objtype="site" objname="imu"/>
 		<framexaxis name="forwardvector" objtype="site" objname="imu"/>

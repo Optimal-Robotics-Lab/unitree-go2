@@ -8,46 +8,60 @@
 	<default>
         <default class="go2">
             <geom friction="0.6" contype="0" conaffinity="0" type="mesh"/>
-            <joint axis="0 1 0" armature="0.001" frictionloss="0.05"/>
+            <joint axis="0 1 0" damping="0.5" armature="0.01"/>
+            <position forcerange="-23.7 23.7" inheritrange="2" kp="35.0"/>
             <default class="go2/abduction">
-                <joint axis="1 0 0" range="-1.0472 1.0472"/>
-				<default class="go2/abduction/position">
-					<position forcerange="-23.7 23.7" inheritrange="2" kp="35.0"/>
-				</default>
-				<default class="go2/abduction/velocity">
-					<velocity forcerange="-23.7 23.7" ctrlrange="-3.14 3.14" kv="0.5"/>
-				</default>
+                <joint axis="1 0 0" range="-1.0472 1.0472" frictionloss="0.35"/>
             </default>
             <default class="go2/hip">
                 <default class="go2/front_hip">
-                    <joint range="-1.5708 3.4907"/>
+                    <joint range="-1.5708 3.4907" frictionloss="0.35"/>
                 </default>
                 <default class="go2/back_hip">
-                    <joint range="-0.5236 4.5379"/>
+                    <joint range="-0.5236 4.5379" frictionloss="0.35"/>
                 </default>
-				<default class="go2/hip/position">
-					<position forcerange="-23.7 23.7" inheritrange="2" kp="35.0"/>
-				</default>
-				<default class="go2/hip/velocity">
-					<velocity forcerange="-23.7 23.7" ctrlrange="-3.14 3.14" kv="0.5"/>
-				</default>
             </default>
             <default class="go2/knee">
-                <joint range="-2.7227 -0.83776"/>
-				<default class="go2/knee/position">
-					<position forcerange="-45.43 45.43" inheritrange="2" kp="35.0"/>
-				</default>
-				<default class="go2/knee/velocity">
-					<velocity forcerange="-45.43 45.43" ctrlrange="-3.14 3.14" kv="0.5"/>
-				</default>
+                <joint range="-2.7227 -0.83776" frictionloss="1.35"/>
+                <position forcerange="-45.43 45.43"/>
             </default>
             <default class="go2/foot">
                 <site pos="-0.002 0 -0.213"/>
             </default>
             <default class="go2/collision">
-                <geom group="3" contype="0" conaffinity="1"/>
+                <geom group="3" contype="0" conaffinity="2"/>
+				<default class="go2/collision/torso">
+					<geom type="capsule" size="0.058 0.125" quat="1 0 1 0"/>
+					<default class="go2/collision/torso/left">
+						<geom pos="0 0.04 0"/>
+					</default>
+					<default class="go2/collision/torso/right">
+						<geom pos="0 -0.04 0"/>
+					</default>
+				</default>
+				<default class="go2/collision/hip">
+					<geom type="capsule" size="0.046 0.02" pos="0 0.045 0" quat="1 1 0 0"/>
+					<default class="go2/collision/hip/left">
+						<geom pos="0 0.045 0"/>
+					</default>
+					<default class="go2/collision/hip/right">
+						<geom pos="0 -0.045 0"/>
+					</default>
+				</default>
+				<default class="go2/collision/thigh">
+					<geom type="capsule" size="0.02" fromto="-0.02 0 0 -0.01 0 -0.2"/>
+				</default>
+				<default class="go2/collision/calf">
+					<geom type="capsule" size="0.01"/>
+					<default class="go2/collision/calf/upper">
+						<geom type="capsule" size="0.01" fromto="0 0 0 0.02 0 -0.13"/>
+					</default>
+					<default class="go2/collision/calf/lower">
+						<geom fromto="0.02 0 -0.13 0 0 -0.2"/>
+					</default>
+				</default>
                 <default class="go2/collision/foot">
-                    <geom type="sphere" size="0.022" pos="-0.002 0 -0.213" solimp="0.9 .95 0.022" condim="6" friction="0.8 0.02 0.01"/>
+                    <geom type="sphere" size="0.022" pos="-0.002 0 -0.213" solimp="0.9 0.95 0.022" condim="6" friction="0.8 0.02 0.01"/>
                 </default>
             </default>
         </default>
@@ -87,6 +101,8 @@
 			<geom mesh="base_2" material="black" class="go2"/>
 			<geom mesh="base_3" material="white" class="go2"/>
 			<geom mesh="base_4" material="gray" class="go2"/>
+			<geom name="left_torso_collision" class="go2/collision/torso/left"/>
+			<geom name="right_torso_collision" class="go2/collision/torso/right"/>
 			<site name="imu" pos="-0.02557 0 0.04232"/>
 			<body name="front_right_hip" pos="0.1934 -0.0465 0">
 				<inertial pos="-0.0054 -0.00194 -0.000105" quat="0.498237 0.505462 0.499245 0.497014"
@@ -95,6 +111,7 @@
 				<joint name="front_right_hip_joint" class="go2/abduction"/>
 				<geom mesh="hip_0" material="metal" class="go2" quat="4.63268e-05 1 0 0"/>
 				<geom mesh="hip_1" material="gray" class="go2" quat="4.63268e-05 1 0 0"/>
+				<geom name="front_right_hip_collision" class="go2/collision/hip/right"/>
 				<body name="front_right_thigh" pos="0 -0.0955 0">
 					<inertial pos="-0.00374 0.0223 -0.0327" quat="0.551623 -0.0200632 0.0847635 0.829533"
 						mass="1.152"
@@ -102,6 +119,7 @@
 					<joint name="front_right_thigh_joint" class="go2/front_hip"/>
 					<geom mesh="thigh_mirror_0" material="metal" class="go2"/>
 					<geom mesh="thigh_mirror_1" material="gray" class="go2"/>
+					<geom name="front_right_thigh_collision" class="go2/collision/thigh"/>
 					<body name="front_right_calf" pos="0 0 -0.213">
 						<inertial pos="0.00629595 0.000622121 -0.141417"
                             quat="0.703508 -0.00450087 0.00154099 0.710672"
@@ -110,6 +128,8 @@
 						<geom mesh="calf_mirror_0" material="gray" class="go2"/>
 						<geom mesh="calf_mirror_1" material="black" class="go2"/>
 						<geom pos="0 0 -0.213" mesh="foot" class="go2" material="black"/>
+						<geom name="front_right_calf_upper_collision" class="go2/collision/calf/upper"/>
+						<geom name="front_right_calf_lower_collision" class="go2/collision/calf/lower"/>
 						<geom name="front_right" class="go2/collision/foot"/>
 						<site name="front_right_foot" class="go2/foot"/>
 					</body>
@@ -122,6 +142,7 @@
 				<joint name="front_left_hip_joint" class="go2/abduction"/>
 				<geom mesh="hip_0" material="metal" class="go2"/>
 				<geom mesh="hip_1" material="gray" class="go2"/>
+				<geom name="front_left_hip_collision" class="go2/collision/hip/left"/>
 				<body name="front_left_thigh" pos="0 0.0955 0">
 					<inertial pos="-0.00374 -0.0223 -0.0327" quat="0.829533 0.0847635 -0.0200632 0.551623"
 						mass="1.152"
@@ -129,6 +150,7 @@
 					<joint name="front_left_thigh_joint" class="go2/front_hip"/>
 					<geom mesh="thigh_0" material="metal" class="go2"/>
 					<geom mesh="thigh_1" material="gray" class="go2"/>
+					<geom name="front_left_thigh_collision" class="go2/collision/thigh"/>
 					<body name="front_left_calf" pos="0 0 -0.213">
 						<inertial pos="0.00629595 -0.000622121 -0.141417"
                             quat="0.710672 0.00154099 -0.00450087 0.703508"
@@ -137,6 +159,8 @@
 						<geom mesh="calf_0" material="gray" class="go2"/>
 						<geom mesh="calf_1" material="black" class="go2"/>
 						<geom pos="0 0 -0.213" mesh="foot" class="go2" material="black"/>
+						<geom name="front_left_calf_upper_collision" class="go2/collision/calf/upper"/>
+						<geom name="front_left_calf_lower_collision" class="go2/collision/calf/lower"/>
 						<geom name="front_left" class="go2/collision/foot"/>
 						<site name="front_left_foot" class="go2/foot"/>
 					</body>
@@ -151,6 +175,7 @@
 				    quat="2.14617e-09 4.63268e-05 4.63268e-05 -1"/>
 				<geom mesh="hip_1" material="gray" class="go2"
 					quat="2.14617e-09 4.63268e-05 4.63268e-05 -1"/>
+				<geom name="hind_right_hip_collision" class="go2/collision/hip/right"/>
 				<body name="hind_right_thigh" pos="0 -0.0955 0">
 					<inertial pos="-0.00374 0.0223 -0.0327" quat="0.551623 -0.0200632 0.0847635 0.829533"
 						mass="1.152"
@@ -158,6 +183,7 @@
 					<joint name="hind_right_thigh_joint" class="go2/back_hip"/>
 					<geom mesh="thigh_mirror_0" material="metal" class="go2"/>
 					<geom mesh="thigh_mirror_1" material="gray" class="go2"/>
+					<geom name="hind_right_thigh_collision" class="go2/collision/thigh"/>
 					<body name="hind_right_calf" pos="0 0 -0.213">
 						<inertial pos="0.00629595 0.000622121 -0.141417"
                             quat="0.703508 -0.00450087 0.00154099 0.710672"
@@ -166,6 +192,8 @@
 						<geom mesh="calf_mirror_0" material="gray" class="go2"/>
 						<geom mesh="calf_mirror_1" material="black" class="go2"/>
 						<geom pos="0 0 -0.213" mesh="foot" class="go2" material="black"/>
+						<geom name="hind_right_calf_upper_collision" class="go2/collision/calf/upper"/>
+						<geom name="hind_right_calf_lower_collision" class="go2/collision/calf/lower"/>
 						<geom name="hind_right" class="go2/collision/foot"/>
 						<site name="hind_right_foot" class="go2/foot"/>
 					</body>
@@ -178,6 +206,7 @@
 				<joint name="hind_left_hip_joint" class="go2/abduction"/>
 				<geom mesh="hip_0" material="metal" class="go2" quat="4.63268e-05 0 1 0"/>
 				<geom mesh="hip_1" material="gray" class="go2" quat="4.63268e-05 0 1 0"/>
+				<geom name="hind_left_hip_collision" class="go2/collision/hip/left"/>
 				<body name="hind_left_thigh" pos="0 0.0955 0">
 					<inertial pos="-0.00374 -0.0223 -0.0327" quat="0.829533 0.0847635 -0.0200632 0.551623"
 						mass="1.152"
@@ -185,6 +214,7 @@
 					<joint name="hind_left_thigh_joint" class="go2/back_hip"/>
 					<geom mesh="thigh_0" material="metal" class="go2"/>
 					<geom mesh="thigh_1" material="gray" class="go2"/>
+					<geom name="hind_left_thigh_collision" class="go2/collision/thigh"/>
 					<body name="hind_left_calf" pos="0 0 -0.213">
 						<inertial pos="0.00629595 -0.000622121 -0.141417"
                             quat="0.710672 0.00154099 -0.00450087 0.703508"
@@ -193,6 +223,8 @@
 						<geom mesh="calf_0" material="gray" class="go2"/>
 						<geom mesh="calf_1" material="black" class="go2"/>
 						<geom pos="0 0 -0.213" mesh="foot" class="go2" material="black"/>
+						<geom name="hind_left_calf_upper_collision" class="go2/collision/calf/upper"/>
+						<geom name="hind_left_calf_lower_collision" class="go2/collision/calf/lower"/>
 						<geom name="hind_left" class="go2/collision/foot"/>
 						<site name="hind_left_foot" class="go2/foot"/>
 					</body>
@@ -209,31 +241,18 @@
     </contact>
 
 	<actuator>
-        <position class="go2/abduction/position" name="front_right_hip_position" joint="front_right_hip_joint"/>
-        <position class="go2/hip/position" name="front_right_thigh_position" joint="front_right_thigh_joint"/>
-        <position class="go2/knee/position" name="front_right_calf_position" joint="front_right_calf_joint"/>
-        <position class="go2/abduction/position" name="front_left_hip_position" joint="front_left_hip_joint"/>
-        <position class="go2/hip/position" name="front_left_thigh_position" joint="front_left_thigh_joint"/>
-        <position class="go2/knee/position" name="front_left_calf_position" joint="front_left_calf_joint"/>
-        <position class="go2/abduction/position" name="hind_right_hip_position" joint="hind_right_hip_joint"/>
-        <position class="go2/hip/position" name="hind_right_thigh_position" joint="hind_right_thigh_joint"/>
-        <position class="go2/knee/position" name="hind_right_calf_position" joint="hind_right_calf_joint"/>
-        <position class="go2/abduction/position" name="hind_left_hip_position" joint="hind_left_hip_joint"/>
-        <position class="go2/hip/position" name="hind_left_thigh_position" joint="hind_left_thigh_joint"/>
-        <position class="go2/knee/position" name="hind_left_calf_position" joint="hind_left_calf_joint"/>
-
-		<velocity class="go2/abduction/velocity" name="front_right_hip_velocity" joint="front_right_hip_joint"/>
-		<velocity class="go2/hip/velocity" name="front_right_thigh_velocity" joint="front_right_thigh_joint"/>
-		<velocity class="go2/knee/velocity" name="front_right_calf_velocity" joint="front_right_calf_joint"/>
-		<velocity class="go2/abduction/velocity" name="front_left_hip_velocity" joint="front_left_hip_joint"/>
-		<velocity class="go2/hip/velocity" name="front_left_thigh_velocity" joint="front_left_thigh_joint"/>
-		<velocity class="go2/knee/velocity" name="front_left_calf_velocity" joint="front_left_calf_joint"/>
-		<velocity class="go2/abduction/velocity" name="hind_right_hip_velocity" joint="hind_right_hip_joint"/>
-		<velocity class="go2/hip/velocity" name="hind_right_thigh_velocity" joint="hind_right_thigh_joint"/>
-		<velocity class="go2/knee/velocity" name="hind_right_calf_velocity" joint="hind_right_calf_joint"/>
-		<velocity class="go2/abduction/velocity" name="hind_left_hip_velocity" joint="hind_left_hip_joint"/>
-		<velocity class="go2/hip/velocity" name="hind_left_thigh_velocity" joint="hind_left_thigh_joint"/>
-		<velocity class="go2/knee/velocity" name="hind_left_calf_velocity" joint="hind_left_calf_joint"/>
+        <position class="go2/abduction" name="front_right_hip" joint="front_right_hip_joint"/>
+        <position class="go2/hip" name="front_right_thigh" joint="front_right_thigh_joint"/>
+        <position class="go2/knee" name="front_right_calf" joint="front_right_calf_joint"/>
+        <position class="go2/abduction" name="front_left_hip" joint="front_left_hip_joint"/>
+        <position class="go2/hip" name="front_left_thigh" joint="front_left_thigh_joint"/>
+        <position class="go2/knee" name="front_left_calf" joint="front_left_calf_joint"/>
+        <position class="go2/abduction" name="hind_right_hip" joint="hind_right_hip_joint"/>
+        <position class="go2/hip" name="hind_right_thigh" joint="hind_right_thigh_joint"/>
+        <position class="go2/knee" name="hind_right_calf" joint="hind_right_calf_joint"/>
+        <position class="go2/abduction" name="hind_left_hip" joint="hind_left_hip_joint"/>
+        <position class="go2/hip" name="hind_left_thigh" joint="hind_left_thigh_joint"/>
+        <position class="go2/knee" name="hind_left_calf" joint="hind_left_calf_joint"/>
 	</actuator>
 
 	<sensor>
