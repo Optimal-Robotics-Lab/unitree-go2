@@ -23,11 +23,10 @@ from brax.io import mjcf, html
 import mujoco
 from mujoco.mjx._src import math as mjx_math
 
-from training.envs.unitree_go2_velocity_control.config import (
+from training.envs.unitree_go2_handstand.config import (
     RewardConfig,
     NoiseConfig,
     DisturbanceConfig,
-    CommandConfig,
     EnvironmentConfig,
 )
 
@@ -44,7 +43,6 @@ class UnitreeGo2Env(PipelineEnv):
         reward_config: RewardConfig = RewardConfig(),
         noise_config: NoiseConfig = NoiseConfig(),
         disturbance_config: DisturbanceConfig = DisturbanceConfig(),
-        command_config: CommandConfig = CommandConfig(),
         **kwargs,
     ):
         self.filename = f'mjcf/{env_config.filename}'
@@ -67,7 +65,6 @@ class UnitreeGo2Env(PipelineEnv):
 
         self.noise_config = noise_config
         self.disturbance_config = disturbance_config
-        self.command_config = command_config
 
         self.floor_geom_idx = self.sys.mj_model.geom('floor').id
         self.base_idx = mujoco.mj_name2id(
@@ -402,7 +399,6 @@ class UnitreeGo2Env(PipelineEnv):
                 relative_motor_positions,
                 motor_velocities,
                 previous_action,
-                command,
             ]
         """
         q = pipeline_state.q[7:]
