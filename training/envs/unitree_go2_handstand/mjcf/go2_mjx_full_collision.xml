@@ -8,8 +8,7 @@
 	<default>
         <default class="go2">
             <geom friction="0.6" contype="0" conaffinity="0" type="mesh"/>
-            <joint axis="0 1 0" damping="0.5" armature="0.01"/>
-            <position forcerange="-23.7 23.7" inheritrange="2" kp="35.0"/>
+            <joint axis="0 1 0" armature="0.01"/>
             <default class="go2/abduction">
                 <joint axis="1 0 0" range="-1.0472 1.0472" frictionloss="0.35"/>
             </default>
@@ -23,7 +22,6 @@
             </default>
             <default class="go2/knee">
                 <joint range="-2.7227 -0.83776" frictionloss="1.35"/>
-                <position forcerange="-45.43 45.43"/>
             </default>
             <default class="go2/foot">
                 <site pos="-0.002 0 -0.213"/>
@@ -239,21 +237,6 @@
 		<pair name="left_front_foot_floor_contact" geom1="front_left" geom2="floor" solref="0.01 1" solimp="0.9 .95 0.022" condim="3" friction="0.8 0.8 0.02 0.01 0.01"/>
 		<pair name="left_hind_foot_floor_contact" geom1="hind_left" geom2="floor" solref="0.01 1" solimp="0.9 .95 0.022" condim="3" friction="0.8 0.8 0.02 0.01 0.01"/>
     </contact>
-
-	<actuator>
-        <position class="go2/abduction" name="front_right_hip" joint="front_right_hip_joint"/>
-        <position class="go2/hip" name="front_right_thigh" joint="front_right_thigh_joint"/>
-        <position class="go2/knee" name="front_right_calf" joint="front_right_calf_joint"/>
-        <position class="go2/abduction" name="front_left_hip" joint="front_left_hip_joint"/>
-        <position class="go2/hip" name="front_left_thigh" joint="front_left_thigh_joint"/>
-        <position class="go2/knee" name="front_left_calf" joint="front_left_calf_joint"/>
-        <position class="go2/abduction" name="hind_right_hip" joint="hind_right_hip_joint"/>
-        <position class="go2/hip" name="hind_right_thigh" joint="hind_right_thigh_joint"/>
-        <position class="go2/knee" name="hind_right_calf" joint="hind_right_calf_joint"/>
-        <position class="go2/abduction" name="hind_left_hip" joint="hind_left_hip_joint"/>
-        <position class="go2/hip" name="hind_left_thigh" joint="hind_left_thigh_joint"/>
-        <position class="go2/knee" name="hind_left_calf" joint="hind_left_calf_joint"/>
-	</actuator>
 
 	<sensor>
 		<!-- IMU: -->

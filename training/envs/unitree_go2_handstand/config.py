@@ -51,6 +51,7 @@ class DisturbanceConfig:
 @flax.struct.dataclass
 class EnvironmentConfig:
     filename: str = "scene_mjx.xml"
+    control_type: str = "position"
     action_scale: float = 0.5
     control_timestep: float = 0.02
     optimizer_timestep: float = 0.004

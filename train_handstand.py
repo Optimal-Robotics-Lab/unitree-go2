@@ -52,21 +52,41 @@ def main(argv=None):
         # Rewards:
         tracking_base_pose=1.0,
         tracking_orientation=1.0,
-        tracking_joint_pose=0.5,
+        tracking_joint_pose=1.0,
         # Experimental Terms:
-        feet_contact=0.5,
+        feet_contact=0.1,
         # Energy Regularization Terms:
-        torque=-2e-4,
-        action_rate=-0.01,
-        acceleration=-2.5e-5,
+        torque=-2e-3,
+        action_rate=-0.1,
+        acceleration=-2.5e-4,
         # Penalty Terms:
-        base_velocity=-0.1,
+        base_velocity=-1.0,
         stand_still=-1.0,
         unwanted_contact=-1.0,
         termination=-1.0,
         # Hyperparameter for exponential kernel:
-        kernel_sigma=0.25,
+        kernel_sigma=0.1,
     )
+
+    # reward_config = config.RewardConfig(
+    #     # Rewards:
+    #     tracking_base_pose=1.0,
+    #     tracking_orientation=1.0,
+    #     tracking_joint_pose=0.5,
+    #     # Experimental Terms:
+    #     feet_contact=0.5,
+    #     # Energy Regularization Terms:
+    #     torque=-2e-4,
+    #     action_rate=-0.01,
+    #     acceleration=-2.5e-5,
+    #     # Penalty Terms:
+    #     base_velocity=-0.1,
+    #     stand_still=-1.0,
+    #     unwanted_contact=-1.0,
+    #     termination=-1.0,
+    #     # Hyperparameter for exponential kernel:
+    #     kernel_sigma=0.1,
+    # )
 
     # Noise Config:
     noise_config = config.NoiseConfig()
@@ -82,6 +102,7 @@ def main(argv=None):
 
     env_config = config.EnvironmentConfig(
         filename=filename,
+        control_type="position",
         action_scale=0.5,
         control_timestep=0.02,
         optimizer_timestep=0.004,
@@ -150,7 +171,7 @@ def main(argv=None):
 
     # Start Wandb and save metadata:
     run = wandb.init(
-        project='Unitree-Go2',
+        project='Unitree-Go2-Handstand',
         tags=[FLAGS.tag],
         config={
             'reward_config': reward_config,
