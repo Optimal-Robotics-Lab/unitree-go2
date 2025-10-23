@@ -264,6 +264,8 @@ class UnitreeGo2Env(PipelineEnv):
             'previous_velocity': jnp.zeros(self.num_joints),
             'previous_feet_contact': feet_contacts,
             'previous_unwanted_contacts': unwanted_contacts,
+            'front_feet_air_time': 0.0,
+            'first_contact': False,
             'rewards': {k: 0.0 for k in self.reward_config.keys()},
             'steps_until_next_disturbance': steps_until_next_disturbance,
             'disturbance_duration': disturbance_duration,
@@ -272,6 +274,7 @@ class UnitreeGo2Env(PipelineEnv):
             'disturbance_step': 0,
             'disturbance_magnitude': disturbance_magnitude,
             'disturbance_direction': jnp.array([0.0, 0.0, 0.0]),
+            'time': 0.0,
         }
 
         # Observation Initialization:
@@ -333,9 +336,34 @@ class UnitreeGo2Env(PipelineEnv):
             state.info,
         )
 
-        # Done if joint limits are reached or robot is falling:
+        # Termination Condition:
         done = self.get_upvector(pipeline_state)[-1] < -0.25
-        done |= imu_height < 0.05
+
+        # Old Termination:
+        # done |= imu_height < 0.05
+
+        # New Termination:
+        done |= imu_height < 0.1
+
+        # Terminate if front feet hit the ground after first contact:
+        # Calculate contacts and Contact Filter:
+        # front_feet_contact = jnp.any(feet_contacts[:2])
+
+        # new_contact_event = (state.info['front_feet_air_time'] > 0.0) & front_feet_contact
+
+        # # Check for Termination:
+        # done |= state.info['first_contact'] & new_contact_event
+
+        # # Update Contact Tracker:
+        # state.info['first_contact'] |= new_contact_event
+
+        # # Update Air Time:
+        # state.info['front_feet_air_time'] += self.dt
+        # state.info['front_feet_air_time'] *= (~front_feet_contact)
+
+        # Timing Based Termination:
+        # front_feet_contact = jnp.any(feet_contacts[:2])
+        # done |= ((state.info['time'] > 2.0) & front_feet_contact)
 
         # Rewards:
         rewards = {
@@ -360,6 +388,9 @@ class UnitreeGo2Env(PipelineEnv):
                 forward_vector, joint_angles,
             ),
             'feet_contact': self._cost_feet_contact(feet_contacts, alpha=1.0),
+            'feet_slip': self._cost_feet_slip(
+                pipeline_state, feet_contacts
+            ),
             'unwanted_contact': self._cost_unwanted_contact(
                 unwanted_contacts,
             ),
@@ -381,6 +412,9 @@ class UnitreeGo2Env(PipelineEnv):
         state.info['previous_unwanted_contacts'] = unwanted_contacts
         state.info['rewards'] = rewards
         state.info['rng'] = rng
+
+        # Auto Reset Wrapper does not reset state.info:
+        state.info['time'] = jnp.where(done, 0.0, state.info['time'] + self.dt)
         
         state.metrics.update(state.info['rewards'])
 
@@ -492,24 +526,46 @@ class UnitreeGo2Env(PipelineEnv):
         self, pose: jax.Array
     ) -> jax.Array:
         # Reward Correct Height:
-        error = jnp.sum(jnp.square(pose - self.desired_height))
+        base_height = jnp.min(jnp.array([pose, self.desired_height]))
+        error = jnp.sum(jnp.square(base_height - self.desired_height))
         return jnp.exp(-error / self.kernel_sigma)
 
+    # def _reward_tracking_orientation(
+    #     self, forward_vector: jax.Array,
+    # ) -> jax.Array:
+    #     # Reward Handstand/Footstand Orientation:
+    #     dot_product = jnp.dot(forward_vector, self.desired_forward_vector)
+    #     normalized = 0.5 * dot_product + 0.5
+    #     return jnp.square(normalized)
+    
     def _reward_tracking_orientation(
-        self, forward_vector: jax.Array,
+        self,
+        forward_vector: jax.Array,
+        kernel_sigma: float = 0.25,
     ) -> jax.Array:
+        '''
+            Sigma tuning: Desired Allowed Angle Deviation to achieve 61% Reward
+                sigma = 2 * (allowed_angle * pi / 180)^2
+
+                Ex. Angle Deviation of 20 Degrees to achieve 61% Reward
+                    sigma = 2 * (20 * pi / 180)^2 = 0.24
+        '''
         # Reward Handstand/Footstand Orientation:
-        dot_product = jnp.dot(forward_vector, self.desired_forward_vector)
-        normalized = 0.5 * dot_product + 0.5
-        return jnp.square(normalized)
+        dot_product = jnp.clip(
+            jnp.dot(forward_vector, self.desired_forward_vector),
+            -1.0,
+            1.0,
+        )
+        error = jnp.square(jnp.arccos(dot_product))
+        return jnp.exp(-error / kernel_sigma)
 
     def _reward_tracking_joint_pose(
         self, qpos: jax.Array,
     ) -> jax.Array:
         # Reward for Handstand/Footstand Pose:
         weight = jnp.array([
-            0.1, 0.1, 0.1,
-            0.1, 0.1, 0.1,
+            1.0, 1.0, 1.0,
+            1.0, 1.0, 1.0,
             1.0, 1.0, 1.0,
             1.0, 1.0, 1.0,
         ])
@@ -550,7 +606,8 @@ class UnitreeGo2Env(PipelineEnv):
     ) -> jax.Array:
         # Penalize base velocity at target pose
         dot_product = jnp.dot(forward_vector, self.desired_forward_vector)
-        target_pose = dot_product >= self.target_pose_threshold
+        # target_pose = dot_product >= self.target_pose_threshold
+        target_pose = 1.0
         linear_velocity_xy_error = jnp.sum(jnp.square(base_velocity[:2]))
         angular_velocity_z_error = jnp.square(base_velocity[5])
         return (linear_velocity_xy_error + angular_velocity_z_error) * (target_pose)
@@ -563,9 +620,20 @@ class UnitreeGo2Env(PipelineEnv):
         # Reward Correct Feet Contact and Penalize Incorrect Feet Contact
         correct_contact = jnp.sum(jnp.array([0, 0, 1, 1]) * contact)
         incorrect_contact = jnp.sum(jnp.array([1, 1, 0, 0]) * contact)
-        # linear_reward = correct_contact - incorrect_contact
-        exponential_reward = jnp.exp(alpha * (correct_contact - incorrect_contact)) - 1.0
-        return exponential_reward
+        reward = (correct_contact - incorrect_contact) / 2.0
+        # reward = jnp.exp(alpha * (correct_contact - incorrect_contact)) - 1.0
+        return reward
+
+    def _cost_feet_slip(
+        self,
+        pipeline_state: base.State,
+        contact: jax.Array,
+    ) -> jax.Array:
+        # Penalize foot slip
+        foot_velocity = self.get_feet_velocity(pipeline_state)
+        foot_velocity_xy = foot_velocity[..., :2]
+        velocity_xy_sq = jnp.sum(jnp.square(foot_velocity_xy), axis=-1)
+        return jnp.sum(velocity_xy_sq * contact)
 
     def _cost_unwanted_contact(
         self,

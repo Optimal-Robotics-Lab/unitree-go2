@@ -12,7 +12,7 @@ class RewardConfig:
     # Rewards:
     tracking_base_pose: float = 1.0
     tracking_orientation: float = 1.0
-    tracking_joint_pose: float = 0.5
+    tracking_joint_pose: float = 1.0
     # Experimental Terms:
     feet_contact: float = 0.5
     # Energy Regularization Terms:
@@ -20,8 +20,9 @@ class RewardConfig:
     action_rate: float = -0.01
     acceleration: float = -2.5e-7
     # Penalty Terms:
-    base_velocity: float = -0.1
+    base_velocity: float = -1.0
     stand_still: float = -1.0
+    feet_slip: float = -0.1
     unwanted_contact: float = -1.0
     termination: float = -1.0
     # Hyperparameter for exponential kernel:

@@ -56,37 +56,18 @@ def main(argv=None):
         # Experimental Terms:
         feet_contact=0.1,
         # Energy Regularization Terms:
-        torque=-2e-3,
-        action_rate=-0.1,
-        acceleration=-2.5e-4,
+        torque=-2e-4,
+        action_rate=-0.01,
+        acceleration=-2.5e-5,
         # Penalty Terms:
         base_velocity=-1.0,
         stand_still=-1.0,
+        feet_slip=-0.25,
         unwanted_contact=-1.0,
         termination=-1.0,
         # Hyperparameter for exponential kernel:
         kernel_sigma=0.1,
     )
-
-    # reward_config = config.RewardConfig(
-    #     # Rewards:
-    #     tracking_base_pose=1.0,
-    #     tracking_orientation=1.0,
-    #     tracking_joint_pose=0.5,
-    #     # Experimental Terms:
-    #     feet_contact=0.5,
-    #     # Energy Regularization Terms:
-    #     torque=-2e-4,
-    #     action_rate=-0.01,
-    #     acceleration=-2.5e-5,
-    #     # Penalty Terms:
-    #     base_velocity=-0.1,
-    #     stand_still=-1.0,
-    #     unwanted_contact=-1.0,
-    #     termination=-1.0,
-    #     # Hyperparameter for exponential kernel:
-    #     kernel_sigma=0.1,
-    # )
 
     # Noise Config:
     noise_config = config.NoiseConfig()
@@ -151,7 +132,7 @@ def main(argv=None):
         normalize_advantages=True,
     )
     training_metadata = checkpoint_utilities.training_metadata(
-        num_epochs=20,
+        num_epochs=50,
         num_training_steps=20,
         episode_length=1000,
         num_policy_steps=40,
