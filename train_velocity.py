@@ -97,7 +97,7 @@ def main(argv=None):
     # )
 
     # Default Command Config:
-    command_config = config.CommandConfig()
+    # command_config = config.CommandConfig()
 
     # Long Horizon Command Config:
     # command_config = config.CommandConfig(
@@ -124,12 +124,12 @@ def main(argv=None):
     # )
 
     # Fast Command Tracking:
-    # command_config = config.CommandConfig(
-    #     command_range=jax.numpy.array([1.5, 1.0, 3.14]),
-    #     single_command_probability=0.0,
-    #     command_mask_probability=0.9,
-    #     command_frequency=[0.5, 2.0],
-    # )
+    command_config = config.CommandConfig(
+        command_range=jax.numpy.array([1.5, 1.0, 3.14]),
+        single_command_probability=0.0,
+        command_mask_probability=0.9,
+        command_frequency=[0.5, 2.0],
+    )
 
     # command_config = config.CommandConfig(
     #     command_range=jax.numpy.array([2.0, 1.5, 3.14]),

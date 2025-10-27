@@ -548,7 +548,8 @@ class UnitreeGo2Env(PipelineEnv):
         contact: jax.Array,
     ) -> jax.Array:
         # This does not make sense...
-        return jnp.any(contact)
+        front_feet_contact = jnp.array([1, 1, 0, 0]) * contact
+        return jnp.any(front_feet_contact)
 
     def _cost_termination(self, done: jax.Array) -> jax.Array:
         return done
