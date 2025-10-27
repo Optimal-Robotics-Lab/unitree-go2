@@ -69,6 +69,7 @@ def main(argv=None):
         air_time=0.75,
         foot_clearance=0.5,
         gait_variance=-1.0,
+        foot_acceleration=-1.0e-4,
         # Gait Hyperparameters:
         target_air_time=0.25,
         mode_time=0.3,
@@ -86,17 +87,17 @@ def main(argv=None):
     noise_config = config.NoiseConfig()
 
     # Default Disturbance Config:
-    # disturbance_config = config.DisturbanceConfig()
+    disturbance_config = config.DisturbanceConfig()
 
     # Soft Disturbance Config:
-    disturbance_config = config.DisturbanceConfig(
-        wait_times=[1.0, 3.0],
-        durations=[0.05, 0.2],
-        magnitudes=[0.0, 1.0],
-    )
+    # disturbance_config = config.DisturbanceConfig(
+    #     wait_times=[1.0, 3.0],
+    #     durations=[0.05, 0.2],
+    #     magnitudes=[0.0, 1.0],
+    # )
 
     # Default Command Config:
-    # command_config = config.CommandConfig()
+    command_config = config.CommandConfig()
 
     # Long Horizon Command Config:
     # command_config = config.CommandConfig(
@@ -123,12 +124,12 @@ def main(argv=None):
     # )
 
     # Fast Command Tracking:
-    command_config = config.CommandConfig(
-        command_range=jax.numpy.array([1.5, 1.0, 3.14]),
-        single_command_probability=0.0,
-        command_mask_probability=0.9,
-        command_frequency=[0.5, 2.0],
-    )
+    # command_config = config.CommandConfig(
+    #     command_range=jax.numpy.array([1.5, 1.0, 3.14]),
+    #     single_command_probability=0.0,
+    #     command_mask_probability=0.9,
+    #     command_frequency=[0.5, 2.0],
+    # )
 
     # command_config = config.CommandConfig(
     #     command_range=jax.numpy.array([2.0, 1.5, 3.14]),
@@ -143,8 +144,8 @@ def main(argv=None):
     env_config = config.EnvironmentConfig(
         filename=filename,
         action_scale=0.5,
-        control_timestep=0.01,
-        optimizer_timestep=0.002,
+        control_timestep=0.02,
+        optimizer_timestep=0.004,
     )
 
     environment_config = {

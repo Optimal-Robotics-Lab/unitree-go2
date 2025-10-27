@@ -177,6 +177,13 @@ class UnitreeGo2Env(PipelineEnv):
             "hl_global_linvel",
         ]
 
+        self.feet_linear_acceleration_sensor = [
+            "front_right_foot_acceleration",
+            "front_left_foot_acceleration",
+            "hind_right_foot_acceleration",
+            "hind_left_foot_acceleration"
+        ]
+
         # Observation Size:
         self.num_observations = 57
         self.num_privileged_observations = self.num_observations + 103
@@ -433,6 +440,9 @@ class UnitreeGo2Env(PipelineEnv):
                 self.foot_clearance_velocity_scale,
                 self.foot_clearance_sigma,
             ),
+            'foot_acceleration': self._reward_foot_acceleration(
+                pipeline_state,
+            ),
             'unwanted_contact': self._reward_unwanted_contact(
                 pipeline_state,
             ),
@@ -669,20 +679,6 @@ class UnitreeGo2Env(PipelineEnv):
         command_norm = jnp.linalg.norm(commands)
         return jnp.sum(jnp.abs(joint_angles - self.default_pose)) * (command_norm < 0.1)
 
-    # def _reward_air_time(
-    #     self,
-    #     air_time: jax.Array,
-    #     first_contact: jax.Array,
-    #     commands: jax.Array,
-    # ) -> jax.Array:
-    #     # Flight Phase Reward:
-    #     command_norm = jnp.linalg.norm(commands)
-    #     reward_air_time = jnp.sum((air_time - self.target_air_time) * first_contact)
-    #     reward_air_time *= (
-    #         command_norm > 0.1
-    #     )
-    #     return reward_air_time
-
     def _reward_air_time(
         self,
         air_time: jax.Array,
@@ -750,7 +746,15 @@ class UnitreeGo2Env(PipelineEnv):
         foot_velocity_xy = foot_velocity[..., :2]
         velocity_xy_sq = jnp.sum(jnp.square(foot_velocity_xy), axis=-1)
         return jnp.sum(velocity_xy_sq * contact) * (command_norm > 0.1)
-    
+
+    def _reward_foot_acceleration(
+        self,
+        pipeline_state: base.State,
+    ) -> jax.Array:
+        # Penalize foot acceleration
+        foot_acceleration = self.get_feet_acceleration(pipeline_state)
+        return jnp.sqrt(jnp.sum(jnp.square(foot_acceleration)))
+
     def _reward_unwanted_contact(
         self,
         pipeline_state: base.State,
@@ -811,6 +815,12 @@ class UnitreeGo2Env(PipelineEnv):
         return jnp.vstack([
             self.get_sensor_data(self.sys.mj_model, pipeline_state, sensor_name)
             for sensor_name in self.feet_linear_velocity_sensor
+        ])
+
+    def get_feet_acceleration(self, pipeline_state: base.State) -> jax.Array:
+        return jnp.vstack([
+            self.get_sensor_data(self.sys.mj_model, pipeline_state, sensor_name)
+            for sensor_name in self.feet_linear_acceleration_sensor
         ])
 
     # Adapted from mujoco_playground:

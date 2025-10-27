@@ -29,6 +29,7 @@ class RewardConfig:
     air_time: float = 0.25
     foot_clearance: float = 0.5
     gait_variance: float = -1.0
+    foot_acceleration: float = -1.0e-3
     # Gait Hyperparameters:
     target_air_time: float = 0.5
     mode_time: float = 0.3

@@ -253,12 +253,17 @@
 		<framepos name="fl_pos" objtype="site" objname="front_left_foot" reftype="site" refname="imu"/>
 		<framepos name="hr_pos" objtype="site" objname="hind_right_foot" reftype="site" refname="imu"/>
 		<framepos name="hl_pos" objtype="site" objname="hind_left_foot" reftype="site" refname="imu"/>
+		<framelinacc name="front_right_foot_acceleration" objtype="site" objname="front_right_foot"/>
+		<framelinacc name="front_left_foot_acceleration" objtype="site" objname="front_left_foot"/>
+		<framelinacc name="hind_right_foot_acceleration" objtype="site" objname="hind_right_foot"/>
+		<framelinacc name="hind_left_foot_acceleration" objtype="site" objname="hind_left_foot"/>
 
 		<!-- Globals: -->
 		<framezaxis name="upvector" objtype="site" objname="imu"/>
 		<framexaxis name="forwardvector" objtype="site" objname="imu"/>
 		<framelinvel name="global_linvel" objtype="site" objname="imu"/>
 		<frameangvel name="global_angvel" objtype="site" objname="imu"/>
+		
 	</sensor>
 
 </mujoco>
