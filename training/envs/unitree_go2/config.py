@@ -81,3 +81,4 @@ class EnvironmentConfig:
     action_scale: float = 0.5
     control_timestep: float = 0.02
     optimizer_timestep: float = 0.004
+    recover_from_footstand: bool = False

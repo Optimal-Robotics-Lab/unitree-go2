@@ -84,6 +84,7 @@ class UnitreeGo2Env(PipelineEnv):
         self.noise_config = noise_config
         self.disturbance_config = disturbance_config
         self.command_config = command_config
+        self.recover_from_footstand = env_config.recover_from_footstand
 
         self.floor_geom_idx = self.sys.mj_model.geom('floor').id
         self.base_idx = mujoco.mj_name2id(
@@ -92,11 +93,15 @@ class UnitreeGo2Env(PipelineEnv):
         self.base_link_mass = self.sys.mj_model.body_subtreemass[self.base_idx]
 
         self.action_scale = env_config.action_scale
-        self.init_q = jnp.array(sys.mj_model.keyframe('home').qpos)
-        self.init_qd = jnp.zeros(sys.nv)
+        self.home_qpos = jnp.array(sys.mj_model.keyframe('home').qpos)
+        self.home_qvel = jnp.zeros(sys.nv)
         self.default_pose = jnp.array(sys.mj_model.keyframe('home').qpos[7:])
         self.default_ctrl = jnp.array(sys.mj_model.keyframe('home').ctrl)
         self.joint_lb, self.joint_ub = self.sys.mj_model.jnt_range[1:].T
+
+        if self.recover_from_footstand:
+            self.footstand_qpos = jnp.array(sys.mj_model.keyframe('footstand').qpos)
+            self.foot_stand_pose = jnp.array(sys.mj_model.keyframe('footstand').qpos[7:])
 
         # Sites and Bodies:
         feet_geom = [
@@ -229,28 +234,48 @@ class UnitreeGo2Env(PipelineEnv):
         return command
 
     def reset(self, rng: PRNGKey) -> State:  # pytype: disable=signature-mismatch
+        # Choose Initial Position and Velocity:
+        if self.recover_from_footstand:
+            rng, key = jax.random.split(rng)
+            initial_qpos = jax.random.choice(
+                key,
+                a=jnp.array([self.home_qpos, self.footstand_qpos]),
+                p=jnp.array([0.0, 1.0]),
+            )
+        else:
+            initial_qpos = self.home_qpos
+
+        initial_qvel = self.home_qvel
+
         # Initial Position:
         rng, key = jax.random.split(rng)
         delta = jax.random.uniform(
             key, shape=(2,), minval=-0.5, maxval=0.5,
         )
-        qpos = self.init_q.at[0:2].set(self.init_q[0:2] + delta)
+        qpos = initial_qpos.at[0:2].set(initial_qpos[0:2] + delta)
 
         # Yaw: Uniform [-pi, pi]
         rng, key = jax.random.split(rng)
         yaw = jax.random.uniform(key, (1,), minval=-jnp.pi, maxval=jnp.pi)
         rotation = mjx_math.axis_angle_to_quat(jnp.array([0, 0, 1]), yaw)
-        quaternion = mjx_math.quat_mul(self.init_q[3:7], rotation)
+        quaternion = mjx_math.quat_mul(initial_qpos[3:7], rotation)
         qpos = qpos.at[3:7].set(quaternion)
 
         # Initial Velocity: Normal STD Deviation 0.2 m/s
         rng, key = jax.random.split(rng)
-        qvel = self.init_qd.at[0:6].set(
+        qvel = initial_qvel.at[0:6].set(
             jax.random.uniform(key, (6,), minval=-0.5, maxval=0.5)
         )
 
-        qpos = self.init_q
-        qvel = self.init_qd
+        # Small Joint Perturbation:
+        rng, key = jax.random.split(rng)
+        delta = jax.random.uniform(
+            key,
+            shape=(self.sys.mj_model.nu,),
+            minval=-0.1,
+            maxval=0.1,
+        )
+        qpos = qpos.at[7:].set(qpos[7:] + delta)
 
         # Initialize State:
         pipeline_state = self.pipeline_init(qpos, qvel)

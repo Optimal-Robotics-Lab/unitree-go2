@@ -106,6 +106,7 @@ def main(argv=None):
         action_scale=0.5,
         control_timestep=0.02,
         optimizer_timestep=0.004,
+        recover_from_footstand=True,
     )
 
     env = unitree_go2_joystick.UnitreeGo2Env(
