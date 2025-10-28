@@ -589,7 +589,7 @@ class UnitreeGo2Env(PipelineEnv):
             global_angular_velocity,                                                                    # 3
             q - self.default_pose,                                                                      # 12
             qd,                                                                                         # 12
-            actuator_force,                                                                             # 12
+            actuator_force,                                                                             # 24
             feet_velocity,                                                                              # 12
             state_info['previous_contact'],                                                             # 4
             state_info['feet_air_time'],                                                                # 4
@@ -602,7 +602,7 @@ class UnitreeGo2Env(PipelineEnv):
                 state_info['steps_since_previous_disturbance'] >= state_info['steps_until_next_disturbance']
             ]),                                                                                         # 1
         ])
-        # Size: 91
+        # Size: 103
 
         return {
             'state': observation,
@@ -935,7 +935,7 @@ class UnitreeGo2Env(PipelineEnv):
         observation = np.concatenate([
             gyroscope,
             projected_gravity,
-            q - self.default_ctrl,
+            q - self.default_pose,
             qd,
             previous_action,
             command,

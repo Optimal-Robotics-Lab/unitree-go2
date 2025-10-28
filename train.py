@@ -63,46 +63,64 @@ def main(argv=None):
         # Auxilary Terms:
         stand_still=-1.0,
         termination=-1.0,
+        unwanted_contact=-1.0,
         # Gait Reward Terms:
-        foot_slip=-0.25,
-        air_time=0.2,
+        foot_slip=-0.5,
+        air_time=0.75,
+        foot_clearance=0.5,
+        gait_variance=-1.0,
         # Gait Hyperparameters:
         target_air_time=0.25,
+        mode_time=0.2,
+        command_threshold=0.0,
+        velocity_threshold=0.5,
+        # Foot Clearance Reward Terms:
+        target_foot_height=0.125,
+        foot_clearance_velocity_scale=2.0,
+        foot_clearance_sigma=0.05,
         # Hyperparameter for exponential kernel:
         kernel_sigma=0.25,
     )
 
     # Configs:
-    disturbance_config = config.DisturbanceConfig(
-        wait_times=[1.0, 3.0],
-        durations=[0.05, 0.2],
-        magnitudes=[0.0, 1.0],
-    )
+    noise_config = config.NoiseConfig()
 
+    # Default Disturbance Config:
+    disturbance_config = config.DisturbanceConfig()
+
+    # Default Command Config:
+    # command_config = config.CommandConfig()
+
+    # Fast Command Tracking:
     command_config = config.CommandConfig(
         command_range=jax.numpy.array([1.5, 1.0, 3.14]),
-        command_mask_probability=jax.numpy.array([0.9]),
+        single_command_probability=0.0,
+        command_mask_probability=0.9,
         command_frequency=[0.5, 2.0],
     )
 
-    action_scale = 0.5
-
     flat_terrain = 'scene_mjx.xml'
-    rough_terrain = 'scene_mjx_rough.xml'
+
+    environment_config = config.EnvironmentConfig(
+        filename=flat_terrain,
+        action_scale=0.5,
+        control_timestep=0.02,
+        optimizer_timestep=0.004,
+    )
 
     env = unitree_go2_joystick.UnitreeGo2Env(
-        filename=flat_terrain,
+        env_config=environment_config,
         reward_config=reward_config,
+        noise_config=noise_config,
         disturbance_config=disturbance_config,
         command_config=command_config,
-        action_scale=action_scale,
     )
     eval_env = unitree_go2_joystick.UnitreeGo2Env(
-        filename=flat_terrain,
+        env_config=environment_config,
         reward_config=reward_config,
+        noise_config=noise_config,
         disturbance_config=disturbance_config,
         command_config=command_config,
-        action_scale=action_scale,
     )
 
     # Metadata:
@@ -156,6 +174,7 @@ def main(argv=None):
             'network_metadata': network_metadata,
             'loss_metadata': loss_metadata,
             'training_metadata': training_metadata,
+            'environment_config': environment_config,
         },
     )
 

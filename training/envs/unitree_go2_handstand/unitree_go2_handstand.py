@@ -84,18 +84,14 @@ class UnitreeGo2Env(PipelineEnv):
         self.init_qd = jnp.zeros(sys.nv)
         self.default_pose = jnp.array(sys.mj_model.keyframe('home').qpos[7:])
         self.default_ctrl = jnp.array(sys.mj_model.keyframe('home').ctrl)
-        self.joint_lb = jnp.array([
-            -1.0472, -1.5708, -2.7227,
-            -1.0472, -1.5708, -2.7227,
-            -1.0472, -0.5236, -2.7227,
-            -1.0472, -0.5236, -2.7227,
-        ])
-        self.joint_ub = jnp.array([
-            1.0472, 3.4907, -0.83776,
-            1.0472, 3.4907, -0.83776,
-            1.0472, 4.5379, -0.83776,
-            1.0472, 4.5379, -0.83776,
-        ])
+        self.joint_lb, self.joint_ub = self.sys.mj_model.jnt_range[1:].T
+
+        # Soft Joint Limits:
+        c = (self.joint_lb + self.joint_ub) / 2.0
+        r = self.joint_ub - self.joint_lb
+        self.soft_joint_limit_factor = 0.9
+        self.soft_lb = c - 0.5 * r * self.soft_joint_limit_factor
+        self.soft_ub = c + 0.5 * r * self.soft_joint_limit_factor
 
         self.num_joints = self.sys.nv - 6
         self.nu = self.sys.nu
@@ -161,6 +157,28 @@ class UnitreeGo2Env(PipelineEnv):
             self.sys.mj_model.sensor(f'{foot_sensor_name}').id
             for foot_sensor_name in feet_sensor_names
         ]
+
+        # termination_sensor_names = [
+        #     "left_torso_to_floor",
+        #     "right_torso_to_floor",
+        # ]
+        termination_sensor_names = [
+            "left_torso_to_floor",
+            "right_torso_to_floor",
+            "hind_right_calf_upper_to_floor",
+            "hind_right_calf_lower_to_floor",
+            "hind_left_calf_upper_to_floor",
+            "hind_left_calf_lower_to_floor",
+            "hind_right_thigh_to_floor",
+            "hind_left_thigh_to_floor",
+            "front_right_foot_to_hind_right_hip",
+            "front_left_foot_to_hind_left_hip",
+        ]
+        self.termination_contact_sensor = [
+            self.sys.mj_model.sensor(f'{termination_sensor_name}').id
+            for termination_sensor_name in termination_sensor_names
+        ]
+        self.terminate_on_contact = env_config.terminate_on_contact
 
         unwanted_contact_sensor_names = [
             "front_right_foot_to_floor",
@@ -306,9 +324,9 @@ class UnitreeGo2Env(PipelineEnv):
         state = self.maybe_apply_perturbation(state)
 
         # Physics step:
-        motor_targets = state.pipeline_state.q[7:] + action * self.action_scale
+        # motor_targets = state.pipeline_state.q[7:] + action * self.action_scale
         # motor_targets = state.pipeline_state.ctrl + action * self.action_scale
-        # motor_targets = self.default_ctrl + action * self.action_scale
+        motor_targets = self.default_ctrl + action * self.action_scale
 
         pipeline_state = self.pipeline_step(
             state.pipeline_state, motor_targets,
@@ -329,6 +347,10 @@ class UnitreeGo2Env(PipelineEnv):
             pipeline_state.sensordata[self.sys.sensor_adr[sensor_id]] > 0
             for sensor_id in self.unwanted_contact_sensor
         ])
+        termination_contacts = jnp.array([
+            pipeline_state.sensordata[self.sys.sensor_adr[sensor_id]] > 0
+            for sensor_id in self.termination_contact_sensor
+        ])
 
         # Observation data:
         observation = self.get_observation(
@@ -337,33 +359,11 @@ class UnitreeGo2Env(PipelineEnv):
         )
 
         # Termination Condition:
-        done = self.get_upvector(pipeline_state)[-1] < -0.25
-
-        # Old Termination:
-        # done |= imu_height < 0.05
-
-        # New Termination:
-        done |= imu_height < 0.1
-
-        # Terminate if front feet hit the ground after first contact:
-        # Calculate contacts and Contact Filter:
-        # front_feet_contact = jnp.any(feet_contacts[:2])
-
-        # new_contact_event = (state.info['front_feet_air_time'] > 0.0) & front_feet_contact
-
-        # # Check for Termination:
-        # done |= state.info['first_contact'] & new_contact_event
-
-        # # Update Contact Tracker:
-        # state.info['first_contact'] |= new_contact_event
-
-        # # Update Air Time:
-        # state.info['front_feet_air_time'] += self.dt
-        # state.info['front_feet_air_time'] *= (~front_feet_contact)
-
-        # Timing Based Termination:
-        # front_feet_contact = jnp.any(feet_contacts[:2])
-        # done |= ((state.info['time'] > 2.0) & front_feet_contact)
+        done = self._get_termination(
+            pipeline_state,
+            termination_contacts,
+            terminate_on_contact=self.terminate_on_contact,
+        )
 
         # Rewards:
         rewards = {
@@ -393,6 +393,10 @@ class UnitreeGo2Env(PipelineEnv):
             ),
             'unwanted_contact': self._cost_unwanted_contact(
                 unwanted_contacts,
+            ),
+            'pose': self._cost_pose(joint_angles),
+            'joint_limits': self._cost_joint_position_limits(
+                joint_angles,
             ),
             'termination': jnp.float64(
                 self._cost_termination(done)
@@ -522,6 +526,12 @@ class UnitreeGo2Env(PipelineEnv):
             'privileged_state': privileged_observation,
         }
 
+    def _get_termination(self, pipeline_state: base.State, termination_contacts: jax.Array, terminate_on_contact: bool = False) -> jax.Array:
+        # Termination Condition:
+        done = self.get_upvector(pipeline_state)[-1] < -0.25
+        done |= terminate_on_contact * jnp.any(termination_contacts)
+        return done
+
     def _reward_tracking_base_pose(
         self, pose: jax.Array
     ) -> jax.Array:
@@ -589,6 +599,12 @@ class UnitreeGo2Env(PipelineEnv):
         # Penalize Motor/Joint Acceleration
         return jnp.sqrt(jnp.sum(jnp.square(qacc)))
 
+    def _cost_pose(
+        self, qpos: jax.Array,
+    ) -> jax.Array:
+        front_joint_ids = jnp.array([0, 1, 2, 3, 4, 5])
+        return jnp.sum(jnp.square(qpos[front_joint_ids] - self.default_pose[front_joint_ids]))
+    
     def _cost_stand_still(
         self,
         forward_vector: jax.Array,
@@ -597,7 +613,7 @@ class UnitreeGo2Env(PipelineEnv):
         # Penalize motion at target pose
         dot_product = jnp.dot(forward_vector, self.desired_forward_vector)
         target_pose = dot_product >= self.target_pose_threshold
-        return jnp.sum(jnp.abs(joint_angles -self.footstand_pose)) * (target_pose)
+        return jnp.sum(jnp.abs(joint_angles - self.footstand_pose)) * (target_pose)
 
     def _cost_base_velocity(
         self,
@@ -611,6 +627,14 @@ class UnitreeGo2Env(PipelineEnv):
         linear_velocity_xy_error = jnp.sum(jnp.square(base_velocity[:2]))
         angular_velocity_z_error = jnp.square(base_velocity[5])
         return (linear_velocity_xy_error + angular_velocity_z_error) * (target_pose)
+    
+    def _cost_joint_position_limits(
+        self, joint_angles: jax.Array,
+    ) -> jax.Array:
+        # Penalize joint angles outside of limits
+        out_of_limits = -jnp.clip(joint_angles - self.soft_lb, None, 0.0)
+        out_of_limits += jnp.clip(joint_angles - self.soft_ub, 0.0, None)
+        return jnp.sum(out_of_limits)
 
     def _cost_feet_contact(
         self,
@@ -752,6 +776,70 @@ class UnitreeGo2Env(PipelineEnv):
             wait,
             state,
         )
+
+    def np_observation(
+        self,
+        mj_data: mujoco.MjData,
+        previous_action: np.ndarray,
+        add_noise: bool = True,
+    ) -> np.ndarray:
+        # Numpy implementation of the observation function:
+        def rotate(vec: np.ndarray, quat: np.ndarray) -> np.ndarray:
+            if len(vec.shape) != 1:
+                raise ValueError('vec must have no batch dimensions.')
+            s, u = quat[0], quat[1:]
+            r = 2 * (np.dot(u, vec) * u) + (s * s - np.dot(u, u)) * vec
+            r = r + 2 * s * np.cross(u, vec)
+            return r
+
+        def quat_inv(q: np.ndarray) -> np.ndarray:
+            return q * np.array([1, -1, -1, -1])
+
+        base_w = mj_data.qpos[3:7]
+        q = mj_data.qpos[7:]
+        qd = mj_data.qvel[6:]
+
+        gyroscope = self.get_gyro(mj_data)
+
+        inverse_trunk_rotation = quat_inv(base_w)
+        projected_gravity = rotate(
+            np.array([0, 0, -1]), inverse_trunk_rotation,
+        )
+
+        if add_noise:
+            gyroscope = gyroscope + np.random.uniform(
+                low=-self.noise_config.gyroscope,
+                high=self.noise_config.gyroscope,
+                size=gyroscope.shape,
+            )
+            projected_gravity = projected_gravity + np.random.uniform(
+                low=-self.noise_config.gravity_vector,
+                high=self.noise_config.gravity_vector,
+                size=projected_gravity.shape,
+            )
+            q = q + np.random.uniform(
+                low=-self.noise_config.joint_position,
+                high=self.noise_config.joint_position,
+                size=q.shape,
+            )
+            qd = qd + np.random.uniform(
+                low=-self.noise_config.joint_velocity,
+                high=self.noise_config.joint_velocity,
+                size=qd.shape,
+            )
+
+        observation = np.concatenate([
+            gyroscope,
+            projected_gravity,
+            q - self.default_pose,
+            qd,
+            previous_action,
+        ])
+
+        return {
+            'state': observation,
+            'privileged_state': np.zeros((self.num_privileged_observations,)),
+        }
 
 envs.register_environment('unitree_go2', UnitreeGo2Env)
 

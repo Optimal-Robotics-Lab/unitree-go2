@@ -661,6 +661,70 @@ class UnitreeGo2Env(PipelineEnv):
             wait,
             state,
         )
+    
+    def np_observation(
+        self,
+        mj_data: mujoco.MjData,
+        previous_action: np.ndarray,
+        add_noise: bool = True,
+    ) -> np.ndarray:
+        # Numpy implementation of the observation function:
+        def rotate(vec: np.ndarray, quat: np.ndarray) -> np.ndarray:
+            if len(vec.shape) != 1:
+                raise ValueError('vec must have no batch dimensions.')
+            s, u = quat[0], quat[1:]
+            r = 2 * (np.dot(u, vec) * u) + (s * s - np.dot(u, u)) * vec
+            r = r + 2 * s * np.cross(u, vec)
+            return r
+
+        def quat_inv(q: np.ndarray) -> np.ndarray:
+            return q * np.array([1, -1, -1, -1])
+
+        base_w = mj_data.qpos[3:7]
+        q = mj_data.qpos[7:]
+        qd = mj_data.qvel[6:]
+
+        gyroscope = self.get_gyro(mj_data)
+
+        inverse_trunk_rotation = quat_inv(base_w)
+        projected_gravity = rotate(
+            np.array([0, 0, -1]), inverse_trunk_rotation,
+        )
+
+        if add_noise:
+            gyroscope = gyroscope + np.random.uniform(
+                low=-self.noise_config.gyroscope,
+                high=self.noise_config.gyroscope,
+                size=gyroscope.shape,
+            )
+            projected_gravity = projected_gravity + np.random.uniform(
+                low=-self.noise_config.gravity_vector,
+                high=self.noise_config.gravity_vector,
+                size=projected_gravity.shape,
+            )
+            q = q + np.random.uniform(
+                low=-self.noise_config.joint_position,
+                high=self.noise_config.joint_position,
+                size=q.shape,
+            )
+            qd = qd + np.random.uniform(
+                low=-self.noise_config.joint_velocity,
+                high=self.noise_config.joint_velocity,
+                size=qd.shape,
+            )
+
+        observation = np.concatenate([
+            gyroscope,
+            projected_gravity,
+            q - self.default_pose,
+            qd,
+            previous_action,
+        ])
+
+        return {
+            'state': observation,
+            'privileged_state': np.zeros((self.num_privileged_observations,)),
+        }
 
 envs.register_environment('unitree_go2', UnitreeGo2Env)
 

@@ -58,104 +58,32 @@ def main(argv=None):
         angular_xy_velocity=-0.05,
         # Energy Regularization Terms:
         torque=-2e-4,
-        action_rate=-0.1,
-        acceleration=-2.5e-4,
+        action_rate=-0.01,
+        acceleration=-2.5e-5,
         # Auxilary Terms:
         stand_still=-1.0,
         termination=-1.0,
-        unwanted_contact=-0.5,
         # Gait Reward Terms:
-        foot_slip=-0.5,
-        air_time=0.75,
-        foot_clearance=0.5,
-        gait_variance=-1.0,
+        foot_slip=-0.25,
+        air_time=0.2,
         # Gait Hyperparameters:
         target_air_time=0.25,
-        mode_time=0.3,
-        command_threshold=0.0,
-        velocity_threshold=0.5,
-        # Foot Clearance Reward Terms:
-        target_foot_height=0.125,
-        foot_clearance_velocity_scale=2.0,
-        foot_clearance_sigma=0.05,
         # Hyperparameter for exponential kernel:
         kernel_sigma=0.25,
     )
 
     # Configs:
-    noise_config = config.NoiseConfig()
+    disturbance_config = config.DisturbanceConfig()
 
-    # Default Disturbance Config:
-    # disturbance_config = config.DisturbanceConfig()
-
-    # Soft Disturbance Config:
-    disturbance_config = config.DisturbanceConfig(
-        wait_times=[1.0, 3.0],
-        durations=[0.05, 0.2],
-        magnitudes=[0.0, 1.0],
-    )
-
-    # Default Command Config:
-    # command_config = config.CommandConfig()
-
-    # Long Horizon Command Config:
-    # command_config = config.CommandConfig(
-    #     command_range=jax.numpy.array([1.5, 1.0, 1.2]),
-    #     single_command_probability=0.75,
-    #     command_mask_probability=0.9,
-    #     command_frequency=[1.0, 10.0],
-    # )
-
-    # Short Horizon Command Config:
-    # command_config = config.CommandConfig(
-    #     command_range=jax.numpy.array([1.5, 1.0, 1.2]),
-    #     single_command_probability=0.9,
-    #     command_mask_probability=0.9,
-    #     command_frequency=[1.0, 5.0],
-    # )
-
-    # Fast Long Horizon Command Config:
-    # command_config = config.CommandConfig(
-    #     command_range=jax.numpy.array([2.0, 1.5, 3.14]),
-    #     single_command_probability=0.9,
-    #     command_mask_probability=0.9,
-    #     command_frequency=[1.0, 10.0],
-    # )
-
-    # Fast Command Tracking:
-    command_config = config.CommandConfig(
-        command_range=jax.numpy.array([1.5, 1.0, 3.14]),
-        single_command_probability=0.0,
-        command_mask_probability=0.9,
-        command_frequency=[0.5, 2.0],
-    )
-
-    # command_config = config.CommandConfig(
-    #     command_range=jax.numpy.array([2.0, 1.5, 3.14]),
-    #     single_command_probability=0.0,
-    #     command_mask_probability=0.9,
-    #     command_frequency=[0.5, 2.0],
-    # )
+    command_config = config.CommandConfig()
 
     action_scale = 0.5
 
-    # flat_terrain = 'scene_sabotaged_mjx.xml'
-    # flat_terrain = 'scene_vendored_mjx.xml'
     flat_terrain = 'scene_mjx.xml'
-
-    environment_config = {
-        "filename": flat_terrain,
-        "reward_config": reward_config,
-        "noise_config": noise_config,
-        "disturbance_config": disturbance_config,
-        "command_config": command_config,
-        "action_scale": action_scale,
-    }
 
     env = unitree_go2_joystick.UnitreeGo2Env(
         filename=flat_terrain,
         reward_config=reward_config,
-        noise_config=noise_config,
         disturbance_config=disturbance_config,
         command_config=command_config,
         action_scale=action_scale,
@@ -163,7 +91,6 @@ def main(argv=None):
     eval_env = unitree_go2_joystick.UnitreeGo2Env(
         filename=flat_terrain,
         reward_config=reward_config,
-        noise_config=noise_config,
         disturbance_config=disturbance_config,
         command_config=command_config,
         action_scale=action_scale,
@@ -220,7 +147,6 @@ def main(argv=None):
             'network_metadata': network_metadata,
             'loss_metadata': loss_metadata,
             'training_metadata': training_metadata,
-            'environment_config': environment_config,
         },
     )
 

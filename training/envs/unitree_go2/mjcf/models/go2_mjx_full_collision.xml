@@ -128,7 +128,7 @@
 						<geom pos="0 0 -0.213" mesh="foot" class="go2" material="black"/>
 						<geom name="front_right_calf_upper_collision" class="go2/collision/calf/upper"/>
 						<geom name="front_right_calf_lower_collision" class="go2/collision/calf/lower"/>
-						<geom name="front_right" class="go2/collision/foot"/>
+						<geom name="front_right_foot_collision" class="go2/collision/foot"/>
 						<site name="front_right_foot" class="go2/foot"/>
 					</body>
 				</body>
@@ -159,7 +159,7 @@
 						<geom pos="0 0 -0.213" mesh="foot" class="go2" material="black"/>
 						<geom name="front_left_calf_upper_collision" class="go2/collision/calf/upper"/>
 						<geom name="front_left_calf_lower_collision" class="go2/collision/calf/lower"/>
-						<geom name="front_left" class="go2/collision/foot"/>
+						<geom name="front_left_foot_collision" class="go2/collision/foot"/>
 						<site name="front_left_foot" class="go2/foot"/>
 					</body>
 				</body>
@@ -192,7 +192,7 @@
 						<geom pos="0 0 -0.213" mesh="foot" class="go2" material="black"/>
 						<geom name="hind_right_calf_upper_collision" class="go2/collision/calf/upper"/>
 						<geom name="hind_right_calf_lower_collision" class="go2/collision/calf/lower"/>
-						<geom name="hind_right" class="go2/collision/foot"/>
+						<geom name="hind_right_foot_collision" class="go2/collision/foot"/>
 						<site name="hind_right_foot" class="go2/foot"/>
 					</body>
 				</body>
@@ -223,7 +223,7 @@
 						<geom pos="0 0 -0.213" mesh="foot" class="go2" material="black"/>
 						<geom name="hind_left_calf_upper_collision" class="go2/collision/calf/upper"/>
 						<geom name="hind_left_calf_lower_collision" class="go2/collision/calf/lower"/>
-						<geom name="hind_left" class="go2/collision/foot"/>
+						<geom name="hind_left_foot_collision" class="go2/collision/foot"/>
 						<site name="hind_left_foot" class="go2/foot"/>
 					</body>
 				</body>
@@ -232,10 +232,10 @@
 	</worldbody>
 
 	<contact>
-        <pair name="right_front_foot_floor_contact" geom1="front_right" geom2="floor" solref="0.01 1" solimp="0.9 .95 0.022" condim="3" friction="0.8 0.8 0.02 0.01 0.01"/>
-		<pair name="right_hind_foot_floor_contact" geom1="hind_right" geom2="floor" solref="0.01 1" solimp="0.9 .95 0.022" condim="3" friction="0.8 0.8 0.02 0.01 0.01"/>
-		<pair name="left_front_foot_floor_contact" geom1="front_left" geom2="floor" solref="0.01 1" solimp="0.9 .95 0.022" condim="3" friction="0.8 0.8 0.02 0.01 0.01"/>
-		<pair name="left_hind_foot_floor_contact" geom1="hind_left" geom2="floor" solref="0.01 1" solimp="0.9 .95 0.022" condim="3" friction="0.8 0.8 0.02 0.01 0.01"/>
+        <pair name="right_front_foot_floor_contact" geom1="front_right_foot_collision" geom2="floor" solref="0.01 1" solimp="0.9 .95 0.022" condim="3" friction="0.8 0.8 0.02 0.01 0.01"/>
+		<pair name="right_hind_foot_floor_contact" geom1="hind_right_foot_collision" geom2="floor" solref="0.01 1" solimp="0.9 .95 0.022" condim="3" friction="0.8 0.8 0.02 0.01 0.01"/>
+		<pair name="left_front_foot_floor_contact" geom1="front_left_foot_collision" geom2="floor" solref="0.01 1" solimp="0.9 .95 0.022" condim="3" friction="0.8 0.8 0.02 0.01 0.01"/>
+		<pair name="left_hind_foot_floor_contact" geom1="hind_left_foot_collision" geom2="floor" solref="0.01 1" solimp="0.9 .95 0.022" condim="3" friction="0.8 0.8 0.02 0.01 0.01"/>
     </contact>
 
 	<sensor>
@@ -245,22 +245,22 @@
 		<accelerometer name="imu_acceleration" site="imu"/>
 
 		<!-- State Estimator: -->
-		<velocimeter name="local_linvel" site="imu"/>
+		<velocimeter name="local_linear_velocity" site="imu"/>
 		<framepos name="imu_position" objtype="site" objname="imu"/>
-		<framelinvel name="fr_global_linvel" objtype="site" objname="front_right_foot"/>
-		<framelinvel name="fl_global_linvel" objtype="site" objname="front_left_foot"/>
-		<framelinvel name="hr_global_linvel" objtype="site" objname="hind_right_foot"/>
-		<framelinvel name="hl_global_linvel" objtype="site" objname="hind_left_foot"/>
-		<framepos name="fr_pos" objtype="site" objname="front_right_foot" reftype="site" refname="imu"/>
-		<framepos name="fl_pos" objtype="site" objname="front_left_foot" reftype="site" refname="imu"/>
-		<framepos name="hr_pos" objtype="site" objname="hind_right_foot" reftype="site" refname="imu"/>
-		<framepos name="hl_pos" objtype="site" objname="hind_left_foot" reftype="site" refname="imu"/>
+		<framelinvel name="front_right_global_linear_velocity" objtype="site" objname="front_right_foot"/>
+		<framelinvel name="front_left_global_linear_velocity" objtype="site" objname="front_left_foot"/>
+		<framelinvel name="hind_right_global_linear_velocity" objtype="site" objname="hind_right_foot"/>
+		<framelinvel name="hind_left_global_linear_velocity" objtype="site" objname="hind_left_foot"/>
+		<framepos name="front_right_foot_position" objtype="site" objname="front_right_foot" reftype="site" refname="imu"/>
+		<framepos name="front_left_foot_position" objtype="site" objname="front_left_foot" reftype="site" refname="imu"/>
+		<framepos name="hind_right_foot_position" objtype="site" objname="hind_right_foot" reftype="site" refname="imu"/>
+		<framepos name="hind_left_foot_position" objtype="site" objname="hind_left_foot" reftype="site" refname="imu"/>
 
 		<!-- Globals: -->
 		<framezaxis name="upvector" objtype="site" objname="imu"/>
 		<framexaxis name="forwardvector" objtype="site" objname="imu"/>
-		<framelinvel name="global_linvel" objtype="site" objname="imu"/>
-		<frameangvel name="global_angvel" objtype="site" objname="imu"/>
+		<framelinvel name="global_linear_velocity" objtype="site" objname="imu"/>
+		<frameangvel name="global_angular_velocity" objtype="site" objname="imu"/>
 	</sensor>
 
 </mujoco>

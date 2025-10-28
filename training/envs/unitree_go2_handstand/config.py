@@ -13,8 +13,6 @@ class RewardConfig:
     tracking_base_pose: float = 1.0
     tracking_orientation: float = 1.0
     tracking_joint_pose: float = 1.0
-    # Experimental Terms:
-    feet_contact: float = 0.5
     # Energy Regularization Terms:
     torque: float = -2e-4
     action_rate: float = -0.01
@@ -22,9 +20,13 @@ class RewardConfig:
     # Penalty Terms:
     base_velocity: float = -1.0
     stand_still: float = -1.0
+    feet_contact: float = 0.5
     feet_slip: float = -0.1
     unwanted_contact: float = -1.0
     termination: float = -1.0
+    # MuJoCo Terms:
+    pose: float = -0.1
+    joint_limits: float = -0.5
     # Hyperparameter for exponential kernel:
     kernel_sigma: float = 0.25
 
@@ -56,3 +58,4 @@ class EnvironmentConfig:
     action_scale: float = 0.5
     control_timestep: float = 0.02
     optimizer_timestep: float = 0.004
+    terminate_on_contact: bool = False

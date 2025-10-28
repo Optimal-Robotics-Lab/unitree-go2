@@ -263,7 +263,13 @@
 		<framexaxis name="forwardvector" objtype="site" objname="imu"/>
 		<framelinvel name="global_linvel" objtype="site" objname="imu"/>
 		<frameangvel name="global_angvel" objtype="site" objname="imu"/>
-		
+
+		<!-- Force Sensors: -->
+		<force name="front_right_foot_force" site="front_right_foot"/>
+		<force name="front_left_foot_force" site="front_left_foot"/>
+		<force name="hind_right_foot_force" site="hind_right_foot"/>
+		<force name="hind_left_foot_force" site="hind_left_foot"/>
+
 	</sensor>
 
 </mujoco>

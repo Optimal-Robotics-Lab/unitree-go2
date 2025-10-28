@@ -68,8 +68,16 @@ class CommandConfig:
     command_range: jax.Array = flax.struct.field(
         default_factory=lambda: jnp.array([1.5, 1.0, 1.2]),
     )
-    single_command_probability: float = 0.9
-    command_mask_probability: float = 0.8
+    single_command_probability: float = 0.0
+    command_mask_probability: float = 0.9
     command_frequency: list[float] = flax.struct.field(
         default_factory=lambda: [1.0, 5.0],
     )
+
+
+@flax.struct.dataclass
+class EnvironmentConfig:
+    filename: str = "scene_mjx.xml"
+    action_scale: float = 0.5
+    control_timestep: float = 0.02
+    optimizer_timestep: float = 0.004

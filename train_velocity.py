@@ -69,7 +69,7 @@ def main(argv=None):
         air_time=0.75,
         foot_clearance=0.5,
         gait_variance=-1.0,
-        foot_acceleration=-1.0e-4,
+        foot_acceleration=0.0, # This did not help
         # Gait Hyperparameters:
         target_air_time=0.25,
         mode_time=0.3,
