@@ -29,6 +29,9 @@ class RewardConfig:
     joint_limits: float = -0.5
     # Hyperparameter for exponential kernel:
     kernel_sigma: float = 0.25
+    base_sigma: float = 0.25
+    orientation_sigma: float = 0.25
+    pose_sigma: float = 1.0
 
 
 @flax.struct.dataclass
@@ -52,8 +55,15 @@ class DisturbanceConfig:
     )
 
 @flax.struct.dataclass
+class CommandConfig:
+    command_probability: float = 0.5
+    command_frequency: list[float] = flax.struct.field(
+        default_factory=lambda: [1.0, 5.0],
+    )
+
+@flax.struct.dataclass
 class EnvironmentConfig:
-    filename: str = "scene_mjx.xml"
+    filename: str = "scene_mjx_handstand.xml"
     control_type: str = "position"
     action_scale: float = 0.5
     control_timestep: float = 0.02

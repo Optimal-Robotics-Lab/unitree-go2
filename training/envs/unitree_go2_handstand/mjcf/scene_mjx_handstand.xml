@@ -28,11 +28,13 @@
 
   <!-- Add Task Specific Contacts -->
   <include file="handstand_contacts.xml"/>
+  <include file="front_calf_contacts.xml"/>
 
   <!-- Add Task Specific Sensors -->
   <include file="torso_to_floor_collision_sensor.xml"/>
   <include file="foot_to_floor_collision_sensor.xml"/>
   <include file="front_foot_to_hind_hip_collision_sensor.xml"/>
+  <include file="front_calf_to_floor_collision_sensor.xml"/>
   <include file="hind_calf_to_floor_collision_sensor.xml"/>
   <include file="hind_thigh_to_floor_collision_sensor.xml"/>
 
