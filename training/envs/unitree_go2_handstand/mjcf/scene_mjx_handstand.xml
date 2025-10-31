@@ -1,5 +1,5 @@
 <mujoco model="go2-mjx scene">
-  <include file="go2_mjx_full_collision.xml"/>
+  <include file="models/go2_mjx_full_collision.xml"/>
 
   <statistic center="0 0 0.1" extent="0.8"/>
 
@@ -23,19 +23,22 @@
   </worldbody>
 
   <!-- Control Type -->
-  <include file="position_control.xml"/>
-  <!-- <include file="velocity_control.xml"/> -->
+  <include file="controllers/position_control.xml"/>
+  <!-- <include file="controllers/velocity_control.xml"/> -->
 
   <!-- Add Task Specific Contacts -->
-  <include file="handstand_contacts.xml"/>
-  <include file="front_calf_contacts.xml"/>
+  <include file="contacts/torso_to_floor_contacts.xml"/>
+  <!-- <include file="contacts/front_calf_to_floor_contacts.xml"/> -->
+  <include file="contacts/front_foot_to_hip_contacts.xml"/>
+  <include file="contacts/hind_calf_to_floor_contacts.xml"/>
+  <include file="contacts/hind_thigh_to_floor_contacts.xml"/>
 
   <!-- Add Task Specific Sensors -->
-  <include file="torso_to_floor_collision_sensor.xml"/>
-  <include file="foot_to_floor_collision_sensor.xml"/>
-  <include file="front_foot_to_hind_hip_collision_sensor.xml"/>
-  <include file="front_calf_to_floor_collision_sensor.xml"/>
-  <include file="hind_calf_to_floor_collision_sensor.xml"/>
-  <include file="hind_thigh_to_floor_collision_sensor.xml"/>
+  <include file="sensors/torso_to_floor_collision_sensor.xml"/>
+  <include file="sensors/foot_to_floor_collision_sensor.xml"/>
+  <include file="sensors/front_foot_to_hind_hip_collision_sensor.xml"/>
+  <include file="sensors/front_calf_to_floor_collision_sensor.xml"/>
+  <include file="sensors/hind_calf_to_floor_collision_sensor.xml"/>
+  <include file="sensors/hind_thigh_to_floor_collision_sensor.xml"/>
 
 </mujoco>

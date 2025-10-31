@@ -105,30 +105,3 @@ def domain_randomize(sys: System, rng: PRNGKey) -> tuple[System, System]:
     })  # type: ignore
 
     return sys, in_axes
-
-
-def domain_randomize_friction(sys: System, rng: PRNGKey) -> tuple[System, System]:
-    @jax.vmap
-    def randomize_parameters(rng):
-        # Body IDs:
-        FLOOR_BODY_ID = 0
-
-        # Floor Friction:
-        rng, key = jax.random.split(rng)
-        geom_friction = jax.random.uniform(key, minval=0.6, maxval=1.2)
-        friction = sys.geom_friction.at[FLOOR_BODY_ID, 0].set(geom_friction)
-
-        return friction
-
-    friction = randomize_parameters(rng)
-
-    in_axes = jax.tree.map(lambda x: None, sys)
-    in_axes = in_axes.tree_replace({
-        'geom_friction': 0,
-    })
-
-    sys = sys.tree_replace({
-        'geom_friction': friction,
-    })  # type: ignore
-
-    return sys, in_axes

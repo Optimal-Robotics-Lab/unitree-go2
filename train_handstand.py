@@ -59,41 +59,19 @@ def main(argv=None):
         acceleration=-2.5e-5,
         # Penalty Terms:
         base_velocity=-1.0,
-        stand_still=-0.0,
+        stand_still=-1.0,
         feet_contact=0.1,
         feet_slip=-0.25,
-        unwanted_contact=-5.0,
+        unwanted_contact=-1.0,
         termination=-1.0,
         # MuJoCo Terms:
-        pose=-0.1,
+        pose=-0.0,
         joint_limits=-0.5,
         # Hyperparameter for exponential kernel:
-        kernel_sigma=0.1,
+        base_sigma=0.1,
+        orientation_sigma=0.1,
+        pose_sigma=0.25,
     )
-
-    # Energy Finetune with Termination.
-    # reward_config = config.RewardConfig(
-    #     # Rewards:
-    #     tracking_base_pose=1.0,
-    #     tracking_orientation=1.0,
-    #     tracking_joint_pose=0.0,
-    #     # Energy Regularization Terms:
-    #     torque=-2e-3,
-    #     action_rate=-0.1,
-    #     acceleration=-2.5e-4,
-    #     # Penalty Terms:
-    #     base_velocity=-2.0,
-    #     stand_still=-0.0,
-    #     feet_contact=0.1,
-    #     feet_slip=-0.25,
-    #     unwanted_contact=-1.0,
-    #     termination=-1.0,
-    #     # MuJoCo Terms:
-    #     pose=-0.1,
-    #     joint_limits=-0.5,
-    #     # Hyperparameter for exponential kernel:
-    #     kernel_sigma=0.1,
-    # )
 
     # Noise Config:
     noise_config = config.NoiseConfig()
@@ -106,7 +84,6 @@ def main(argv=None):
     )
 
     filename = "scene_mjx_handstand.xml"
-
     env_config = config.EnvironmentConfig(
         filename=filename,
         control_type="position",

@@ -28,7 +28,6 @@ class RewardConfig:
     pose: float = -0.1
     joint_limits: float = -0.5
     # Hyperparameter for exponential kernel:
-    kernel_sigma: float = 0.25
     base_sigma: float = 0.25
     orientation_sigma: float = 0.25
     pose_sigma: float = 1.0
