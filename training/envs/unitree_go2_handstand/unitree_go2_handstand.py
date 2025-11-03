@@ -166,20 +166,20 @@ class UnitreeGo2Env(PipelineEnv):
             "left_torso_to_floor",
             "right_torso_to_floor",
         ]
-        termination_sensor_names.extend([
-            "front_right_calf_upper_to_floor",
-            "front_right_calf_lower_to_floor",
-            "front_left_calf_upper_to_floor",
-            "front_left_calf_lower_to_floor",
-            "hind_right_calf_upper_to_floor",
-            "hind_right_calf_lower_to_floor",
-            "hind_left_calf_upper_to_floor",
-            "hind_left_calf_lower_to_floor",
-            "hind_right_thigh_to_floor",
-            "hind_left_thigh_to_floor",
-            "front_right_foot_to_hind_right_hip",
-            "front_left_foot_to_hind_left_hip",
-        ])
+        # termination_sensor_names.extend([
+        #     "front_right_calf_upper_to_floor",
+        #     "front_right_calf_lower_to_floor",
+        #     "front_left_calf_upper_to_floor",
+        #     "front_left_calf_lower_to_floor",
+        #     "hind_right_calf_upper_to_floor",
+        #     "hind_right_calf_lower_to_floor",
+        #     "hind_left_calf_upper_to_floor",
+        #     "hind_left_calf_lower_to_floor",
+        #     "hind_right_thigh_to_floor",
+        #     "hind_left_thigh_to_floor",
+        #     "front_right_foot_to_hind_right_hip",
+        #     "front_left_foot_to_hind_left_hip",
+        # ])
         self.termination_contact_sensor = [
             self.sys.mj_model.sensor(f'{termination_sensor_name}').id
             for termination_sensor_name in termination_sensor_names

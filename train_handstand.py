@@ -65,12 +65,12 @@ def main(argv=None):
         unwanted_contact=-1.0,
         termination=-1.0,
         # MuJoCo Terms:
-        pose=-0.0,
+        pose=-0.1,
         joint_limits=-0.5,
         # Hyperparameter for exponential kernel:
         base_sigma=0.1,
-        orientation_sigma=0.1,
-        pose_sigma=0.25,
+        orientation_sigma=0.25,
+        pose_sigma=1.0,
     )
 
     # Noise Config:
