@@ -27,6 +27,8 @@ class RewardConfig:
     # MuJoCo Terms:
     pose: float = -0.1
     joint_limits: float = -0.5
+    # Experimental Terms:
+    symmetry: float = -0.1
     # Hyperparameter for exponential kernel:
     base_sigma: float = 0.25
     orientation_sigma: float = 0.25

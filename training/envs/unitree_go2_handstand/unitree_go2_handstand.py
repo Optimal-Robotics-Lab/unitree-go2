@@ -335,13 +335,16 @@ class UnitreeGo2Env(PipelineEnv):
         # Physics step:
         if self.control_type == "position":
             motor_targets = state.info['previous_motor_targets'] + action * self.action_scale
+            # motor_targets = self.default_ctrl + action * self.action_scale
         elif self.control_type == "velocity":
             position_actions, velocity_actions = jnp.split(action, 2)
             previous_position_targets, previous_velocity_targets = jnp.split(
                 state.info['previous_motor_targets'], 2
             )
+            default_position_ctrl, default_velocity_ctrl = jnp.split(self.default_ctrl, 2)
             position_targets = previous_position_targets + position_actions * self.action_scale
-            velocity_targets = velocity_actions * self.action_scale
+            # position_targets = default_position_ctrl + position_actions * self.action_scale
+            velocity_targets = default_velocity_ctrl + velocity_actions * self.action_scale
             motor_targets = jnp.concatenate([position_targets, velocity_targets])
         else:
             raise ValueError(f"Unknown control type: {self.control_type}")
@@ -416,6 +419,7 @@ class UnitreeGo2Env(PipelineEnv):
             'joint_limits': self._cost_joint_position_limits(
                 joint_angles,
             ),
+            'symmetry': self._cost_joint_symmetry(joint_angles),
             'termination': jnp.float64(
                 self._cost_termination(done)
             ) if jax.config.x64_enabled else jnp.float32(
@@ -658,8 +662,11 @@ class UnitreeGo2Env(PipelineEnv):
         alpha: float = 1.0,
     ) -> jax.Array:
         # Reward Correct Feet Contact and Penalize Incorrect Feet Contact
-        correct_contact = jnp.sum(jnp.array([0, 0, 1, 1]) * contact)
-        incorrect_contact = jnp.sum(jnp.array([1, 1, 0, 0]) * contact)
+        correct_contact = jnp.sum(jnp.array([0, 0, 1, 1]) * contact)  # Hind Feet in Contact
+        incorrect_contact = jnp.sum(
+            jnp.array([1, 1, 0, 0]) * contact       # Front Feet in Contact
+            + jnp.array([0, 0, 1, 1]) * ~contact    # Hind Feet not in Contact
+        )
 
         # Linear Formulation:
         reward = (correct_contact - incorrect_contact) / 2.0
@@ -686,6 +693,18 @@ class UnitreeGo2Env(PipelineEnv):
     ) -> jax.Array:
         # Unwanted Contact Penalty
         return jnp.sum(unwanted_contacts)
+
+    def _cost_joint_symmetry(
+        self,
+        joint_angles: jax.Array,
+    ) -> jax.Array:
+        # Penalize asymmetry between left and right joints
+        symmetry_mask = jnp.array([-1, 1, 1] * 2)
+        right_ids = jnp.array([0, 1, 2, 6, 7, 8])
+        left_ids = jnp.array([3, 4, 5, 9, 10, 11])
+        right_joints = joint_angles[right_ids]
+        left_joints = joint_angles[left_ids] * symmetry_mask
+        return jnp.sum(jnp.square(right_joints - left_joints))
 
     def _cost_termination(self, done: jax.Array) -> jax.Array:
         return done

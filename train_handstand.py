@@ -54,7 +54,7 @@ def main(argv=None):
         tracking_orientation=1.0,
         tracking_joint_pose=0.0,
         # Energy Regularization Terms:
-        torque=-2e-4,
+        torque=-2e-5,
         action_rate=-0.01,
         acceleration=-2.5e-5,
         # Penalty Terms:
@@ -67,6 +67,8 @@ def main(argv=None):
         # MuJoCo Terms:
         pose=-0.1,
         joint_limits=-0.5,
+        # Experimental Terms:
+        symmetry=-0.1,
         # Hyperparameter for exponential kernel:
         base_sigma=0.1,
         orientation_sigma=0.25,
