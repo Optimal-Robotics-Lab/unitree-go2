@@ -28,7 +28,7 @@
 
   <!-- Add Task Specific Contacts -->
   <include file="contacts/torso_to_floor_contacts.xml"/>
-  <!-- <include file="contacts/front_calf_to_floor_contacts.xml"/> -->
+  <include file="contacts/front_calf_to_floor_contacts.xml"/>
   <include file="contacts/front_foot_to_hip_contacts.xml"/>
   <include file="contacts/hind_calf_to_floor_contacts.xml"/>
   <include file="contacts/hind_thigh_to_floor_contacts.xml"/>

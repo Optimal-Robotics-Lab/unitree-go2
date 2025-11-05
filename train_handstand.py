@@ -50,17 +50,17 @@ def main(argv=None):
     # Baseline Reward Config:
     reward_config = config.RewardConfig(
         # Rewards:
-        tracking_base_pose=1.0,
+        tracking_base_pose=0.75,
         tracking_orientation=1.0,
         tracking_joint_pose=0.0,
         # Energy Regularization Terms:
-        torque=-2e-5,
+        torque=-2e-4,
         action_rate=-0.01,
         acceleration=-2.5e-5,
         # Penalty Terms:
         base_velocity=-1.0,
-        stand_still=-1.0,
-        feet_contact=0.1,
+        stand_still=0.0,
+        feet_contact=0.5,
         feet_slip=-0.25,
         unwanted_contact=-1.0,
         termination=-1.0,
@@ -71,7 +71,7 @@ def main(argv=None):
         symmetry=-0.1,
         # Hyperparameter for exponential kernel:
         base_sigma=0.1,
-        orientation_sigma=0.25,
+        orientation_sigma=0.1,
         pose_sigma=1.0,
     )
 
@@ -89,7 +89,7 @@ def main(argv=None):
     env_config = config.EnvironmentConfig(
         filename=filename,
         control_type="position",
-        action_scale=0.5,
+        action_scale=0.3,
         control_timestep=0.02,
         optimizer_timestep=0.004,
         terminate_on_contact=True,
@@ -138,7 +138,7 @@ def main(argv=None):
         normalize_advantages=True,
     )
     training_metadata = checkpoint_utilities.training_metadata(
-        num_epochs=20,
+        num_epochs=50,
         num_training_steps=20,
         episode_length=1000,
         num_policy_steps=40,
