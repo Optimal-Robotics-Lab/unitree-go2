@@ -50,28 +50,28 @@ def main(argv=None):
     # Baseline Reward Config:
     reward_config = config.RewardConfig(
         # Rewards:
-        tracking_base_pose=0.75,
+        tracking_base_pose=1.0,
         tracking_orientation=1.0,
         tracking_joint_pose=0.0,
         # Energy Regularization Terms:
         torque=-2e-4,
-        action_rate=-0.01,
-        acceleration=-2.5e-5,
+        action_rate=-0.1,
+        acceleration=-2.5e-4,
         # Penalty Terms:
-        base_velocity=-1.0,
+        base_velocity=-5.0,
         stand_still=0.0,
         feet_contact=0.5,
-        feet_slip=-0.25,
+        feet_slip=-1.0,
         unwanted_contact=-1.0,
         termination=-1.0,
         # MuJoCo Terms:
-        pose=-0.1,
+        pose=-0.0,
         joint_limits=-0.5,
         # Experimental Terms:
         symmetry=-0.1,
         # Hyperparameter for exponential kernel:
         base_sigma=0.1,
-        orientation_sigma=0.1,
+        orientation_sigma=0.05,
         pose_sigma=1.0,
     )
 
@@ -79,11 +79,18 @@ def main(argv=None):
     noise_config = config.NoiseConfig()
 
     # Disturbance Config:
+    # disturbance_config = config.DisturbanceConfig(
+    #     wait_times=[1.0, 3.0],
+    #     durations=[0.05, 0.2],
+    #     magnitudes=[0.0, 1.0],
+    # )
+
     disturbance_config = config.DisturbanceConfig(
         wait_times=[1.0, 3.0],
         durations=[0.05, 0.2],
-        magnitudes=[0.0, 1.0],
+        magnitudes=[0.0, 0.0],
     )
+
 
     filename = "scene_mjx_handstand.xml"
     env_config = config.EnvironmentConfig(
@@ -138,7 +145,7 @@ def main(argv=None):
         normalize_advantages=True,
     )
     training_metadata = checkpoint_utilities.training_metadata(
-        num_epochs=50,
+        num_epochs=20,
         num_training_steps=20,
         episode_length=1000,
         num_policy_steps=40,
