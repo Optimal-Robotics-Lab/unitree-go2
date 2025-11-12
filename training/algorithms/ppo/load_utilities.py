@@ -123,7 +123,7 @@ def load_network(checkpoint_name: str, environment: Env, restore_iteration: Opti
     return network, params
 
 
-def load_policy(checkpoint_name: str, environment: Env, restore_iteration: Optional[int] = None):
+def load_policy(checkpoint_name: str, environment: Env, restore_iteration: Optional[int] = None) -> Tuple[Any, Any, Metadata]:
     # Load Metadata:
     checkpoint_direrctory = os.path.join(
         os.path.dirname(
