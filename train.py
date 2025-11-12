@@ -102,7 +102,7 @@ def main(argv=None):
     # )
 
     # No Command Tracking for Footstand Recovery:
-    recover_from_footstand = True
+    recover_from_footstand = False
     command_config = config.CommandConfig(
         command_range=jax.numpy.array([0.0, 0.0, 0.0]),
         single_command_probability=0.0,

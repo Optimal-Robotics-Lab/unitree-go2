@@ -23,8 +23,6 @@ from brax.io import mjcf, html
 import mujoco
 from mujoco.mjx._src import math as mjx_math
 
-from training.envs.utilities import collisions
-
 from training.envs.unitree_go2.config import (
     RewardConfig,
     NoiseConfig,

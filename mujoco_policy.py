@@ -13,6 +13,7 @@ import mujoco
 import mujoco.viewer
 
 from training.envs.unitree_go2 import unitree_go2_joystick as unitree_go2
+from training.envs.unitree_go2 import config
 from training.algorithms.ppo.load_utilities import load_policy
 
 
@@ -29,8 +30,8 @@ flags.DEFINE_integer(
 
 
 def controller(
-    action: npt.ArrayLike,
-    default_control: npt.ArrayLike,
+    action: npt.Array,
+    default_control: npt.Array,
     action_scale: float,
 ) -> np.ndarray:
     motor_targets = default_control + action * action_scale
@@ -38,17 +39,23 @@ def controller(
 
 
 def main(argv=None):
-    filename = 'scene_mjx.xml'
-    action_scale = 0.5
+    flat_terrain = 'scene_mjx.xml'
+    environment_config = config.EnvironmentConfig(
+        filename=flat_terrain,
+        action_scale=0.5,
+        control_timestep=0.02,
+        optimizer_timestep=0.004,
+    )
 
     env = unitree_go2.UnitreeGo2Env(
-        filename=filename,
-        action_scale=action_scale,
+        environment_config=environment_config,
     )
+
+    import pdb; pdb.set_trace()
 
     model_path = os.path.join(
         os.path.dirname(__file__),
-        f'training/envs/unitree_go2/{env.filename}',
+        f'{env.filepath}',
     )
     model = mujoco.MjModel.from_xml_path(
         model_path,
