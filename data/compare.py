@@ -7,7 +7,6 @@ import absl.flags as flags
 
 import numpy as np
 
-import matplotlib
 import matplotlib.pyplot as plt
 
 
@@ -15,6 +14,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string(
     'directory_name', None, 'Desired checkpoint folder name to load.', short_name='d',
 )
+
 
 def main(argv=None):
     # Current directory
@@ -75,6 +75,12 @@ def main(argv=None):
     command_history[:, 0] -= command_start_time
     state_history[:, 0] -= state_start_time
 
+    # Trim to simulation length:
+    state_idx = np.where(state_history[:, 0] >= simulation_history[-1, 0])[0][0]
+    command_idx = np.where(command_history[:, 0] >= simulation_history[-1, 0])[0][0]
+    state_history = state_history[:state_idx, :]
+    command_history = command_history[:command_idx, :]
+
     # Joint ID Map:
     joints = {
         'front_right_abduction': 0,
@@ -94,8 +100,8 @@ def main(argv=None):
     joints_of_interest = ['front_right_knee']
 
     # Plot data:
-    fig, axs = plt.subplots(3, 1, figsize=(10, 8))
-    plt.suptitle("Unitree State vs Command: Front Right Leg")
+    fig, axs = plt.subplots(4, 1, figsize=(10, 8))
+    fig.suptitle("Unitree State vs Simulation: Front Right Leg")
 
     colors = ['#1f77b4', '#ff7f0e', '#2ca02c']
 
@@ -106,13 +112,6 @@ def main(argv=None):
             state_history[:, 0],
             state_history[:, 1+i],
             label="State",
-            color=colors[i],
-        )
-        axs[0].plot(
-            command_history[:, 0],
-            command_history[:, 1+i],
-            '--',
-            label="Command",
             color=colors[i],
         )
         axs[0].plot(
@@ -135,13 +134,6 @@ def main(argv=None):
             color=colors[i],
         )
         axs[1].plot(
-            command_history[:, 0],
-            command_history[:, 13+i],
-            '--',
-            label="Command",
-            color=colors[i],
-        )
-        axs[1].plot(
             simulation_history[:, 0],
             simulation_history[:, 13+i],
             ':',
@@ -161,13 +153,6 @@ def main(argv=None):
             color=colors[i],
         )
         axs[2].plot(
-            command_history[:, 0],
-            command_history[:, 25+i],
-            '--',
-            label="Command",
-            color=colors[i],
-        )
-        axs[2].plot(
             simulation_history[:, 0],
             simulation_history[:, 25+i],
             ':',
@@ -178,12 +163,80 @@ def main(argv=None):
     axs[2].set_ylabel("Torque (Nm)")
     axs[2].legend()
     axs[2].set_xlabel("Time (s)")
-    plt.tight_layout()
+
+    # Command Plot: Position Command
+    for i in joints_to_plot:
+        axs[3].plot(
+            command_history[:, 0],
+            command_history[:, 1+i],
+            label="Command",
+            color=colors[i],
+        )
+        axs[3].plot(
+            simulation_history[:, 0],
+            simulation_history[:, 37+i],
+            ':',
+            label="Simulation",
+            color=colors[i],
+        )
+
+    axs[3].set_ylabel("Commanded Position (rad)")
+    axs[3].legend()
+    axs[3].set_xlabel("Time (s)")
+
+    fig.tight_layout()
     plt.show()
 
     output_filename = current_directory / f"plots/{FLAGS.directory_name}_comparison_plot.png"
-    plt.savefig(output_filename)
-    print(f"Plot saved successfully to {output_filename}")
+    fig.savefig(output_filename)
+
+    fig, axs = plt.subplots(2, 1, sharey=True, figsize=(10, 6))
+    fig.suptitle("Unitree State vs Command: Front Right Leg")
+
+    # Plot State vs Command:
+    for i in joints_to_plot:
+        axs[0].plot(
+            state_history[:, 0],
+            state_history[:, 1+i],
+            label="State",
+            color=colors[i],
+        )
+        axs[0].plot(
+            command_history[:, 0],
+            command_history[:, 1+i],
+            ':',
+            label="Command",
+            color=colors[i],
+        )
+
+    axs[0].set_ylabel("Position (rad)")
+    axs[0].legend()
+
+    # Plot Simulation State vs Command:
+    for i in joints_to_plot:
+        axs[1].plot(
+            simulation_history[:, 0],
+            simulation_history[:, 1+i],
+            label="Simulation State",
+            color=colors[i],
+        )
+        axs[1].plot(
+            simulation_history[:, 0],
+            simulation_history[:, 37+i],
+            ':',
+            label="Simulation Command",
+            color=colors[i],
+        )
+
+    axs[1].set_ylabel("Position (rad)")
+    axs[1].legend()
+    axs[1].set_xlabel("Time (s)")
+
+    fig.tight_layout()
+    plt.show()
+
+    output_filename = current_directory / f"plots/{FLAGS.directory_name}_state_command_plot.png"
+    fig.savefig(output_filename)
 
 
 if __name__ == "__main__":
