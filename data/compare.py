@@ -3,22 +3,28 @@ import pathlib
 import yaml
 
 import absl.app as app
+import absl.flags as flags
 
 import numpy as np
+
+import matplotlib
 import matplotlib.pyplot as plt
 
 
-def main(argv=None):
-    del argv  # Unused.
+FLAGS = flags.FLAGS
+flags.DEFINE_string(
+    'directory_name', None, 'Desired checkpoint folder name to load.', short_name='d',
+)
 
+def main(argv=None):
     # Current directory
     current_directory = pathlib.Path(__file__).parent
 
-    command_history = current_directory / "command_history.csv"
-    state_history = current_directory / "state_history.csv"
+    command_history = current_directory / f"bags/{FLAGS.directory_name}/command_history.csv"
+    state_history = current_directory / f"bags/{FLAGS.directory_name}/state_history.csv"
     simulation_history = current_directory / "simulation_history.csv"
 
-    metadata_file = current_directory / "metadata.yaml"
+    metadata_file = current_directory / f"bags/{FLAGS.directory_name}/metadata.yaml"
     if not metadata_file.exists():
         print(f"Error: '{metadata_file}' not found.", file=sys.stderr)
         print("Please put the 'metadata.yaml' in the data directory.", file=sys.stderr)
@@ -55,17 +61,19 @@ def main(argv=None):
     command_history[:, 0] = (command_history[:, 0] - start_time) * 1e-9
     state_history[:, 0] = (state_history[:, 0] - start_time) * 1e-9
 
-    # Find the first closest timestamp:
-    closest_index = np.where(
-        np.isclose(
-            command_history[0, 0], state_history[:, 0],
-            rtol=1e-2,
-        )
-    )[0][0]
+    # Find first Command Signal:
+    command_idx = np.where(command_history[:, 1] != 0)[0][0]
+    command_start_time = command_history[command_idx, 0]
 
-    # Realign timestamps to zero:
-    command_history[:, 0] = command_history[:, 0] - state_history[closest_index, 0]
-    state_history[:, 0] = state_history[:, 0] - state_history[closest_index, 0]
+    # Find the corresponding State Signal:
+    state_idx = np.where(state_history[:, 0] >= command_start_time)[0][0]
+    state_start_time = state_history[state_idx, 0]
+
+    # Align time:
+    command_history = command_history[command_idx:, :]
+    state_history = state_history[state_idx:, :]
+    command_history[:, 0] -= command_start_time
+    state_history[:, 0] -= state_start_time
 
     # Joint ID Map:
     joints = {
@@ -95,8 +103,8 @@ def main(argv=None):
     joints_to_plot = [joints[joint_name] for joint_name in joints_of_interest]
     for i in joints_to_plot:
         axs[0].plot(
-            state_history[closest_index:, 0],
-            state_history[closest_index:, 1+i],
+            state_history[:, 0],
+            state_history[:, 1+i],
             label="State",
             color=colors[i],
         )
@@ -121,8 +129,8 @@ def main(argv=None):
     # Velocity Plot:
     for i in joints_to_plot:
         axs[1].plot(
-            state_history[closest_index:, 0],
-            state_history[closest_index:, 13+i],
+            state_history[:, 0],
+            state_history[:, 13+i],
             label="State",
             color=colors[i],
         )
@@ -147,8 +155,8 @@ def main(argv=None):
     # Torque Plot:
     for i in joints_to_plot:
         axs[2].plot(
-            state_history[closest_index:, 0],
-            state_history[closest_index:, 25+i],
+            state_history[:, 0],
+            state_history[:, 25+i],
             label="State",
             color=colors[i],
         )
@@ -172,6 +180,10 @@ def main(argv=None):
     axs[2].set_xlabel("Time (s)")
     plt.tight_layout()
     plt.show()
+
+    output_filename = current_directory / f"plots/{FLAGS.directory_name}_comparison_plot.png"
+    plt.savefig(output_filename)
+    print(f"Plot saved successfully to {output_filename}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,35 @@
+filegroup(
+    name = "bag_data",
+    srcs = glob(
+        ["**"],
+        allow_empty = True,
+    ),
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "test_1",
+    srcs = glob(
+        ["test_1/**"],
+        allow_empty = True,
+    ),
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "test_2",
+    srcs = glob(
+        ["test_2/**"],
+        allow_empty = True,
+    ),
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "test_3",
+    srcs = glob(
+        ["test_3/**"],
+        allow_empty = True,
+    ),
+    visibility = ["//visibility:public"],
+)
