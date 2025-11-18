@@ -9,6 +9,8 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 
+from process_data import process_data
+
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
@@ -22,7 +24,7 @@ def main(argv=None):
 
     command_history = current_directory / f"bags/{FLAGS.directory_name}/command_history.csv"
     state_history = current_directory / f"bags/{FLAGS.directory_name}/state_history.csv"
-    simulation_history = current_directory / "simulation_history.csv"
+    simulation_history = current_directory / "simulation_history_sabotaged.csv"
 
     metadata_file = current_directory / f"bags/{FLAGS.directory_name}/metadata.yaml"
     if not metadata_file.exists():
@@ -57,29 +59,37 @@ def main(argv=None):
         simulation_history, delimiter=',',
     ).reshape(-1, num_columns + 12)
 
-    start_time = metadata['rosbag2_bagfile_information']['starting_time']['nanoseconds_since_epoch']
-    command_history[:, 0] = (command_history[:, 0] - start_time) * 1e-9
-    state_history[:, 0] = (state_history[:, 0] - start_time) * 1e-9
+    # Process data
+    command_history, state_history, simulation_history = process_data(
+        command_history,
+        state_history,
+        simulation_history,
+        metadata
+    )
 
-    # Find first Command Signal:
-    command_idx = np.where(command_history[:, 1] != 0)[0][0]
-    command_start_time = command_history[command_idx, 0]
+    # start_time = metadata['rosbag2_bagfile_information']['starting_time']['nanoseconds_since_epoch']
+    # command_history[:, 0] = (command_history[:, 0] - start_time) * 1e-9
+    # state_history[:, 0] = (state_history[:, 0] - start_time) * 1e-9
 
-    # Find the corresponding State Signal:
-    state_idx = np.where(state_history[:, 0] >= command_start_time)[0][0]
-    state_start_time = state_history[state_idx, 0]
+    # # Find first Command Signal:
+    # command_idx = np.where(command_history[:, 1] != 0)[0][0]
+    # command_start_time = command_history[command_idx, 0]
 
-    # Align time:
-    command_history = command_history[command_idx:, :]
-    state_history = state_history[state_idx:, :]
-    command_history[:, 0] -= command_start_time
-    state_history[:, 0] -= state_start_time
+    # # Find the corresponding State Signal:
+    # state_idx = np.where(state_history[:, 0] >= command_start_time)[0][0]
+    # state_start_time = state_history[state_idx, 0]
 
-    # Trim to simulation length:
-    state_idx = np.where(state_history[:, 0] >= simulation_history[-1, 0])[0][0]
-    command_idx = np.where(command_history[:, 0] >= simulation_history[-1, 0])[0][0]
-    state_history = state_history[:state_idx, :]
-    command_history = command_history[:command_idx, :]
+    # # Align time:
+    # command_history = command_history[command_idx:, :]
+    # state_history = state_history[state_idx:, :]
+    # command_history[:, 0] -= command_start_time
+    # state_history[:, 0] -= state_start_time
+
+    # # Trim to simulation length:
+    # state_idx = np.where(state_history[:, 0] >= simulation_history[-1, 0])[0][0]
+    # command_idx = np.where(command_history[:, 0] >= simulation_history[-1, 0])[0][0]
+    # state_history = state_history[:state_idx, :]
+    # command_history = command_history[:command_idx, :]
 
     # Joint ID Map:
     joints = {
@@ -187,7 +197,7 @@ def main(argv=None):
     fig.tight_layout()
     plt.show()
 
-    output_filename = current_directory / f"plots/{FLAGS.directory_name}_comparison_plot.png"
+    output_filename = current_directory / f"plots/{FLAGS.directory_name}/comparison_plot.png"
     fig.savefig(output_filename)
 
     fig, axs = plt.subplots(2, 1, sharey=True, figsize=(10, 6))
@@ -235,7 +245,7 @@ def main(argv=None):
     fig.tight_layout()
     plt.show()
 
-    output_filename = current_directory / f"plots/{FLAGS.directory_name}_state_command_plot.png"
+    output_filename = current_directory / f"plots/{FLAGS.directory_name}/state_command_plot.png"
     fig.savefig(output_filename)
 
 
