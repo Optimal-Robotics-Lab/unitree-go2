@@ -1,5 +1,5 @@
 <mujoco model="go2-mjx scene">
-  <include file="go2_vendored_mjx.xml"/>
+  <include file="models/go2_mjx_full_collision_vendored.xml"/>
 
   <statistic center="0 0 0.1" extent="0.8"/>
 
@@ -22,9 +22,16 @@
     <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
   </worldbody>
 
-  <keyframe>
-    <key name="home" qpos="0 0 0.3 1 0 0 0 0.0 0.9 -1.8 0.0 0.9 -1.8 0.0 0.9 -1.8 0.0 0.9 -1.8"
-      ctrl="0 0.9 -1.8 0 0.9 -1.8 0 0.9 -1.8 0 0.9 -1.8"/>
-  </keyframe>
+  <!-- Control Type -->
+  <include file="controllers/position_control.xml"/>
+
+  <!-- Add Task Specific Contacts -->
+  <include file="contacts/walking_task_contacts.xml"/>
+
+  <!-- Add Task Specific Sensors -->
+  <include file="sensors/torso_to_floor_collision_sensor.xml"/>
+  <include file="sensors/foot_to_floor_collision_sensor.xml"/>
+  <include file="sensors/front_calf_to_floor_collision_sensor.xml"/>
+  <include file="sensors/hind_calf_to_floor_collision_sensor.xml"/>
 
 </mujoco>

@@ -8,8 +8,7 @@
 	<default>
         <default class="go2">
             <geom friction="0.6" contype="0" conaffinity="0" type="mesh"/>
-            <joint axis="0 1 0" damping="0.5" armature="0.01" frictionloss="0.2"/>
-            <position forcerange="-23.7 23.7" inheritrange="2" kp="35.0"/>
+            <joint axis="0 1 0" armature="0.01" frictionloss="0.2"/>
             <default class="go2/abduction">
                 <joint axis="1 0 0" range="-1.0472 1.0472"/>
             </default>
@@ -23,15 +22,44 @@
             </default>
             <default class="go2/knee">
                 <joint range="-2.7227 -0.83776"/>
-                <position forcerange="-45.43 45.43"/>
             </default>
             <default class="go2/foot">
                 <site pos="-0.002 0 -0.213"/>
             </default>
             <default class="go2/collision">
-                <geom group="3" contype="0" conaffinity="1"/>
+                <geom group="3" contype="0" conaffinity="2"/>
+				<default class="go2/collision/torso">
+					<geom type="capsule" size="0.058 0.125" quat="1 0 1 0"/>
+					<default class="go2/collision/torso/left">
+						<geom pos="0 0.04 0"/>
+					</default>
+					<default class="go2/collision/torso/right">
+						<geom pos="0 -0.04 0"/>
+					</default>
+				</default>
+				<default class="go2/collision/hip">
+					<geom type="capsule" size="0.046 0.02" pos="0 0.045 0" quat="1 1 0 0"/>
+					<default class="go2/collision/hip/left">
+						<geom pos="0 0.045 0"/>
+					</default>
+					<default class="go2/collision/hip/right">
+						<geom pos="0 -0.045 0"/>
+					</default>
+				</default>
+				<default class="go2/collision/thigh">
+					<geom type="capsule" size="0.02" fromto="-0.02 0 0 -0.01 0 -0.2"/>
+				</default>
+				<default class="go2/collision/calf">
+					<geom type="capsule" size="0.01"/>
+					<default class="go2/collision/calf/upper">
+						<geom type="capsule" size="0.01" fromto="0 0 0 0.02 0 -0.13"/>
+					</default>
+					<default class="go2/collision/calf/lower">
+						<geom fromto="0.02 0 -0.13 0 0 -0.2"/>
+					</default>
+				</default>
                 <default class="go2/collision/foot">
-                    <geom type="sphere" size="0.022" pos="-0.002 0 -0.213" solimp="0.9 .95 0.022" condim="6" friction="0.8 0.02 0.01"/>
+                    <geom type="sphere" size="0.022" pos="-0.002 0 -0.213" solimp="0.9 0.95 0.022" condim="6" friction="0.8 0.02 0.01"/>
                 </default>
             </default>
         </default>
@@ -71,6 +99,8 @@
 			<geom mesh="base_2" material="black" class="go2"/>
 			<geom mesh="base_3" material="white" class="go2"/>
 			<geom mesh="base_4" material="gray" class="go2"/>
+			<geom name="left_torso_collision" class="go2/collision/torso/left"/>
+			<geom name="right_torso_collision" class="go2/collision/torso/right"/>
 			<site name="imu" pos="-0.02557 0 0.04232"/>
 			<body name="front_right_hip" pos="0.1934 -0.0465 0">
 				<inertial pos="-0.0054 -0.00194 -0.000105" quat="0.498237 0.505462 0.499245 0.497014"
@@ -79,6 +109,7 @@
 				<joint name="front_right_hip_joint" class="go2/abduction"/>
 				<geom mesh="hip_0" material="metal" class="go2" quat="4.63268e-05 1 0 0"/>
 				<geom mesh="hip_1" material="gray" class="go2" quat="4.63268e-05 1 0 0"/>
+				<geom name="front_right_hip_collision" class="go2/collision/hip/right"/>
 				<body name="front_right_thigh" pos="0 -0.0955 0">
 					<inertial pos="-0.00374 0.0223 -0.0327" quat="0.551623 -0.0200632 0.0847635 0.829533"
 						mass="1.152"
@@ -86,6 +117,7 @@
 					<joint name="front_right_thigh_joint" class="go2/front_hip"/>
 					<geom mesh="thigh_mirror_0" material="metal" class="go2"/>
 					<geom mesh="thigh_mirror_1" material="gray" class="go2"/>
+					<geom name="front_right_thigh_collision" class="go2/collision/thigh"/>
 					<body name="front_right_calf" pos="0 0 -0.213">
 						<inertial pos="0.00629595 0.000622121 -0.141417"
                             quat="0.703508 -0.00450087 0.00154099 0.710672"
@@ -94,7 +126,9 @@
 						<geom mesh="calf_mirror_0" material="gray" class="go2"/>
 						<geom mesh="calf_mirror_1" material="black" class="go2"/>
 						<geom pos="0 0 -0.213" mesh="foot" class="go2" material="black"/>
-						<geom name="front_right" class="go2/collision/foot"/>
+						<geom name="front_right_calf_upper_collision" class="go2/collision/calf/upper"/>
+						<geom name="front_right_calf_lower_collision" class="go2/collision/calf/lower"/>
+						<geom name="front_right_foot_collision" class="go2/collision/foot"/>
 						<site name="front_right_foot" class="go2/foot"/>
 					</body>
 				</body>
@@ -106,6 +140,7 @@
 				<joint name="front_left_hip_joint" class="go2/abduction"/>
 				<geom mesh="hip_0" material="metal" class="go2"/>
 				<geom mesh="hip_1" material="gray" class="go2"/>
+				<geom name="front_left_hip_collision" class="go2/collision/hip/left"/>
 				<body name="front_left_thigh" pos="0 0.0955 0">
 					<inertial pos="-0.00374 -0.0223 -0.0327" quat="0.829533 0.0847635 -0.0200632 0.551623"
 						mass="1.152"
@@ -113,6 +148,7 @@
 					<joint name="front_left_thigh_joint" class="go2/front_hip"/>
 					<geom mesh="thigh_0" material="metal" class="go2"/>
 					<geom mesh="thigh_1" material="gray" class="go2"/>
+					<geom name="front_left_thigh_collision" class="go2/collision/thigh"/>
 					<body name="front_left_calf" pos="0 0 -0.213">
 						<inertial pos="0.00629595 -0.000622121 -0.141417"
                             quat="0.710672 0.00154099 -0.00450087 0.703508"
@@ -121,7 +157,9 @@
 						<geom mesh="calf_0" material="gray" class="go2"/>
 						<geom mesh="calf_1" material="black" class="go2"/>
 						<geom pos="0 0 -0.213" mesh="foot" class="go2" material="black"/>
-						<geom name="front_left" class="go2/collision/foot"/>
+						<geom name="front_left_calf_upper_collision" class="go2/collision/calf/upper"/>
+						<geom name="front_left_calf_lower_collision" class="go2/collision/calf/lower"/>
+						<geom name="front_left_foot_collision" class="go2/collision/foot"/>
 						<site name="front_left_foot" class="go2/foot"/>
 					</body>
 				</body>
@@ -135,6 +173,7 @@
 				    quat="2.14617e-09 4.63268e-05 4.63268e-05 -1"/>
 				<geom mesh="hip_1" material="gray" class="go2"
 					quat="2.14617e-09 4.63268e-05 4.63268e-05 -1"/>
+				<geom name="hind_right_hip_collision" class="go2/collision/hip/right"/>
 				<body name="hind_right_thigh" pos="0 -0.0955 0">
 					<inertial pos="-0.00374 0.0223 -0.0327" quat="0.551623 -0.0200632 0.0847635 0.829533"
 						mass="1.152"
@@ -142,6 +181,7 @@
 					<joint name="hind_right_thigh_joint" class="go2/back_hip"/>
 					<geom mesh="thigh_mirror_0" material="metal" class="go2"/>
 					<geom mesh="thigh_mirror_1" material="gray" class="go2"/>
+					<geom name="hind_right_thigh_collision" class="go2/collision/thigh"/>
 					<body name="hind_right_calf" pos="0 0 -0.213">
 						<inertial pos="0.00629595 0.000622121 -0.141417"
                             quat="0.703508 -0.00450087 0.00154099 0.710672"
@@ -150,7 +190,9 @@
 						<geom mesh="calf_mirror_0" material="gray" class="go2"/>
 						<geom mesh="calf_mirror_1" material="black" class="go2"/>
 						<geom pos="0 0 -0.213" mesh="foot" class="go2" material="black"/>
-						<geom name="hind_right" class="go2/collision/foot"/>
+						<geom name="hind_right_calf_upper_collision" class="go2/collision/calf/upper"/>
+						<geom name="hind_right_calf_lower_collision" class="go2/collision/calf/lower"/>
+						<geom name="hind_right_foot_collision" class="go2/collision/foot"/>
 						<site name="hind_right_foot" class="go2/foot"/>
 					</body>
 				</body>
@@ -162,6 +204,7 @@
 				<joint name="hind_left_hip_joint" class="go2/abduction"/>
 				<geom mesh="hip_0" material="metal" class="go2" quat="4.63268e-05 0 1 0"/>
 				<geom mesh="hip_1" material="gray" class="go2" quat="4.63268e-05 0 1 0"/>
+				<geom name="hind_left_hip_collision" class="go2/collision/hip/left"/>
 				<body name="hind_left_thigh" pos="0 0.0955 0">
 					<inertial pos="-0.00374 -0.0223 -0.0327" quat="0.829533 0.0847635 -0.0200632 0.551623"
 						mass="1.152"
@@ -169,6 +212,7 @@
 					<joint name="hind_left_thigh_joint" class="go2/back_hip"/>
 					<geom mesh="thigh_0" material="metal" class="go2"/>
 					<geom mesh="thigh_1" material="gray" class="go2"/>
+					<geom name="hind_left_thigh_collision" class="go2/collision/thigh"/>
 					<body name="hind_left_calf" pos="0 0 -0.213">
 						<inertial pos="0.00629595 -0.000622121 -0.141417"
                             quat="0.710672 0.00154099 -0.00450087 0.703508"
@@ -177,7 +221,9 @@
 						<geom mesh="calf_0" material="gray" class="go2"/>
 						<geom mesh="calf_1" material="black" class="go2"/>
 						<geom pos="0 0 -0.213" mesh="foot" class="go2" material="black"/>
-						<geom name="hind_left" class="go2/collision/foot"/>
+						<geom name="hind_left_calf_upper_collision" class="go2/collision/calf/upper"/>
+						<geom name="hind_left_calf_lower_collision" class="go2/collision/calf/lower"/>
+						<geom name="hind_left_foot_collision" class="go2/collision/foot"/>
 						<site name="hind_left_foot" class="go2/foot"/>
 					</body>
 				</body>
@@ -186,26 +232,11 @@
 	</worldbody>
 
 	<contact>
-        <pair name="right_front_foot_floor_contact" geom1="front_right" geom2="floor" solref="0.01 1" solimp="0.9 .95 0.022" condim="3" friction="0.8 0.8 0.02 0.01 0.01"/>
-		<pair name="right_hind_foot_floor_contact" geom1="hind_right" geom2="floor" solref="0.01 1" solimp="0.9 .95 0.022" condim="3" friction="0.8 0.8 0.02 0.01 0.01"/>
-		<pair name="left_front_foot_floor_contact" geom1="front_left" geom2="floor" solref="0.01 1" solimp="0.9 .95 0.022" condim="3" friction="0.8 0.8 0.02 0.01 0.01"/>
-		<pair name="left_hind_foot_floor_contact" geom1="hind_left" geom2="floor" solref="0.01 1" solimp="0.9 .95 0.022" condim="3" friction="0.8 0.8 0.02 0.01 0.01"/>
+        <pair name="right_front_foot_floor_contact" geom1="front_right_foot_collision" geom2="floor" solref="0.01 1" solimp="0.9 .95 0.022" condim="3" friction="0.8 0.8 0.02 0.01 0.01"/>
+		<pair name="right_hind_foot_floor_contact" geom1="hind_right_foot_collision" geom2="floor" solref="0.01 1" solimp="0.9 .95 0.022" condim="3" friction="0.8 0.8 0.02 0.01 0.01"/>
+		<pair name="left_front_foot_floor_contact" geom1="front_left_foot_collision" geom2="floor" solref="0.01 1" solimp="0.9 .95 0.022" condim="3" friction="0.8 0.8 0.02 0.01 0.01"/>
+		<pair name="left_hind_foot_floor_contact" geom1="hind_left_foot_collision" geom2="floor" solref="0.01 1" solimp="0.9 .95 0.022" condim="3" friction="0.8 0.8 0.02 0.01 0.01"/>
     </contact>
-
-	<actuator>
-        <position class="go2/abduction" name="front_right_hip" joint="front_right_hip_joint"/>
-        <position class="go2/hip" name="front_right_thigh" joint="front_right_thigh_joint"/>
-        <position class="go2/knee" name="front_right_calf" joint="front_right_calf_joint"/>
-        <position class="go2/abduction" name="front_left_hip" joint="front_left_hip_joint"/>
-        <position class="go2/hip" name="front_left_thigh" joint="front_left_thigh_joint"/>
-        <position class="go2/knee" name="front_left_calf" joint="front_left_calf_joint"/>
-        <position class="go2/abduction" name="hind_right_hip" joint="hind_right_hip_joint"/>
-        <position class="go2/hip" name="hind_right_thigh" joint="hind_right_thigh_joint"/>
-        <position class="go2/knee" name="hind_right_calf" joint="hind_right_calf_joint"/>
-        <position class="go2/abduction" name="hind_left_hip" joint="hind_left_hip_joint"/>
-        <position class="go2/hip" name="hind_left_thigh" joint="hind_left_thigh_joint"/>
-        <position class="go2/knee" name="hind_left_calf" joint="hind_left_calf_joint"/>
-	</actuator>
 
 	<sensor>
 		<!-- IMU: -->
@@ -214,22 +245,22 @@
 		<accelerometer name="imu_acceleration" site="imu"/>
 
 		<!-- State Estimator: -->
-		<velocimeter name="local_linvel" site="imu"/>
+		<velocimeter name="local_linear_velocity" site="imu"/>
 		<framepos name="imu_position" objtype="site" objname="imu"/>
-		<framelinvel name="fr_global_linvel" objtype="site" objname="front_right_foot"/>
-		<framelinvel name="fl_global_linvel" objtype="site" objname="front_left_foot"/>
-		<framelinvel name="hr_global_linvel" objtype="site" objname="hind_right_foot"/>
-		<framelinvel name="hl_global_linvel" objtype="site" objname="hind_left_foot"/>
-		<framepos name="fr_pos" objtype="site" objname="front_right_foot" reftype="site" refname="imu"/>
-		<framepos name="fl_pos" objtype="site" objname="front_left_foot" reftype="site" refname="imu"/>
-		<framepos name="hr_pos" objtype="site" objname="hind_right_foot" reftype="site" refname="imu"/>
-		<framepos name="hl_pos" objtype="site" objname="hind_left_foot" reftype="site" refname="imu"/>
+		<framelinvel name="front_right_global_linear_velocity" objtype="site" objname="front_right_foot"/>
+		<framelinvel name="front_left_global_linear_velocity" objtype="site" objname="front_left_foot"/>
+		<framelinvel name="hind_right_global_linear_velocity" objtype="site" objname="hind_right_foot"/>
+		<framelinvel name="hind_left_global_linear_velocity" objtype="site" objname="hind_left_foot"/>
+		<framepos name="front_right_foot_position" objtype="site" objname="front_right_foot" reftype="site" refname="imu"/>
+		<framepos name="front_left_foot_position" objtype="site" objname="front_left_foot" reftype="site" refname="imu"/>
+		<framepos name="hind_right_foot_position" objtype="site" objname="hind_right_foot" reftype="site" refname="imu"/>
+		<framepos name="hind_left_foot_position" objtype="site" objname="hind_left_foot" reftype="site" refname="imu"/>
 
 		<!-- Globals: -->
 		<framezaxis name="upvector" objtype="site" objname="imu"/>
 		<framexaxis name="forwardvector" objtype="site" objname="imu"/>
-		<framelinvel name="global_linvel" objtype="site" objname="imu"/>
-		<frameangvel name="global_angvel" objtype="site" objname="imu"/>
+		<framelinvel name="global_linear_velocity" objtype="site" objname="imu"/>
+		<frameangvel name="global_angular_velocity" objtype="site" objname="imu"/>
 	</sensor>
 
 </mujoco>

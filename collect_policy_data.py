@@ -43,7 +43,7 @@ def controller(
 
 
 def main(argv=None):
-    filename = "scene_mjx.xml"
+    filename = "scene_vendored_mjx.xml"
     env_config = config.EnvironmentConfig(
         filename=filename,
         action_scale=0.5,
@@ -52,7 +52,7 @@ def main(argv=None):
     )
 
     env = unitree_go2.UnitreeGo2Env(
-        environment_config=env_config,
+        env_config=env_config,
     )
 
     model_path = os.path.join(
@@ -145,7 +145,7 @@ def main(argv=None):
             termination_flag = True
 
     # Parse Data History and write to csv:
-    output_filename = "simulation_data.csv"
+    output_filename = "simulation_history.csv"
     output_path = Path(output_filename)
     with output_path.open('w', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
