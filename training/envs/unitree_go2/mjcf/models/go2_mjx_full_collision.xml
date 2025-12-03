@@ -102,6 +102,7 @@
 			<geom name="left_torso_collision" class="go2/collision/torso/left"/>
 			<geom name="right_torso_collision" class="go2/collision/torso/right"/>
 			<site name="imu" pos="-0.02557 0 0.04232"/>
+			<site name="vicon_marker" pos="0.22 0 0.095" material="black"/>
 			<body name="front_right_hip" pos="0.1934 -0.0465 0">
 				<inertial pos="-0.0054 -0.00194 -0.000105" quat="0.498237 0.505462 0.499245 0.497014"
                     mass="0.678"
