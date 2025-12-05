@@ -300,5 +300,9 @@ user.bazelrc
 # ONNX Models:
 # *.onnx
 
+# Data base files:
+*.db
+*.db3
+
 # ONNX Virtual Environment:
 onnx_env/
