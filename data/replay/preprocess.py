@@ -23,22 +23,29 @@ def main(argv=None):
     command_history = data_directory / f"bags/{FLAGS.directory_name}/command_history.csv"
     state_history = data_directory / f"bags/{FLAGS.directory_name}/state_history.csv"
     imu_history = data_directory / f"bags/{FLAGS.directory_name}/imu_history.csv"
+    policy_command_history = data_directory / f"bags/{FLAGS.directory_name}/policy_command_history.csv"
     vicon_history = data_directory / f"bags/{FLAGS.directory_name}/vicon_history.csv"
 
-    metadata_file = data_directory / f"bags/{FLAGS.directory_name}/metadata.yaml"
-    if not metadata_file.exists():
-        print(f"Error: '{metadata_file}' not found.", file=sys.stderr)
+    robot_metadata_file = data_directory / f"bags/{FLAGS.directory_name}/robot_bag/metadata.yaml"
+    vicon_metadata_file = data_directory / f"bags/{FLAGS.directory_name}/vicon_bag/metadata.yaml"
+
+    if not all([robot_metadata_file.exists(), vicon_metadata_file.exists()]):
+        print(f"Error: metadata not found.", file=sys.stderr)
         print("Please put the 'metadata.yaml' in the data directory.", file=sys.stderr)
         return
 
     # Load metadata:
-    with metadata_file.open('r', encoding='utf-8') as f:
-        metadata = yaml.safe_load(f)
+    with robot_metadata_file.open('r', encoding='utf-8') as f:
+        robot_metadata = yaml.safe_load(f)
+
+    with vicon_metadata_file.open('r', encoding='utf-8') as f:
+        vicon_metadata = yaml.safe_load(f)
 
     files_exist = all([
         command_history.exists(),
         state_history.exists(),
         imu_history.exists(),
+        policy_command_history.exists(),
         vicon_history.exists(),
     ])
 
@@ -61,13 +68,24 @@ def main(argv=None):
         imu_history, delimiter=',',
     ).reshape(-1, imu_data_columns)
 
+    policy_command_data_columns = 4
+    policy_command_history = np.loadtxt(
+        policy_command_history, delimiter=',',
+    ).reshape(-1, policy_command_data_columns)
+
     vicon_data_columns = 8
     vicon_history = np.loadtxt(
         vicon_history, delimiter=',',
     ).reshape(-1, vicon_data_columns)
 
-    command_history, state_history, imu_history, vicon_history = process_data(
-        command_history, state_history, imu_history, vicon_history, metadata,
+    command_history, state_history, imu_history, policy_command_history, vicon_history = process_data(
+        command_history,
+        state_history,
+        imu_history,
+        policy_command_history,
+        vicon_history,
+        robot_metadata,
+        vicon_metadata,
     )
 
     # Save Processed Data:
@@ -87,6 +105,11 @@ def main(argv=None):
     np.savetxt(
         output_directory / "imu_history.csv",
         imu_history,
+        delimiter=',',
+    )
+    np.savetxt(
+        output_directory / "policy_command_history.csv",
+        policy_command_history,
         delimiter=',',
     )
     np.savetxt(

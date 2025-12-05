@@ -9,8 +9,6 @@ import numpy as np
 
 import mujoco
 import mujoco.viewer
-import scipy
-
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
@@ -114,7 +112,8 @@ def main(argv=None):
                 angular_velocity = imu[5:8]
                 linear_acceleration = imu[8:]
 
-                body_orientation = imu_orientation
+                # body_orientation = imu_orientation
+                body_orientation = vicon_orientation
 
                 # Set Body Position States:
                 data.qpos[:3] = body_position
@@ -135,7 +134,7 @@ def main(argv=None):
 
                 viewer.sync()
 
-                time.sleep(0.1)
+                time.sleep(0.02)
 
             termination_flag = True
 
