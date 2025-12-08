@@ -84,8 +84,6 @@ def main(argv=None):
         imu_history,
         policy_command_history,
         vicon_history,
-        robot_metadata,
-        vicon_metadata,
     )
 
     # Save Processed Data:

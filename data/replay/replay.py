@@ -10,6 +10,7 @@ import numpy as np
 import mujoco
 import mujoco.viewer
 
+
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
     'directory_name', None, 'Desired checkpoint folder name to load.', short_name='d',
@@ -88,6 +89,8 @@ def main(argv=None):
     with mujoco.viewer.launch_passive(model, data) as viewer:
         viewer.cam.trackbodyid = 1
         viewer.cam.distance = 5
+
+        time.sleep(10.0)
 
         while viewer.is_running() and not termination_flag:
             for command, state, imu, vicon in replay_data:

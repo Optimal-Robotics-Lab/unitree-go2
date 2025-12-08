@@ -8,25 +8,12 @@ def process_data(
     imu_history: np.ndarray,
     policy_command_history: np.ndarray,
     vicon_history: np.ndarray,
-    robot_metadata: dict,
-    vicon_metadata: dict,
     trim_time: float = 5.0,
     sample_rate: float = 0.02,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """ Process data from CSV files """
-    robot_bag_start_time = robot_metadata['rosbag2_bagfile_information']['starting_time']['nanoseconds_since_epoch']
-    vicon_bag_start_time = vicon_metadata['rosbag2_bagfile_information']['starting_time']['nanoseconds_since_epoch']
 
-    # Adjust time to seconds:
-    command_history[:, 0] = (command_history[:, 0] - robot_bag_start_time) * 1e-9
-    state_history[:, 0] = (state_history[:, 0] - robot_bag_start_time) * 1e-9
-    imu_history[:, 0] = (imu_history[:, 0] - robot_bag_start_time) * 1e-9
-    policy_command_history[:, 0] = (policy_command_history[:, 0] - robot_bag_start_time) * 1e-9
-    vicon_history[:, 0] = (vicon_history[:, 0] - vicon_bag_start_time) * 1e-9
     # Find first Command Signal:
-    zero_command = 2.146e+09    # Only for Vendor Controller
-    # zero_command = 0.0        # Only for Custom Controller
-
     start_idx = np.where(np.any(policy_command_history[:, 1:] != 0, axis=1))[0][0]
     start_time = policy_command_history[start_idx, 0]
 
@@ -58,6 +45,13 @@ def process_data(
     state_history[:, 0] -= state_start_time
     imu_history[:, 0] -= imu_start_time
     vicon_history[:, 0] -= vicon_start_time
+
+    # Set Timescale to Seconds:
+    command_history[:, 0] *= 1e-9
+    state_history[:, 0] *= 1e-9
+    imu_history[:, 0] *= 1e-9
+    policy_command_history[:, 0] *= 1e-9
+    vicon_history[:, 0] *= 1e-9
 
     # Interpolate at fixed time steps:
     time_points = np.arange(0, trim_time, sample_rate)
