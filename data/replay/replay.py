@@ -115,8 +115,8 @@ def main(argv=None):
                 angular_velocity = imu[5:8]
                 linear_acceleration = imu[8:]
 
-                # body_orientation = imu_orientation
-                body_orientation = vicon_orientation
+                body_orientation = imu_orientation
+                # body_orientation = vicon_orientation
 
                 # Set Body Position States:
                 data.qpos[:3] = body_position

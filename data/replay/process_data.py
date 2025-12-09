@@ -76,7 +76,7 @@ def process_data(
     vicon_history: np.ndarray,
     trim_time: float = 5.0,
     sample_frequency: float = 100.0,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> dict[str, np.ndarray]:
     """ Process data from CSV files """
 
     # Find first Command Signal:
@@ -168,9 +168,15 @@ def process_data(
     )
 
     # Align Filtered Data to Resampled Timepoints:
-    filterd_vicon_function = scipy.interpolate.interp1d(
+    filtered_positions_function = scipy.interpolate.interp1d(
         x=vicon_history[:, 0],
         y=positions,
+        axis=0,
+        kind='nearest',
+    )
+    filtered_velocity_function = scipy.interpolate.interp1d(
+        x=sample_time,
+        y=velocity,
         axis=0,
         kind='nearest',
     )
@@ -215,4 +221,25 @@ def process_data(
         vicon_history_sampled
     ))
 
-    return command_history, state_history, imu_history, policy_command_history, vicon_history
+    positions_sampled = filtered_positions_function(
+        time_points
+    )
+    velocity_sampled = filtered_velocity_function(
+        time_points
+    )
+    filtered_history = np.hstack((
+        time_points[:, np.newaxis],
+        positions_sampled,
+        velocity_sampled,
+    ))
+
+    processed_data = {
+        "command_history": command_history,
+        "state_history": state_history,
+        "imu_history": imu_history,
+        "policy_command_history": policy_command_history,
+        "vicon_history": vicon_history,
+        "filtered_history": filtered_history,
+    }
+
+    return processed_data
