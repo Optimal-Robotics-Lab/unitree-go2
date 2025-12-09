@@ -1,5 +1,71 @@
 import numpy as np
+import pandas as pd
 import scipy
+
+
+def preprocess_outliers(
+    data: np.ndarray,
+    threshold_sigma: float = 3.0
+) -> np.ndarray:
+    """
+        Median Absolute Deviation Thresholding:
+        Detects outliers using a rolling difference metric,
+        replaces them with NaN, and linearly interpolates the gaps.
+    """
+    clean_data = data.copy()
+
+    diffs = np.diff(clean_data, axis=0, prepend=clean_data[0:1])
+    dists = np.linalg.norm(diffs, axis=1)
+
+    median_jump = np.nanmedian(dists)
+    mad_jump = np.nanmedian(np.abs(dists - median_jump))
+
+    # Avoid division by zero if data is perfectly smooth
+    if mad_jump == 0:
+        return clean_data
+
+    cutoff = median_jump + (threshold_sigma * 1.4826 * mad_jump)
+
+    outlier_mask = dists > cutoff
+    clean_data[outlier_mask] = np.nan
+
+    df = pd.DataFrame(clean_data)
+    df = df.interpolate(method='linear', axis=0, limit_direction='both')
+
+    return df.to_numpy()
+
+
+def filter_data(
+    data: np.ndarray,
+    time: np.ndarray,
+    frequency: float = 100.0,
+    window_size: int = 5,
+    order: int = 2,
+    derivative: int = 1,
+) -> tuple[np.ndarray, np.ndarray]:
+    """ Smooth and Differentiate Data using Savitzky-Golay Filter """
+    dt = 1.0 / frequency
+    fixed_time = np.arange(time[0], time[-1], dt)
+
+    interpolation_fn = scipy.interpolate.interp1d(
+        time,
+        data,
+        kind='linear',
+        axis=0,
+        fill_value="extrapolate"
+    )
+    resampled_data = interpolation_fn(fixed_time)
+
+    result = scipy.signal.savgol_filter(
+        resampled_data,
+        window_length=window_size,
+        polyorder=order,
+        deriv=derivative,
+        delta=dt,
+        axis=0,
+    )
+
+    return result, fixed_time
 
 
 def process_data(
@@ -9,7 +75,7 @@ def process_data(
     policy_command_history: np.ndarray,
     vicon_history: np.ndarray,
     trim_time: float = 5.0,
-    sample_rate: float = 0.02,
+    sample_frequency: float = 100.0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """ Process data from CSV files """
 
@@ -53,8 +119,18 @@ def process_data(
     policy_command_history[:, 0] *= 1e-9
     vicon_history[:, 0] *= 1e-9
 
-    # Interpolate at fixed time steps:
-    time_points = np.arange(0, trim_time, sample_rate)
+    # Calculate Velocity from Vicon Data:
+    positions = vicon_history[:, 1:4] * 1e-3    # Convert mm to m
+    positions = preprocess_outliers(positions)
+    velocity, sample_time = filter_data(
+        data=positions,
+        time=vicon_history[:, 0],
+        frequency=sample_frequency,
+    )
+
+    # Resample Data:
+    dt = 1.0 / sample_frequency
+    time_points = np.arange(0, trim_time, dt)
 
     state_interpolation_function = scipy.interpolate.interp1d(
         x=state_history[:, 0],
@@ -87,6 +163,14 @@ def process_data(
     vicon_interpolation_function = scipy.interpolate.interp1d(
         x=vicon_history[:, 0],
         y=vicon_history[:, 1:],
+        axis=0,
+        kind='nearest',
+    )
+
+    # Align Filtered Data to Resampled Timepoints:
+    filterd_vicon_function = scipy.interpolate.interp1d(
+        x=vicon_history[:, 0],
+        y=positions,
         axis=0,
         kind='nearest',
     )
