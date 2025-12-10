@@ -847,7 +847,7 @@ class UnitreeGo2Env(PipelineEnv):
         height_gate = jnp.exp(-foot_height / scale_factor)
 
         return jnp.sum(velocity_xy_sq * height_gate)
-    
+
     def _cost_unwanted_contact(
         self,
         unwanted_contacts: base.State,
