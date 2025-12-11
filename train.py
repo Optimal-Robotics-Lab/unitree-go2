@@ -134,9 +134,15 @@ def main(argv=None):
     # Default Disturbance Config:
     disturbance_config = config.DisturbanceConfig()
 
-    flat_terrain = 'scene_mjx.xml'
+    if suffix == 'standard':
+        scene = 'scene_mjx.xml'
+    elif suffix == 'transparent':
+        scene = 'scene_mjx_transparent.xml'
+    else:
+        raise ValueError(f'Unknown FLAG.tag suffix: {suffix}')
+
     environment_config = config.EnvironmentConfig(
-        filename=flat_terrain,
+        filename=scene,
         action_scale=0.5,
         control_timestep=0.02,
         optimizer_timestep=0.004,
