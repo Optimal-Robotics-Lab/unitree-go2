@@ -3,7 +3,7 @@ import os
 import functools
 import time
 
-import pygame
+# import pygame
 
 import jax
 import numpy as np
@@ -18,7 +18,7 @@ from training.algorithms.ppo.load_utilities import load_policy
 
 
 jax.config.update("jax_enable_x64", True)
-pygame.init()
+# pygame.init()
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
@@ -30,8 +30,8 @@ flags.DEFINE_integer(
 
 
 def controller(
-    action: npt.Array,
-    default_control: npt.Array,
+    action: npt.NDArray,
+    default_control: npt.NDArray,
     action_scale: float,
 ) -> np.ndarray:
     motor_targets = default_control + action * action_scale
@@ -39,7 +39,7 @@ def controller(
 
 
 def main(argv=None):
-    flat_terrain = 'scene_mjx.xml'
+    flat_terrain = 'scene_mjx_velocity.xml'
     environment_config = config.EnvironmentConfig(
         filename=flat_terrain,
         action_scale=0.5,
@@ -48,7 +48,7 @@ def main(argv=None):
     )
 
     env = unitree_go2.UnitreeGo2Env(
-        environment_config=environment_config,
+        env_config=environment_config,
     )
 
     import pdb; pdb.set_trace()

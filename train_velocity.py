@@ -10,9 +10,9 @@ import optax
 import wandb
 import orbax.checkpoint as ocp
 
-from training.envs.unitree_go2_velocity_control import unitree_go2_joystick
-from training.envs.unitree_go2_velocity_control import config
-from training.envs.unitree_go2_velocity_control import randomize
+from training.envs.unitree_go2 import unitree_go2_joystick
+from training.envs.unitree_go2 import config
+from training.envs.unitree_go2 import randomize
 from training.algorithms.ppo import network_utilities as ppo_networks
 from training.algorithms.ppo.loss_utilities import loss_function
 from training.distribution_utilities import ParametricDistribution
@@ -47,41 +47,86 @@ flags.DEFINE_string(
 
 
 def main(argv=None):
+    # Get FLAG.tag prefix:
+    prefix, suffix = FLAGS.tag.split('-')
+
     # Baseline Reward Config:
-    reward_config = config.RewardConfig(
-        # Rewards:
-        tracking_linear_velocity=1.5,
-        tracking_angular_velocity=0.75,
-        # Orientation Regularization Terms:
-        orientation_regularization=-5.0,
-        linear_z_velocity=-2.0,
-        angular_xy_velocity=-0.05,
-        # Energy Regularization Terms:
-        torque=-2e-4,
-        action_rate=-0.1,
-        acceleration=-2.5e-4,
-        # Auxilary Terms:
-        stand_still=-1.0,
-        termination=-1.0,
-        unwanted_contact=-0.5,
-        # Gait Reward Terms:
-        foot_slip=-0.5,
-        air_time=0.75,
-        foot_clearance=0.5,
-        gait_variance=-1.0,
-        foot_acceleration=0.0, # This did not help
-        # Gait Hyperparameters:
-        target_air_time=0.25,
-        mode_time=0.3,
-        command_threshold=0.0,
-        velocity_threshold=0.5,
-        # Foot Clearance Reward Terms:
-        target_foot_height=0.125,
-        foot_clearance_velocity_scale=2.0,
-        foot_clearance_sigma=0.05,
-        # Hyperparameter for exponential kernel:
-        kernel_sigma=0.25,
-    )
+    if prefix == 'baseline':
+        reward_config = config.RewardConfig(
+            # Rewards:
+            tracking_linear_velocity=1.5,
+            tracking_angular_velocity=0.75,
+            # Orientation Regularization Terms:
+            orientation_regularization=-5.0,
+            linear_z_velocity=-2.0,
+            angular_xy_velocity=-0.05,
+            # Energy Regularization Terms:
+            torque=-2e-4,
+            action_rate=-0.01,
+            acceleration=-2.5e-5,
+            # Auxilary Terms:
+            stand_still=-1.0,
+            termination=-1.0,
+            unwanted_contact=-1.0,
+            # Gait Reward Terms:
+            foot_slip=-0.5,
+            air_time=0.75,
+            foot_clearance=0.5,
+            gait_variance=-1.0,
+            # Gait Hyperparameters:
+            target_air_time=0.25,
+            mode_time=0.2,
+            command_threshold=0.0,
+            velocity_threshold=0.5,
+            # Foot Clearance Reward Terms:
+            target_foot_height=0.125,
+            foot_clearance_velocity_scale=2.0,
+            foot_clearance_sigma=0.05,
+            # Hyperparameter for exponential kernel:
+            kernel_sigma=0.25,
+        )
+        command_config = config.CommandConfig()
+    elif prefix == 'finetune':
+        reward_config = config.RewardConfig(
+            # Rewards:
+            tracking_linear_velocity=1.5,
+            tracking_angular_velocity=0.75,
+            # Orientation Regularization Terms:
+            orientation_regularization=-5.0,
+            linear_z_velocity=-2.0,
+            angular_xy_velocity=-0.05,
+            # Energy Regularization Terms:
+            torque=-2e-4,
+            action_rate=-0.1,
+            acceleration=-2.5e-4,
+            # Auxilary Terms:
+            stand_still=-1.0,
+            termination=-1.0,
+            unwanted_contact=-1.0,
+            # Gait Reward Terms:
+            foot_slip=-0.5,
+            air_time=0.75,
+            foot_clearance=0.5,
+            gait_variance=-1.0,
+            # Gait Hyperparameters:
+            target_air_time=0.25,
+            mode_time=0.2,
+            command_threshold=0.0,
+            velocity_threshold=0.5,
+            # Foot Clearance Reward Terms:
+            target_foot_height=0.125,
+            foot_clearance_velocity_scale=2.0,
+            foot_clearance_sigma=0.05,
+            # Hyperparameter for exponential kernel:
+            kernel_sigma=0.25,
+        )
+        command_config = config.CommandConfig(
+            command_range=jax.numpy.array([1.5, 1.0, 3.14]),
+            command_mask_probability=0.9,
+            command_frequency=[0.5, 2.0],
+        )
+    else:
+        raise ValueError(f'Unknown FLAG.tag prefix: {prefix}')
 
     # Configs:
     noise_config = config.NoiseConfig()
@@ -89,85 +134,33 @@ def main(argv=None):
     # Default Disturbance Config:
     disturbance_config = config.DisturbanceConfig()
 
-    # Soft Disturbance Config:
-    # disturbance_config = config.DisturbanceConfig(
-    #     wait_times=[1.0, 3.0],
-    #     durations=[0.05, 0.2],
-    #     magnitudes=[0.0, 1.0],
-    # )
+    if suffix == 'standard':
+        scene = 'scene_mjx_velocity.xml'
+    elif suffix == 'transparent':
+        scene = 'scene_mjx_transparent_velocity.xml'
+    else:
+        raise ValueError(f'Unknown FLAG.tag suffix: {suffix}')
 
-    # Default Command Config:
-    # command_config = config.CommandConfig()
-
-    # Long Horizon Command Config:
-    # command_config = config.CommandConfig(
-    #     command_range=jax.numpy.array([1.5, 1.0, 1.2]),
-    #     single_command_probability=0.75,
-    #     command_mask_probability=0.9,
-    #     command_frequency=[1.0, 10.0],
-    # )
-
-    # Short Horizon Command Config:
-    # command_config = config.CommandConfig(
-    #     command_range=jax.numpy.array([1.5, 1.0, 1.2]),
-    #     single_command_probability=0.9,
-    #     command_mask_probability=0.9,
-    #     command_frequency=[1.0, 5.0],
-    # )
-
-    # Fast Long Horizon Command Config:
-    # command_config = config.CommandConfig(
-    #     command_range=jax.numpy.array([2.0, 1.5, 3.14]),
-    #     single_command_probability=0.9,
-    #     command_mask_probability=0.9,
-    #     command_frequency=[1.0, 10.0],
-    # )
-
-    # Fast Command Tracking:
-    command_config = config.CommandConfig(
-        command_range=jax.numpy.array([1.5, 1.0, 3.14]),
-        single_command_probability=0.0,
-        command_mask_probability=0.9,
-        command_frequency=[0.5, 2.0],
-    )
-
-    # command_config = config.CommandConfig(
-    #     command_range=jax.numpy.array([2.0, 1.5, 3.14]),
-    #     single_command_probability=0.0,
-    #     command_mask_probability=0.9,
-    #     command_frequency=[0.5, 2.0],
-    # )
-
-    filename = "scene_mjx.xml"
-    # filename = 'scene_sabotaged_mjx.xml'
-
-    env_config = config.EnvironmentConfig(
-        filename=filename,
+    environment_config = config.EnvironmentConfig(
+        filename=scene,
         action_scale=0.5,
         control_timestep=0.02,
         optimizer_timestep=0.004,
     )
 
-    environment_config = {
-        "env_config": env_config,
-        "noise_config": noise_config,
-        "disturbance_config": disturbance_config,
-        "command_config": command_config,
-    }
-
     env = unitree_go2_joystick.UnitreeGo2Env(
-        env_config=env_config,
+        env_config=environment_config,
         reward_config=reward_config,
         noise_config=noise_config,
         disturbance_config=disturbance_config,
         command_config=command_config,
     )
     eval_env = unitree_go2_joystick.UnitreeGo2Env(
-        env_config=env_config,
+        env_config=environment_config,
         reward_config=reward_config,
         noise_config=noise_config,
         disturbance_config=disturbance_config,
-        command_config=command_config
+        command_config=command_config,
     )
 
     # Metadata:
@@ -214,7 +207,7 @@ def main(argv=None):
 
     # Start Wandb and save metadata:
     run = wandb.init(
-        project='Unitree-Go2',
+        project='Unitree-Go2-Sim-to-Real',
         tags=[FLAGS.tag],
         config={
             'reward_config': reward_config,
@@ -222,6 +215,9 @@ def main(argv=None):
             'loss_metadata': loss_metadata,
             'training_metadata': training_metadata,
             'environment_config': environment_config,
+            'noise_config': noise_config,
+            'disturbance_config': disturbance_config,
+            'command_config': command_config,
         },
     )
 

@@ -194,9 +194,8 @@ class UnitreeGo2Env(PipelineEnv):
         ]
 
         # Observation Size:
-        import pdb; pdb.set_trace()
-        self.num_observations = 45
-        self.num_privileged_observations = self.num_observations + 91
+        self.num_observations = 33 + self.nu
+        self.num_privileged_observations = self.num_observations + 79 + self.nu
 
     def sample_command(
         self,
@@ -263,7 +262,7 @@ class UnitreeGo2Env(PipelineEnv):
         rng, key = jax.random.split(rng)
         delta = jax.random.uniform(
             key,
-            shape=(self.sys.mj_model.nu,),
+            shape=(self.num_joints,),
             minval=-0.1,
             maxval=0.1,
         )
