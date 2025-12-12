@@ -1,4 +1,9 @@
 import os
+import sys
+
+current_directory = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_directory)
+sys.path.insert(0, project_root)
 
 from absl import app, flags
 
@@ -9,9 +14,10 @@ import tf2onnx
 import tensorflow as tf
 from tensorflow.keras import layers
 
-# from training.envs.unitree_go2.unitree_go2_joystick import UnitreeGo2Env
+from training.envs.unitree_go2.unitree_go2_joystick import UnitreeGo2Env
+from training.envs.unitree_go2 import config
 # from training.envs.unitree_go2_velocity_control.unitree_go2_joystick import UnitreeGo2Env
-from training.envs.unitree_go2_handstand.unitree_go2_handstand import UnitreeGo2Env
+# from training.envs.unitree_go2_handstand.unitree_go2_handstand import UnitreeGo2Env
 
 from training.algorithms.ppo.load_utilities import load_policy
 
@@ -22,11 +28,27 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string(
     'checkpoint_name', None, 'Desired checkpoint folder name to load.', short_name='c',
 )
+flags.DEFINE_string(
+    'control_type', None, 'Control type for the environment (position or velocity).', short_name='t',
+)
 
 
 def main(argv=None):
     # Load Policy:
-    env = UnitreeGo2Env()
+    if FLAGS.control_type == 'position':
+        scene = "scene_mjx.xml"
+    elif FLAGS.control_type == 'velocity':
+        scene = "scene_mjx_velocity.xml"
+    else:
+        raise ValueError(f"Unknown control type: {FLAGS.control_type}")
+    
+    env_config = config.EnvironmentConfig(
+        filename=scene,
+        action_scale=0.5,
+        control_timestep=0.02,
+        optimizer_timestep=0.004,
+    )
+    env = UnitreeGo2Env(env_config=env_config)
     make_policy, params, metadata = load_policy(
         checkpoint_name=FLAGS.checkpoint_name,
         environment=env,
