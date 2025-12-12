@@ -1,0 +1,58 @@
+<mujoco>
+
+	<default>
+		<default class="go2/abduction/position">
+			<position forcerange="-23.7 23.7" inheritrange="1" kp="35.0"/>
+		</default>
+        <default class="go2/abduction/velocity">
+            <velocity forcerange="-23.7 23.7" ctrlrange="-3.14 3.14" kv="0.5"/>
+        </default>
+		<default class="go2/hip/position">
+			<position forcerange="-23.7 23.7" inheritrange="1" kp="35.0"/>
+		</default>
+        <default class="go2/hip/velocity">
+            <velocity forcerange="-23.7 23.7" ctrlrange="-3.14 3.14" kv="0.5"/>
+        </default>
+		<default class="go2/knee/position">
+			<position forcerange="-45.43 45.43" inheritrange="1" kp="35.0"/>
+		</default>
+        <default class="go2/knee/velocity">
+            <velocity forcerange="-45.43 45.43" ctrlrange="-3.14 3.14" kv="0.5"/>
+        </default>
+	</default>
+
+	<actuator>
+        <position class="go2/abduction/position" name="front_right_hip" joint="front_right_hip_joint"/>
+        <position class="go2/hip/position" name="front_right_thigh" joint="front_right_thigh_joint"/>
+        <position class="go2/knee/position" name="front_right_calf" joint="front_right_calf_joint"/>
+        <position class="go2/abduction/position" name="front_left_hip" joint="front_left_hip_joint"/>
+        <position class="go2/hip/position" name="front_left_thigh" joint="front_left_thigh_joint"/>
+        <position class="go2/knee/position" name="front_left_calf" joint="front_left_calf_joint"/>
+        <position class="go2/abduction/position" name="hind_right_hip" joint="hind_right_hip_joint"/>
+        <position class="go2/hip/position" name="hind_right_thigh" joint="hind_right_thigh_joint"/>
+        <position class="go2/knee/position" name="hind_right_calf" joint="hind_right_calf_joint"/>
+        <position class="go2/abduction/position" name="hind_left_hip" joint="hind_left_hip_joint"/>
+        <position class="go2/hip/position" name="hind_left_thigh" joint="hind_left_thigh_joint"/>
+        <position class="go2/knee/position" name="hind_left_calf" joint="hind_left_calf_joint"/>
+        <velocity class="go2/abduction/velocity" name="front_right_hip_velocity" joint="front_right_hip_joint"/>
+		<velocity class="go2/hip/velocity" name="front_right_thigh_velocity" joint="front_right_thigh_joint"/>
+		<velocity class="go2/knee/velocity" name="front_right_calf_velocity" joint="front_right_calf_joint"/>
+		<velocity class="go2/abduction/velocity" name="front_left_hip_velocity" joint="front_left_hip_joint"/>
+		<velocity class="go2/hip/velocity" name="front_left_thigh_velocity" joint="front_left_thigh_joint"/>
+		<velocity class="go2/knee/velocity" name="front_left_calf_velocity" joint="front_left_calf_joint"/>
+		<velocity class="go2/abduction/velocity" name="hind_right_hip_velocity" joint="hind_right_hip_joint"/>
+		<velocity class="go2/hip/velocity" name="hind_right_thigh_velocity" joint="hind_right_thigh_joint"/>
+		<velocity class="go2/knee/velocity" name="hind_right_calf_velocity" joint="hind_right_calf_joint"/>
+		<velocity class="go2/abduction/velocity" name="hind_left_hip_velocity" joint="hind_left_hip_joint"/>
+		<velocity class="go2/hip/velocity" name="hind_left_thigh_velocity" joint="hind_left_thigh_joint"/>
+		<velocity class="go2/knee/velocity" name="hind_left_calf_velocity" joint="hind_left_calf_joint"/>
+	</actuator>
+
+	<keyframe>
+		<key name="home"
+			qpos="0 0 0.3 1 0 0 0 0.0 0.9 -1.8 0.0 0.9 -1.8 0.0 0.9 -1.8 0.0 0.9 -1.8"
+			ctrl="0 0.9 -1.8 0 0.9 -1.8 0 0.9 -1.8 0 0.9 -1.8 0 0 0 0 0 0 0 0 0 0 0 0"/>
+		/>
+  	</keyframe>
+
+</mujoco>

@@ -194,6 +194,7 @@ class UnitreeGo2Env(PipelineEnv):
         ]
 
         # Observation Size:
+        import pdb; pdb.set_trace()
         self.num_observations = 45
         self.num_privileged_observations = self.num_observations + 91
 
@@ -609,7 +610,7 @@ class UnitreeGo2Env(PipelineEnv):
             noisy_projected_gravity,                    # 3
             noisy_joint_positions - self.default_pose,  # 12
             noisy_joint_velocities,                     # 12
-            state_info['previous_action'],              # 12
+            state_info['previous_action'],              # 12 or 24
             state_info['command'],                      # 3
         ])
 
@@ -620,7 +621,7 @@ class UnitreeGo2Env(PipelineEnv):
         feet_velocity = self.get_feet_velocity(pipeline_state).ravel()
 
         privileged_observation = jnp.concatenate([
-            observation,                                                                                # 45
+            observation,                                                                                # 45 or 57
             accelerometer,                                                                              # 3
             gyroscope,                                                                                  # 3
             projected_gravity,                                                                          # 3
@@ -628,7 +629,7 @@ class UnitreeGo2Env(PipelineEnv):
             global_angular_velocity,                                                                    # 3
             q - self.default_pose,                                                                      # 12
             qd,                                                                                         # 12
-            actuator_force,                                                                             # 12
+            actuator_force,                                                                             # 12 or 24
             feet_velocity,                                                                              # 12
             state_info['previous_contact'],                                                             # 4
             state_info['feet_air_time'],                                                                # 4
@@ -641,7 +642,7 @@ class UnitreeGo2Env(PipelineEnv):
                 state_info['steps_since_previous_disturbance'] >= state_info['steps_until_next_disturbance']
             ]),                                                                                         # 1
         ])
-        # Size: 91
+        # Size: 91 or 115
 
         return {
             'state': observation,
