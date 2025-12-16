@@ -1,0 +1,264 @@
+front_left_calf:
+  position_error:
+    diebold_mariano_p_value: 0.0
+    diebold_mariano_statistic: -8.492694039332674
+    mannwhitneyu_p_value: 1.9210784130947103e-15
+    mannwhitneyu_statistic: 397655.0
+    ttest_p_value: 4.854405967457172e-22
+    ttest_statistic: -9.717760797759754
+  torque_error:
+    diebold_mariano_p_value: 0.0
+    diebold_mariano_statistic: -12.976275390057857
+    mannwhitneyu_p_value: 4.591387076667002e-81
+    mannwhitneyu_statistic: 253599.0
+    ttest_p_value: 1.0562286414633323e-69
+    ttest_statistic: -18.447226501372146
+  velocity_error:
+    diebold_mariano_p_value: 0.24375742474678308
+    diebold_mariano_statistic: -1.1663355901116053
+    mannwhitneyu_p_value: 0.003829048851855212
+    mannwhitneyu_statistic: 464615.0
+    ttest_p_value: 0.01804618842121285
+    ttest_statistic: -2.0973018563028463
+front_left_hip:
+  position_error:
+    diebold_mariano_p_value: 0.005294022210411198
+    diebold_mariano_statistic: 2.794719688315035
+    mannwhitneyu_p_value: 0.00010433136338893333
+    mannwhitneyu_statistic: 451186.0
+    ttest_p_value: 0.8206567983032131
+    ttest_statistic: 0.9181002547608649
+  torque_error:
+    diebold_mariano_p_value: 0.0
+    diebold_mariano_statistic: -12.874344181562059
+    mannwhitneyu_p_value: 3.1418818774069054e-56
+    mannwhitneyu_statistic: 295850.0
+    ttest_p_value: 3.1314711990161674e-56
+    ttest_statistic: -16.39610522683381
+  velocity_error:
+    diebold_mariano_p_value: 0.0
+    diebold_mariano_statistic: -12.81084365762947
+    mannwhitneyu_p_value: 1.5634487044834062e-22
+    mannwhitneyu_statistic: 373978.0
+    ttest_p_value: 1.089670061071257e-43
+    ttest_statistic: -14.325162655124396
+front_left_thigh:
+  position_error:
+    diebold_mariano_p_value: 3.490541189421492e-13
+    diebold_mariano_statistic: -7.373405231643573
+    mannwhitneyu_p_value: 5.302512833544305e-08
+    mannwhitneyu_statistic: 430456.0
+    ttest_p_value: 1.6739936535015613e-13
+    ttest_statistic: -7.33655562768409
+  torque_error:
+    diebold_mariano_p_value: 0.0
+    diebold_mariano_statistic: -8.969081054064118
+    mannwhitneyu_p_value: 9.97740015278278e-68
+    mannwhitneyu_statistic: 275301.0
+    ttest_p_value: 5.453347660392759e-49
+    ttest_statistic: -15.168245522226417
+  velocity_error:
+    diebold_mariano_p_value: 0.0
+    diebold_mariano_statistic: -9.014715856492096
+    mannwhitneyu_p_value: 1.9990978454451806e-17
+    mannwhitneyu_statistic: 390525.0
+    ttest_p_value: 2.8192789909954674e-23
+    ttest_statistic: -10.018986598313951
+front_right_calf:
+  position_error:
+    diebold_mariano_p_value: 9.665020331484087e-05
+    diebold_mariano_statistic: -3.914731360063872
+    mannwhitneyu_p_value: 0.07618223763070901
+    mannwhitneyu_statistic: 480546.0
+    ttest_p_value: 0.002622776763365457
+    ttest_statistic: -2.7947402497341387
+  torque_error:
+    diebold_mariano_p_value: 0.0
+    diebold_mariano_statistic: -10.434246739082235
+    mannwhitneyu_p_value: 7.414659211993686e-45
+    mannwhitneyu_statistic: 318441.0
+    ttest_p_value: 7.934395934044028e-42
+    ttest_statistic: -13.845621345505126
+  velocity_error:
+    diebold_mariano_p_value: 2.2905526098071505e-06
+    diebold_mariano_statistic: -4.753704457775147
+    mannwhitneyu_p_value: 1.355833577952729e-08
+    mannwhitneyu_statistic: 427322.0
+    ttest_p_value: 1.3485992257515418e-08
+    ttest_statistic: -5.582353738106638
+front_right_hip:
+  position_error:
+    diebold_mariano_p_value: 1.5827660547529376e-05
+    diebold_mariano_statistic: -4.338168264193469
+    mannwhitneyu_p_value: 2.2306513939451384e-05
+    mannwhitneyu_statistic: 446365.0
+    ttest_p_value: 4.1658976062295777e-07
+    ttest_statistic: -4.944050950208711
+  torque_error:
+    diebold_mariano_p_value: 0.0
+    diebold_mariano_statistic: -11.21550991178989
+    mannwhitneyu_p_value: 3.96271284638864e-44
+    mannwhitneyu_statistic: 319983.0
+    ttest_p_value: 3.149400076914659e-46
+    ttest_statistic: -14.712787138297912
+  velocity_error:
+    diebold_mariano_p_value: 7.543643487650797e-10
+    diebold_mariano_statistic: -6.214679007547899
+    mannwhitneyu_p_value: 5.698106581005454e-15
+    mannwhitneyu_statistic: 399426.0
+    ttest_p_value: 4.1154507868057145e-18
+    ttest_statistic: -8.69386608623845
+front_right_thigh:
+  position_error:
+    diebold_mariano_p_value: 0.1742359253565331
+    diebold_mariano_statistic: -1.359687537532073
+    mannwhitneyu_p_value: 0.4582448313947663
+    mannwhitneyu_statistic: 497648.0
+    ttest_p_value: 0.17568608686682308
+    ttest_statistic: -0.9321511111563198
+  torque_error:
+    diebold_mariano_p_value: 0.0
+    diebold_mariano_statistic: -9.730703586448133
+    mannwhitneyu_p_value: 8.85654241101335e-47
+    mannwhitneyu_statistic: 314429.0
+    ttest_p_value: 5.497559987664261e-45
+    ttest_statistic: -14.512603185408494
+  velocity_error:
+    diebold_mariano_p_value: 0.0
+    diebold_mariano_statistic: -9.284861705521331
+    mannwhitneyu_p_value: 1.1549820821239257e-08
+    mannwhitneyu_statistic: 426962.0
+    ttest_p_value: 3.0363360739660677e-16
+    ttest_statistic: -8.165990258850455
+hind_left_calf:
+  position_error:
+    diebold_mariano_p_value: 3.0229197794717777e-05
+    diebold_mariano_statistic: -4.191043339052098
+    mannwhitneyu_p_value: 5.7595650759075214e-24
+    mannwhitneyu_statistic: 369705.0
+    ttest_p_value: 3.750134026911141e-17
+    ttest_statistic: -8.427015348663897
+  torque_error:
+    diebold_mariano_p_value: 1.7830181775480014e-13
+    diebold_mariano_statistic: -7.467177322550042
+    mannwhitneyu_p_value: 1.5026629927812734e-38
+    mannwhitneyu_statistic: 332269.0
+    ttest_p_value: 3.5851321447722747e-29
+    ttest_statistic: -11.340093115721627
+  velocity_error:
+    diebold_mariano_p_value: 1.291568608507987e-06
+    diebold_mariano_statistic: -4.8708386384841535
+    mannwhitneyu_p_value: 3.102065709770143e-25
+    mannwhitneyu_statistic: 366036.0
+    ttest_p_value: 2.697520627240263e-17
+    ttest_statistic: -8.459658281233029
+hind_left_hip:
+  position_error:
+    diebold_mariano_p_value: 0.0
+    diebold_mariano_statistic: -12.838691599489422
+    mannwhitneyu_p_value: 4.509082529024359e-20
+    mannwhitneyu_statistic: 381664.0
+    ttest_p_value: 1.881638191638225e-32
+    ttest_statistic: -12.05661283607994
+  torque_error:
+    diebold_mariano_p_value: 2.0601160155564457e-07
+    diebold_mariano_statistic: -5.2304502177717875
+    mannwhitneyu_p_value: 1.1346759422356238e-18
+    mannwhitneyu_statistic: 386269.0
+    ttest_p_value: 1.3232339396075066e-20
+    ttest_statistic: -9.34895795204658
+  velocity_error:
+    diebold_mariano_p_value: 2.886579864025407e-15
+    diebold_mariano_statistic: -8.020046717007375
+    mannwhitneyu_p_value: 2.7646968304014953e-33
+    mannwhitneyu_statistic: 344747.0
+    ttest_p_value: 1.1465110124655032e-28
+    ttest_statistic: -11.238012132347789
+hind_left_thigh:
+  position_error:
+    diebold_mariano_p_value: 2.220446049250313e-16
+    diebold_mariano_statistic: -8.473626292449309
+    mannwhitneyu_p_value: 2.48894451381261e-37
+    mannwhitneyu_statistic: 335075.0
+    ttest_p_value: 2.8688183030195986e-31
+    ttest_statistic: -11.792411591887818
+  torque_error:
+    diebold_mariano_p_value: 5.579980921766037e-13
+    diebold_mariano_statistic: -7.307204709150157
+    mannwhitneyu_p_value: 7.821519801265722e-39
+    mannwhitneyu_statistic: 331623.0
+    ttest_p_value: 1.0054655664298446e-30
+    ttest_statistic: -11.68168570896098
+  velocity_error:
+    diebold_mariano_p_value: 6.60901573852346e-05
+    diebold_mariano_statistic: -4.006914171256949
+    mannwhitneyu_p_value: 4.829800743621964e-24
+    mannwhitneyu_statistic: 369481.0
+    ttest_p_value: 2.2868260937922436e-14
+    ttest_statistic: -7.603774607746756
+hind_right_calf:
+  position_error:
+    diebold_mariano_p_value: 3.914646384828302e-13
+    diebold_mariano_statistic: -7.357209690155299
+    mannwhitneyu_p_value: 3.556643271340847e-14
+    mannwhitneyu_statistic: 402480.0
+    ttest_p_value: 2.940356923757389e-21
+    ttest_statistic: -9.532508749927747
+  torque_error:
+    diebold_mariano_p_value: 0.0
+    diebold_mariano_statistic: -11.310093690052119
+    mannwhitneyu_p_value: 1.6538649212181597e-58
+    mannwhitneyu_statistic: 291617.0
+    ttest_p_value: 1.6061027988525582e-47
+    ttest_statistic: -14.855334743584121
+  velocity_error:
+    diebold_mariano_p_value: 6.164886379167456e-10
+    diebold_mariano_statistic: -6.247525139116529
+    mannwhitneyu_p_value: 2.2945582156004547e-12
+    mannwhitneyu_statistic: 409804.0
+    ttest_p_value: 2.6011726322381492e-14
+    ttest_statistic: -7.5845195462153745
+hind_right_hip:
+  position_error:
+    diebold_mariano_p_value: 0.0019206040903305688
+    diebold_mariano_statistic: 3.110518881696426
+    mannwhitneyu_p_value: 0.9815124889378859
+    mannwhitneyu_statistic: 525897.0
+    ttest_p_value: 0.9993721023039644
+    ttest_statistic: 3.2306103557723165
+  torque_error:
+    diebold_mariano_p_value: 0.0
+    diebold_mariano_statistic: -9.267279178862992
+    mannwhitneyu_p_value: 4.8286142122285e-23
+    mannwhitneyu_statistic: 372441.0
+    ttest_p_value: 6.609901642129583e-29
+    ttest_statistic: -11.30807634677281
+  velocity_error:
+    diebold_mariano_p_value: 3.43036266059471e-10
+    diebold_mariano_statistic: -6.342073309992803
+    mannwhitneyu_p_value: 8.565731257808362e-18
+    mannwhitneyu_statistic: 389251.0
+    ttest_p_value: 5.204323936410383e-19
+    ttest_statistic: -8.925700959903029
+hind_right_thigh:
+  position_error:
+    diebold_mariano_p_value: 2.220446049250313e-16
+    diebold_mariano_statistic: -8.468666392842625
+    mannwhitneyu_p_value: 1.6501237112444172e-29
+    mannwhitneyu_statistic: 354348.0
+    ttest_p_value: 6.357275632484877e-28
+    ttest_statistic: -11.071210869208748
+  torque_error:
+    diebold_mariano_p_value: 0.0
+    diebold_mariano_statistic: -13.335288758423301
+    mannwhitneyu_p_value: 3.497257825002726e-105
+    mannwhitneyu_statistic: 218567.0
+    ttest_p_value: 4.2710945031439607e-85
+    ttest_statistic: -20.90934495469365
+  velocity_error:
+    diebold_mariano_p_value: 1.1217376580718863e-05
+    diebold_mariano_statistic: -4.41469584086885
+    mannwhitneyu_p_value: 1.4794457871633428e-18
+    mannwhitneyu_statistic: 386656.0
+    ttest_p_value: 1.0957485355123292e-14
+    ttest_statistic: -7.703088996622803

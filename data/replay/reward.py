@@ -1,5 +1,6 @@
 import sys
 import pathlib
+import yaml
 
 from absl import app, flags
 
@@ -212,6 +213,17 @@ def main(argv=None):
         reward_dicts.append(reward_dict)
 
     print("Average Reward:", np.mean(rewards))
+
+    mean_rewards = {}
+    for key in reward_config.keys():
+        values = list(map(lambda rd: rd[key].item(), reward_dicts))
+        avg = np.mean(values).item()
+        mean_rewards[key] = avg
+
+    output_directory = data_directory / f"processed/{FLAGS.directory_name}"
+    output_directory.mkdir(parents=True, exist_ok=True)
+    with open(output_directory / "reward_summary.yaml", 'w') as f:
+        yaml.dump(mean_rewards, f, sort_keys=False)
 
 
 # Rewards and Costs:

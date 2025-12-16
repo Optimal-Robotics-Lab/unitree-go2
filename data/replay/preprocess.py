@@ -39,13 +39,14 @@ def main(argv=None):
         return
 
     # Shape Data:
-    robot_data_columns = 37
+    command_data_columns = 37
+    state_data_columns = 49
     command_history = np.loadtxt(
         command_history, delimiter=',',
-    ).reshape(-1, robot_data_columns)
+    ).reshape(-1, command_data_columns)
     state_history = np.loadtxt(
         state_history, delimiter=',',
-    ).reshape(-1, robot_data_columns)
+    ).reshape(-1, state_data_columns)
 
     imu_data_columns = 11
     imu_history = np.loadtxt(
@@ -68,6 +69,8 @@ def main(argv=None):
         imu_history,
         policy_command_history,
         vicon_history,
+        trim_time=20.0,
+        sample_frequency=50.0,
     )
 
     command_history = data_dictionary["command_history"]
