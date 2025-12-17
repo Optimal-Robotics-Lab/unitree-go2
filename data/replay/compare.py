@@ -57,7 +57,7 @@ def main(argv=None):
     with open(yaml_directory / "stats.yaml", 'w') as f:
         yaml.dump(stats, f)
 
-    if not FLAGS.plot:
+    if FLAGS.plot:
         joint_positions_hardware = np.array(outputs_hardware['qpos'])[:, 7:]
         joint_positions_simulation = np.array(outputs_simulation['qpos'])[:, 7:]
         joint_velocities_hardware = np.array(outputs_hardware['qvel'])[:, 6:]

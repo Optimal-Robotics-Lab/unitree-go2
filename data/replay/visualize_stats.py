@@ -7,6 +7,8 @@ import numpy as np
 
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 
 FLAGS = flags.FLAGS
@@ -19,7 +21,7 @@ def main(argv=None):
     # Load yaml:
     data_directory = pathlib.Path(__file__).parent.parent
     directories = [
-        data_directory / f"processed/standard-replay-position",
+        data_directory / f"processed/standard-replay-position-2",
         data_directory / f"processed/transparent-replay-position",
     ]
 
@@ -93,6 +95,49 @@ def main(argv=None):
 
     fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
     fig.update_layout(showlegend=False)
+
+    fig.show()
+
+    fig = make_subplots(
+        rows=1, cols=3,
+        subplot_titles=("Position Error (m)", "Velocity Error (m/s)", "Torque Error (Nm)")
+    )
+
+    # Helper function to add histograms with specific bin counts
+    def add_metric_traces(col_idx, std_data, trans_data, bin_count=50):
+        # Standard Model Trace
+        fig.add_trace(go.Histogram(
+            x=std_data,
+            name='Standard',
+            marker_color='royalblue',
+            opacity=0.6,
+            nbinsx=bin_count,  # <--- CRITICAL: Forces 50 bins for THIS specific plot
+            showlegend=(col_idx == 1) # Only show legend entry once
+        ), row=1, col=col_idx)
+
+        # Transparent Model Trace
+        fig.add_trace(go.Histogram(
+            x=trans_data,
+            name='Transparent',
+            marker_color='orange',
+            opacity=0.6,
+            nbinsx=bin_count,  # <--- CRITICAL: Forces 50 bins for THIS specific plot
+            showlegend=(col_idx == 1)
+        ), row=1, col=col_idx)
+
+    # 3. Add the data
+    # You can increase 'bin_count' if you want even finer detail (e.g., 100)
+    add_metric_traces(1, position_errors_standard_abs, position_errors_transparent_abs, bin_count=50)
+    add_metric_traces(2, velocity_errors_standard_abs, velocity_errors_transparent_abs, bin_count=50)
+    add_metric_traces(3, torque_errors_standard_abs, torque_errors_transparent_abs, bin_count=50)
+
+    # 4. Update Layout
+    fig.update_layout(
+        barmode='overlay',
+        title_text="Detailed Error Distribution Comparison",
+        template='plotly_white',
+        height=500,
+    )
 
     fig.show()
 

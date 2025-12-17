@@ -387,15 +387,15 @@ class UnitreeGo2Env(PipelineEnv):
         ])
 
         # Feet Air and Contact Time:
-        state.info['feet_contact_time'] += self.dt
-        state.info['feet_air_time'] += self.dt
-
         state.info['previous_air_time'] = jnp.where(
             feet_contacts, state.info['feet_air_time'], state.info['previous_air_time'],
         )
         state.info['previous_contact_time'] = jnp.where(
             ~feet_contacts, state.info['feet_contact_time'], state.info['previous_contact_time'],
         )
+
+        state.info['feet_contact_time'] += self.dt
+        state.info['feet_air_time'] += self.dt
 
         state.info['feet_air_time'] *= ~feet_contacts
         state.info['feet_contact_time'] *= feet_contacts
