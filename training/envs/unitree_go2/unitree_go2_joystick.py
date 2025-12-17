@@ -234,9 +234,8 @@ class UnitreeGo2Env(PipelineEnv):
     def reset(self, rng: PRNGKey) -> State:  # pytype: disable=signature-mismatch
         # Choose Initial Position and Velocity:
         initial_qpos = self.home_qpos
-        rotation_axis = jnp.array([0, 0, 1])
-
         initial_qvel = self.home_qvel
+        rotation_axis = jnp.array([0, 0, 1])
 
         # Initial Position:
         rng, key = jax.random.split(rng)
@@ -445,8 +444,11 @@ class UnitreeGo2Env(PipelineEnv):
             'stand_still': self._cost_stand_still(
                 state.info['command'], joint_angles,
             ),
+            # 'foot_slip': self._cost_foot_slip(
+            #     pipeline_state, target_foot_height=0.05, decay_rate=0.99,
+            # ),
             'foot_slip': self._cost_foot_slip(
-                pipeline_state, target_foot_height=0.05, decay_rate=0.99,
+                pipeline_state, feet_contacts, state.info['command'],
             ),
             'air_time': self._reward_air_time(
                 state.info['feet_air_time'],
@@ -787,43 +789,43 @@ class UnitreeGo2Env(PipelineEnv):
         error = jnp.sum(foot_error * foot_velocity_tanh)
         return jnp.exp(-error / sigma)
 
-    # def _cost_foot_slip(
-    #     self,
-    #     pipeline_state: base.State,
-    #     contact: jax.Array,
-    #     commands: jax.Array,
-    # ) -> jax.Array:
-    #     # Penalize foot slip
-    #     command_norm = jnp.linalg.norm(commands)
-    #     foot_velocity = self.get_feet_velocity(pipeline_state)
-    #     foot_velocity_xy = foot_velocity[..., :2]
-    #     velocity_xy_sq = jnp.sum(jnp.square(foot_velocity_xy), axis=-1)
-    #     return jnp.sum(velocity_xy_sq * contact) * (command_norm > 0.1)
-
     def _cost_foot_slip(
         self,
         pipeline_state: base.State,
-        target_foot_height: float = 0.1,
-        decay_rate: float = 0.95,
+        contact: jax.Array,
+        commands: jax.Array,
     ) -> jax.Array:
-        # Penalizes foot slip velocity at contact to encourage ground speed matching.
-        if not (0.0 < decay_rate <= 1.0):
-            raise ValueError("Decay rate must be between 0 and 1.")
-
-        # Foot velocities and foot heights
+        # Penalize foot slip
+        command_norm = jnp.linalg.norm(commands)
         foot_velocity = self.get_feet_velocity(pipeline_state)
         foot_velocity_xy = foot_velocity[..., :2]
-        foot_position = pipeline_state.site_xpos[self.feet_site_idx]
-        foot_height = foot_position[..., -1]
-
-        # Calculate velocity of each foot relative to the base
         velocity_xy_sq = jnp.sum(jnp.square(foot_velocity_xy), axis=-1)
+        return jnp.sum(velocity_xy_sq * contact) * (command_norm > 0.1)
 
-        # Calculate scale factor to smoothly increase penalty as foot approaches target height
-        scale_factor = -target_foot_height / jnp.log(1.0 - decay_rate)
-        height_gate = jnp.exp(-foot_height / scale_factor)
+    # def _cost_foot_slip(
+    #     self,
+    #     pipeline_state: base.State,
+    #     target_foot_height: float = 0.1,
+    #     decay_rate: float = 0.95,
+    # ) -> jax.Array:
+    #     # Penalizes foot slip velocity at contact to encourage ground speed matching.
+    #     if not (0.0 < decay_rate <= 1.0):
+    #         raise ValueError("Decay rate must be between 0 and 1.")
 
-        return jnp.sum(velocity_xy_sq * height_gate)
+    #     # Foot velocities and foot heights
+    #     foot_velocity = self.get_feet_velocity(pipeline_state)
+    #     foot_velocity_xy = foot_velocity[..., :2]
+    #     foot_position = pipeline_state.site_xpos[self.feet_site_idx]
+    #     foot_height = foot_position[..., -1]
+
+    #     # Calculate velocity of each foot relative to the base
+    #     velocity_xy_sq = jnp.sum(jnp.square(foot_velocity_xy), axis=-1)
+
+    #     # Calculate scale factor to smoothly increase penalty as foot approaches target height
+    #     scale_factor = -target_foot_height / jnp.log(1.0 - decay_rate)
+    #     height_gate = jnp.exp(-foot_height / scale_factor)
+
+    #     return jnp.sum(velocity_xy_sq * height_gate)
 
     def _cost_unwanted_contact(
         self,
