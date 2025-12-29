@@ -302,3 +302,9 @@ user.bazelrc
 
 # ONNX Virtual Environment:
 onnx_env/
+
+# Database files
+*.db
+*.db3
+*.sqlite
+*.sqlite3
