@@ -311,7 +311,7 @@ class Evaluator:
 
                 frames.append(frame)
                 print(f"Iteration {i}: Elapsed time: {time.time() - time_start} seconds")
-            
+
             print(f"Rendering frame")
             start_time = time.time()
             filepath = os.path.join(self.filepath, f'{iteration}.{self.video_format}')

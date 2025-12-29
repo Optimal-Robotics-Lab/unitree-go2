@@ -14,6 +14,7 @@ Initializer = Callable[..., Any]
 Observation = Union[jnp.ndarray, Mapping[str, jnp.ndarray]]
 ObservationSize = Union[int, Mapping[str, Union[Tuple[int, ...], int]]]
 Action = jnp.ndarray
+Value = jnp.ndarray
 PolicyData = Mapping[str, Any]
 Metrics = dict[str, Any]
 

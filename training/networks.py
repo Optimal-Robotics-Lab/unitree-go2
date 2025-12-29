@@ -1,22 +1,14 @@
-import dataclasses
-
 from typing import Any, Callable, Sequence, Mapping
 
 import jax
 import jax.numpy as jnp
 from flax import nnx
-from jax import nn
+
 
 # Custom types:
 import training.module_types as types
 ActivationFn = Callable[[jnp.ndarray], jnp.ndarray]
 Initializer = Callable[..., Any]
-
-
-@dataclasses.dataclass
-class FeedForwardNetwork:
-    init: Callable[..., Any]
-    apply: Callable[..., Any]
 
 
 # Helper function for observation keys:
@@ -26,7 +18,7 @@ def _get_observation_size(
     observation_size = observation_size[observation_key] if isinstance(observation_size, Mapping) else observation_size
     return jax.tree.flatten(observation_size)[0][-1]
 
-    
+
 class Block(nnx.Module):
     def __init__(
         self,
@@ -61,11 +53,12 @@ class Block(nnx.Module):
             x = self.normalization_layer(x)
         return x
 
+
 class MLP(nnx.Module):
     def __init__(
         self,
         features: Sequence[int],
-        activation: ActivationFn = nn.tanh,
+        activation: ActivationFn = jax.nn.tanh,
         kernel_init: Initializer = jax.nn.initializers.lecun_uniform(),
         activate_final: bool = False,
         bias: bool = True,
@@ -91,7 +84,8 @@ class MLP(nnx.Module):
         for layer in self.layers:
             x = layer(x)
         return x
-    
+
+
 class Policy(nnx.Module):
     def __init__(
         self,
@@ -100,11 +94,13 @@ class Policy(nnx.Module):
         input_normalization_fn: types.InputNormalizationFn = types
         .identity_normalization_fn,
         layer_sizes: Sequence[int] = (256, 256),
-        activation: ActivationFn = nn.tanh,
+        activation: ActivationFn = jax.nn.tanh,
         kernel_init: Initializer = jax.nn.initializers.lecun_uniform(),
         bias: bool = True,
         layer_normalization: bool = False,
         observation_key: str = "state",
+        *,
+        rngs: nnx.Rngs,
     ):
         self.input_normalization_fn = input_normalization_fn
         self.observation_key = observation_key
@@ -116,13 +112,14 @@ class Policy(nnx.Module):
 
         self.normalization_params = nnx.BatchStat(jnp.zeros((observation_size)))
 
-        features = [input_size] + list(layer_sizes) + [output_size]
+        features = [observation_size] + list(layer_sizes) + [output_size]
         self.network = MLP(
             features=features,
             activation=activation,
             kernel_init=kernel_init,
             bias=bias,
             layer_normalization=layer_normalization,
+            rngs=rngs,
         )
 
     def __call__(self, x: jax.Array):
