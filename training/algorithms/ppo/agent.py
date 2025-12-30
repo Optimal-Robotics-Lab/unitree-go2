@@ -53,39 +53,39 @@ class Agent(nnx.Module):
 
         self.action_distribution = action_distribution
 
-        def get_actions(
-            self,
-            x: types.Observation,
-            key: types.PRNGKey,
-            deterministic: bool = False,
-        ) -> Tuple[types.Action, types.PolicyData]:
-            """Forward pass for Policy Network and returns actions and policy data."""
-            logits = self.policy(x)
+    def get_actions(
+        self,
+        x: types.Observation,
+        key: types.PRNGKey,
+        deterministic: bool = False,
+    ) -> Tuple[types.Action, types.PolicyData]:
+        """Forward pass for Policy Network and returns actions and policy data."""
+        logits = self.policy(x)
 
-            if deterministic:
-                actions = self.action_distribution.mode(logits)
-                return actions, {}
+        if deterministic:
+            actions = self.action_distribution.mode(logits)
+            return actions, {}
 
-            raw_actions = self.action_distribution.base_distribution_sample(
-                logits, key,
-            )
-            log_prob = self.action_distribution.log_prob(logits, raw_actions)
-            actions = self.action_distribution.process_sample(raw_actions)
+        raw_actions = self.action_distribution.base_distribution_sample(
+            logits, key,
+        )
+        log_prob = self.action_distribution.log_prob(logits, raw_actions)
+        actions = self.action_distribution.process_sample(raw_actions)
 
-            return actions, {"log_prob": log_prob, "raw_action": raw_actions}
+        return actions, {"log_prob": log_prob, "raw_action": raw_actions}
 
-        def get_values(
-            self,
-            x: types.Observation,
-        ) -> types.Value:
-            """Forward pass for Value Network."""
-            return self.value(x)
+    def get_values(
+        self,
+        x: types.Observation,
+    ) -> types.Value:
+        """Forward pass for Value Network."""
+        return self.value(x)
 
-        def __call__(
-            self,
-            x: types.Observation,
-            key: types.PRNGKey,
-        ) -> Tuple[types.Action, types.Value, types.PolicyData]:
-            actions, info = self.get_actions(x, key)
-            value = self.get_value(x)
-            return actions, value, info
+    def __call__(
+        self,
+        x: types.Observation,
+        key: types.PRNGKey,
+    ) -> Tuple[types.Action, types.Value, types.PolicyData]:
+        actions, info = self.get_actions(x, key)
+        value = self.get_value(x)
+        return actions, value, info
