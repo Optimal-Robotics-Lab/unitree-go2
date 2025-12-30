@@ -1,9 +1,10 @@
-from typing import Any, Callable, Sequence, Mapping
+from typing import Any, Callable, Sequence, Mapping, Optional
 
 import jax
 import jax.numpy as jnp
 from flax import nnx
 
+from training import statistics
 
 # Custom types:
 import training.module_types as types
@@ -13,9 +14,9 @@ Initializer = Callable[..., Any]
 
 # Helper function for observation keys:
 def _get_observation_size(
-    observation_size: types.ObservationSize, observation_key: str
+    observation: types.Observation, observation_key: str
 ) -> int:
-    observation_size = observation_size[observation_key] if isinstance(observation_size, Mapping) else observation_size
+    observation_size = observation[observation_key] if isinstance(observation, Mapping) else observation
     return jax.tree.flatten(observation_size)[0][-1]
 
 
@@ -91,8 +92,7 @@ class Policy(nnx.Module):
         self,
         input_size: types.ObservationSize,
         output_size: int,
-        input_normalization_fn: types.InputNormalizationFn = types
-        .identity_normalization_fn,
+        input_normalization: Optional[statistics.RunningStatistics] = None,
         layer_sizes: Sequence[int] = (256, 256),
         activation: ActivationFn = jax.nn.tanh,
         kernel_init: Initializer = jax.nn.initializers.lecun_uniform(),
@@ -102,15 +102,13 @@ class Policy(nnx.Module):
         *,
         rngs: nnx.Rngs,
     ):
-        self.input_normalization_fn = input_normalization_fn
+        self.input_normalization = input_normalization
         self.observation_key = observation_key
         self.squeeze_output = output_size == 1
 
         observation_size = _get_observation_size(
             input_size, observation_key
         )
-
-        self.normalization_params = nnx.BatchStat(jnp.zeros((observation_size)))
 
         features = [observation_size] + list(layer_sizes) + [output_size]
         self.network = MLP(
@@ -122,9 +120,9 @@ class Policy(nnx.Module):
             rngs=rngs,
         )
 
-    def __call__(self, x: jax.Array):
+    def __call__(self, x: types.NestedArray, training: bool = True):
         x = x if isinstance(x, jnp.ndarray) else x[self.observation_key]
-        x = self.input_normalization_fn(x, self.normalization_params)
+        x = self.input_normalization(x, update_stats=training) if self.input_normalization is not None else x
         out = self.network(x)
         if self.squeeze_output:
             out = jnp.squeeze(out, axis=-1)

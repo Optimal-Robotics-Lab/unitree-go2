@@ -15,10 +15,11 @@
 # limitations under the License.
 
 
-from typing import Any, Callable, Tuple, NamedTuple, Protocol, Mapping, TypeVar, Union
+from typing import Any, Callable, Tuple, NamedTuple, Protocol, Mapping, TypeVar, Union, List
 
 import jax
 import flax.struct
+import flax.nnx as nnx
 
 import numpy as np
 import jax.numpy as jnp
@@ -43,6 +44,17 @@ State = envs.State
 Env = envs.Env
 
 NetworkType = TypeVar('NetworkType')
+
+# Custom type for nested structures:
+Leaf = Union[jnp.ndarray, float, int]
+NestedArray = Union[
+    Leaf,
+    Mapping[Any, 'NestedArray'],
+    List['NestedArray'],
+    Tuple['NestedArray', ...],
+    nnx.Dict,
+    nnx.List,
+]
 
 
 class Transition(NamedTuple):

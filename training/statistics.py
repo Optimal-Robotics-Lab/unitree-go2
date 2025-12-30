@@ -1,21 +1,11 @@
-from typing import Optional, Any, Tuple, Mapping, Union, List
+from typing import Optional, Any, Tuple
 import enum
 
 import flax.nnx as nnx
 import jax
 import jax.numpy as jnp
 
-
-# Custom type for nested structures:
-Leaf = Union[jnp.ndarray, float, int]
-NestedArray = Union[
-    Leaf,
-    Mapping[Any, 'NestedArray'],
-    List['NestedArray'],
-    Tuple['NestedArray', ...],
-    nnx.Dict,
-    nnx.List,
-]
+from training.module_types import NestedArray
 
 
 class NormalizationMode(enum.IntEnum):
@@ -70,7 +60,7 @@ class RunningStatistics(nnx.Module):
         # Upgrade to nnx containers:
         reference_input = _to_nnx(reference_input)
 
-        # Initialize State (Mean = 0, Var = 1 approx, Count = 0)
+        # Initialize State (Mean = 0, Var = 0, Std = 1, Count = 0)
         self.mean = jax.tree.map(
             lambda x: nnx.BatchStat(jnp.zeros_like(x)), reference_input
         )

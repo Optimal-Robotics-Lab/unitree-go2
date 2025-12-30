@@ -6,7 +6,7 @@ from absl.testing import parameterized
 
 # Import your two implementations
 # Assuming the files are named as follows:
-import training.brax_stats as original_impl
+import brax_stats as original_impl
 import training.statistics as new_impl
 
 

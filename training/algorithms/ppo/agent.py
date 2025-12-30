@@ -1,4 +1,4 @@
-from typing import Sequence, Tuple
+from typing import Optional, Sequence, Tuple
 
 import jax
 import distrax
@@ -6,6 +6,7 @@ import distrax
 from flax import nnx
 
 from training import networks
+from training import statistics
 import training.distribution_utilities as distribution_utilities
 from training import module_types as types
 
@@ -15,8 +16,8 @@ class Agent(nnx.Module):
         self,
         observation_size: types.ObservationSize,
         action_size: int,
-        input_normalization_fn: types.InputNormalizationFn = types
-        .identity_normalization_fn,
+        policy_input_normalization: Optional[statistics.RunningStatistics] = None,
+        value_input_normalization: Optional[statistics.RunningStatistics] = None,
         policy_layer_sizes: Sequence[int] = (256, 256),
         value_layer_sizes: Sequence[int] = (256, 256),
         activation: networks.ActivationFn = jax.nn.swish,
@@ -32,7 +33,7 @@ class Agent(nnx.Module):
         self.policy = networks.Policy(
             input_size=observation_size,
             output_size=2*action_size,
-            input_normalization_fn=input_normalization_fn,
+            input_normalization=policy_input_normalization,
             layer_sizes=policy_layer_sizes,
             activation=activation,
             kernel_init=policy_kernel_init,
@@ -43,7 +44,7 @@ class Agent(nnx.Module):
         self.value = networks.Policy(
             input_size=observation_size,
             output_size=1,
-            input_normalization_fn=input_normalization_fn,
+            input_normalization=value_input_normalization,
             layer_sizes=value_layer_sizes,
             activation=activation,
             kernel_init=value_kernel_init,
@@ -58,17 +59,22 @@ class Agent(nnx.Module):
         x: types.Observation,
         key: types.PRNGKey,
         deterministic: bool = False,
+        training: bool = True,
     ) -> Tuple[types.Action, types.PolicyData]:
-        """Forward pass for Policy Network and returns actions and policy data."""
-        logits = self.policy(x)
+        """
+        Forward pass for Policy Network.
+
+        Args:
+            training: If True, updates running statistics (mean/var).
+        """
+        logits = self.policy(x, training=training)
 
         if deterministic:
             actions = self.action_distribution.mode(logits)
             return actions, {}
 
-        raw_actions = self.action_distribution.base_distribution_sample(
-            logits, key,
-        )
+        # Sample actions
+        raw_actions = self.action_distribution.base_distribution_sample(logits, key)
         log_prob = self.action_distribution.log_prob(logits, raw_actions)
         actions = self.action_distribution.process_sample(raw_actions)
 
@@ -77,15 +83,18 @@ class Agent(nnx.Module):
     def get_values(
         self,
         x: types.Observation,
+        training: bool = True,
     ) -> types.Value:
         """Forward pass for Value Network."""
-        return self.value(x)
+        return self.value(x, training=training)
 
     def __call__(
         self,
         x: types.Observation,
         key: types.PRNGKey,
+        training: bool = True,
     ) -> Tuple[types.Action, types.Value, types.PolicyData]:
-        actions, info = self.get_actions(x, key)
-        value = self.get_value(x)
+        """Unified forward pass for training or inference."""
+        actions, info = self.get_actions(x, key, training=training)
+        value = self.get_values(x, training=training)
         return actions, value, info
