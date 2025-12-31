@@ -104,7 +104,7 @@ def train(
     )
 
     # Generate Random Key:
-    key = jax.random.key(seed)
+    key = jax.random.PRNGKey(seed)  # Brax wrappers rely on the old PRNGKey
     global_key, local_key = jax.random.split(key)
     del key
     local_key = jax.random.fold_in(local_key, process_id)
@@ -126,12 +126,13 @@ def train(
         randomization_fn=_randomization_fn,
     )
 
-    # Reset Function with Sharding
-    reset_fn = jax.jit(jax.vmap(env.reset), out_shardings=s_data)
+    # Reset Function
+    reset_fn = jax.jit(env.reset)
 
     # Initialize Env State
     envs_key = jax.random.split(env_key, num_envs)
     envs_key = jax.device_put(envs_key, s_data)
+
     env_state = reset_fn(envs_key)
 
     # Initialize Agent and Optimizer:
@@ -153,7 +154,9 @@ def train(
         agent, opt_state, key = carry
         key, subkey = jax.random.split(key)
 
-        grad_fn = nnx.value_and_grad(loss_function, has_aux=True, wrt=nnx.Param)
+        grad_fn = nnx.value_and_grad(
+            loss_function, argnums=nnx.DiffState(0, nnx.Param), has_aux=True,
+        )
         (loss, metrics), grads = grad_fn(agent, data, subkey)
 
         params = nnx.state(agent, nnx.Param)
@@ -280,26 +283,27 @@ def train(
         action_repeat=action_repeat,
         randomization_fn=eval_randomization_fn,
     )
+    evaluator = metrics_utilities.Evaluator(
+        env=eval_env,
+        num_envs=num_evaluation_envs,
+        episode_length=eval_episode_length,
+        action_repeat=action_repeat,
+        key=eval_key,
+        render_options=render_options,
+    )
 
     def run_evaluation(training_metrics, current_step, iteration):
         host_agent = jax.device_get(agent)
 
+        @jax.jit
         def evaluate_policy(obs, key):
             return host_agent.get_actions(
                 obs, key, deterministic=deterministic_evaluation, training=False,
             )
 
-        evaluator = metrics_utilities.Evaluator(
-            env=eval_env,
-            policy=evaluate_policy,
-            num_envs=num_evaluation_envs,
-            episode_length=eval_episode_length,
-            action_repeat=action_repeat,
-            key=eval_key,
-            render_options=render_options,
+        metrics = evaluator.evaluate(
+            policy_fn=evaluate_policy, training_metrics=training_metrics, iteration=iteration,
         )
-
-        metrics = evaluator.evaluate(training_metrics=training_metrics, iteration=iteration)
 
         if wandb_run is not None:
             log_data = dict(metrics)

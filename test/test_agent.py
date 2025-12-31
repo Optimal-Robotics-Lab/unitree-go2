@@ -1,3 +1,7 @@
+import os
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from absl import app
 
 import jax
@@ -13,10 +17,10 @@ jax.config.update("jax_enable_x64", True)
 def main(argv=None):
     del argv  # Unused.
 
-    observation = {"state": jnp.ones((51,)), "priviledge_state": jnp.ones((101,))}
+    observation = {"state": jnp.ones((51,)), "privileged_state": jnp.ones((101,))}
     observation_size = {
         "state": observation["state"].shape[0],
-        "priviledge_state": observation["priviledge_state"].shape[0],
+        "privileged_state": observation["privileged_state"].shape[0],
     }
     action_size = 12
 
@@ -24,7 +28,7 @@ def main(argv=None):
         reference_input=observation["state"],
     )
     value_input_normalization = statistics.RunningStatistics(
-        reference_input=observation["priviledge_state"],
+        reference_input=observation["privileged_state"],
     )
 
     model = agent.Agent(
@@ -33,7 +37,7 @@ def main(argv=None):
         policy_input_normalization=policy_input_normalization,
         value_input_normalization=value_input_normalization,
         policy_observation_key="state",
-        value_observation_key="priviledge_state",
+        value_observation_key="privileged_state",
     )
 
     print(model)

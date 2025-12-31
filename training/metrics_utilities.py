@@ -20,6 +20,11 @@ from training.training_utilities import unroll_policy_trajectory
 import imageio.v3 as iio
 
 
+"""
+    TODO:This needs a refactor
+"""
+
+
 def create_default_camera():
     """Creates a MjvCamera instance with custom default values."""
     camera = mujoco.MjvCamera()
@@ -52,7 +57,6 @@ class Evaluator:
     def __init__(
         self,
         env: envs.Env,
-        policy: Callable[[types.Observation, types.PRNGKey], types.Action],
         num_envs: int,
         episode_length: int,
         action_repeat: int,
@@ -150,6 +154,7 @@ class Evaluator:
             ]
 
         def _evaluation_loop(
+            policy_fn: Callable[[types.Observation, types.PRNGKey], types.Action],
             key: types.PRNGKey,
         ) -> types.State:
             reset_keys = jax.random.split(key, num_envs)
@@ -157,17 +162,18 @@ class Evaluator:
             final_state, states = unroll_policy_trajectory(
                 env,
                 initial_state,
-                policy,
+                policy_fn,
                 key,
                 num_steps=episode_length // action_repeat,
             )
             return final_state, states
 
-        self.evaluation_loop = jax.jit(_evaluation_loop)
+        self.evaluation_loop = _evaluation_loop
         self.steps_per_epoch = episode_length * num_envs
 
     def evaluate(
         self,
+        policy_fn: Callable[[types.Observation, types.PRNGKey], types.Action],
         training_metrics: types.Metrics,
         iteration: int,
         aggregate_episodes: bool = True,
@@ -175,7 +181,9 @@ class Evaluator:
         self.key, subkey = jax.random.split(self.key)
 
         start_time = time.time()
-        state, states = self.evaluation_loop(subkey)
+        state, states = jax.jit(
+            self.evaluation_loop, static_argnums=(0,)
+        )(policy_fn, subkey)
         evaluation_metrics = state.info['eval_metrics']
         evaluation_metrics.active_episodes.block_until_ready()
         epoch_time = time.time() - start_time

@@ -32,6 +32,14 @@ class Agent(nnx.Module):
         self.observation_size = observation_size
         self.action_size = action_size
 
+        # Validate Keys exist in Observation
+        assert policy_observation_key in observation_size, (
+            f"Policy observation key '{policy_observation_key}' not found in observation size."
+        )
+        assert value_observation_key in observation_size, (
+            f"Value observation key '{value_observation_key}' not found in observation size."
+        )
+
         """Creates the Policy and Value Networks for PPO."""
         self.policy = networks.Policy(
             input_size=observation_size,

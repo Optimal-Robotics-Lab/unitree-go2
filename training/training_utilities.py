@@ -1,4 +1,4 @@
-from typing import Sequence, Tuple
+from typing import Sequence, Tuple, List
 
 import jax
 
@@ -67,7 +67,7 @@ def unroll_policy_trajectory(
     key: types.PRNGKey,
     num_steps: int,
     extra_fields: Sequence[str] = (),
-) -> State:
+) -> Tuple[State, List[State]]:
     @jax.jit
     def f(carry, unused_t):
         state, key = carry
