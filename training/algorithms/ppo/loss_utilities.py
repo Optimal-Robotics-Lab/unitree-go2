@@ -3,7 +3,7 @@ from typing import Any, Tuple
 import jax
 import jax.numpy as jnp
 
-from training.algorithms.ppo import network_utilities as ppo_networks
+from training.algorithms.ppo import agent
 from training import module_types as types
 
 
@@ -54,11 +54,9 @@ def calculate_gae(
 
 
 def loss_function(
-    params: ppo_networks.PPONetworkParams,
-    normalization_params: Any,
+    agent: agent.Agent,
     data: types.Transition,
     rng_key: types.PRNGKey,
-    ppo_networks: ppo_networks.PPONetworks,
     clip_coef: float = 0.2,
     value_coef: float = 0.5,
     entropy_coef: float = 0.01,
@@ -66,36 +64,24 @@ def loss_function(
     gae_lambda: float = 0.95,
     normalize_advantages: bool = True,
 ) -> Tuple[jnp.ndarray, types.Metrics]:
-    # Unpack PPO networks:
-    action_distribution = ppo_networks.action_distribution
-    policy_apply = ppo_networks.policy_network.apply
-    value_apply = ppo_networks.value_network.apply
+    # Unpack action distribution:
+    action_distribution = agent.action_distribution
 
     # Reorder data: (B, T, ...) -> (T, B, ...)
     data = jax.tree.map(lambda x: jnp.swapaxes(x, 0, 1), data)
 
-    logits = policy_apply(
-        normalization_params, params.policy_params, data.observation,
-    )
-    values = value_apply(
-        normalization_params, params.value_params, data.observation,
-    )
-    terminal_observation = jax.tree.map(lambda x: x[-1], data.next_observation)
-    bootstrap_values = value_apply(
-        normalization_params, params.value_params, terminal_observation,
-    )
+    # Policy returns logits (raw network output)
+    logits = agent.policy(data.observation, training=False)
 
-    # Be careful with these definitions:
+    # Value returns scalar values
+    values = agent.value(data.observation, training=False)
+
+    terminal_observation = jax.tree.map(lambda x: x[-1], data.next_observation)
+    bootstrap_values = agent.value(terminal_observation, training=False)
+
     # Create masks for truncation and termination:
     rewards = data.reward
     truncation_mask = 1 - data.extras['state_data']['truncation']
-
-    # These formulations do not make sense...
-    # termination_mask = (1 - data.termination) * truncation_mask
-    # Brax formulation:
-    # termination_mask = 1 - data.termination * truncation_mask
-
-    # This formulation makes sense: (This performed better in my experiments)
     termination_mask = 1 - data.termination
 
     # Calculate GAE:

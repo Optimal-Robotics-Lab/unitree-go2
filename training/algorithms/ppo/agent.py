@@ -29,6 +29,9 @@ class Agent(nnx.Module):
         .ParametricDistribution(distribution=distrax.Normal, bijector=distrax.Tanh()),
         rngs: nnx.Rngs = nnx.Rngs(0),
     ):
+        self.observation_size = observation_size
+        self.action_size = action_size
+
         """Creates the Policy and Value Networks for PPO."""
         self.policy = networks.Policy(
             input_size=observation_size,

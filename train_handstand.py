@@ -17,7 +17,7 @@ from training.algorithms.ppo import network_utilities as ppo_networks
 from training.algorithms.ppo.loss_utilities import loss_function
 from training.distribution_utilities import ParametricDistribution
 from training.algorithms.ppo.train import train
-from training.algorithms.ppo import checkpoint_utilities
+from training import checkpoint_utilities
 from training.algorithms.ppo.load_utilities import load_checkpoint
 from training import metrics_utilities
 

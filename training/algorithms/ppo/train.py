@@ -2,31 +2,28 @@ import functools
 import time
 from typing import Any, Callable, Optional, Tuple
 
-from absl import logging
 import jax
 import jax.numpy as jnp
+from jax.sharding import Mesh, NamedSharding, PartitionSpec
+
 import flax
-import flax.struct
+import flax.nnx as nnx
+
 import optax
-import orbax.checkpoint as ocp
-import numpy as np
 
 from brax import base
 from brax import envs
 from brax.envs.wrappers.training import wrap
-from brax.training.acme import running_statistics, specs
-from brax.training import pmap
 import training.module_types as types
-from training.algorithms.ppo.network_utilities import PPONetworkParams
 
-import training.algorithms.ppo.network_utilities as ppo_networks
+from training.algorithms.ppo.agent import Agent
+
 import training.algorithms.ppo.loss_utilities as loss_utilities
-import training.optimization_utilities as optimization_utilities
-import training.training_utilities as trainining_utilities
+import training.training_utilities as training_utilities
 import training.metrics_utilities as metrics_utilities
-from training.algorithms.ppo.checkpoint_utilities import (
-    RestoredCheckpoint, TrainState
-)
+import training.checkpoint_utilities as checkpoint_utilities
+
+import orbax.checkpoint as ocp
 
 try:
     import wandb
@@ -42,28 +39,19 @@ except ImportError:
         def finish(self, *args, **kwargs):
             pass
 
+        def Video(self, *args, **kwargs):
+            pass
+
+        def Html(self, *args, **kwargs):
+            pass
+
     wandb = MockWandb()
 
 
-InferenceParams = Tuple[running_statistics.NestedMeanStd, types.Params]
-
-_PMAP_AXIS_NAME = 'i'
-
-
-def unpmap(v):
-    return jax.tree.map(lambda x: x[0], v)
-
-
-def strip_weak_type(pytree):
-    def f(leaf):
-        leaf = jnp.asarray(leaf)
-        return leaf.astype(leaf.dtype)
-    return jax.tree.map(f, pytree)
-
-
 def train(
+    agent: Agent,
     environment: envs.Env,
-    evaluation_environment: Optional[envs.Env],
+    evaluation_environment: envs.Env,
     num_epochs: int,
     num_training_steps: int,
     episode_length: int,
@@ -80,32 +68,34 @@ def train(
     num_minibatches: int = 16,
     num_ppo_iterations: int = 4,
     normalize_observations: bool = True,
-    network_factory: types.NetworkFactory[ppo_networks.PPONetworks] = ppo_networks.make_ppo_networks,
     optimizer: optax.GradientTransformation = optax.adam(1e-4),
     loss_function: Callable[..., Tuple[jnp.ndarray, types.Metrics]] =
     loss_utilities.loss_function,
     progress_fn: Callable[[int, int, types.Metrics], None] = lambda *args: None,
-    checkpoint_fn: Callable[..., None] = lambda *args: None,
+    checkpoint_manager: Optional[ocp.CheckpointManager] = None,
     randomization_fn: Optional[
         Callable[[base.System, jnp.ndarray], Tuple[base.System, base.System]]
     ] = None,
-    restored_checkpoint: Optional[RestoredCheckpoint] = None,
     wandb_run: Optional[Any] = None,
     render_options: Optional[metrics_utilities.RenderOptions] = None,
 ):
     assert batch_size * num_minibatches % num_envs == 0
-    training_start_time = time.time()
 
     # JAX Device management:
-    process_count = jax.process_count()
+    devices = jax.devices()
     process_id = jax.process_index()
-    local_device_count = jax.local_device_count()
-    local_devices_to_use = local_device_count
-    device_count = local_devices_to_use * process_count
 
-    assert num_envs % device_count == 0
+    mesh = Mesh(devices, axis_names=('batch',))
 
-    # Training Loop Iteration Parameters:
+    # Sharding Specs
+    # REPLICATED: Params, Optimizer State, Agent Stats (One copy on every GPU)
+    s_replicated = NamedSharding(mesh, PartitionSpec())
+    # SHARDED: Environment State, Observations, Random Keys (Split across GPUs)
+    s_data = NamedSharding(mesh, PartitionSpec('batch'))
+
+    assert num_envs % len(devices) == 0
+
+    # Step increment counters:
     num_steps_per_train_step = (
         batch_size * num_minibatches * num_policy_steps * action_repeat
     )
@@ -114,21 +104,19 @@ def train(
     )
 
     # Generate Random Key:
-    key = jax.random.PRNGKey(seed)
+    key = jax.random.key(seed)
     global_key, local_key = jax.random.split(key)
     del key
     local_key = jax.random.fold_in(local_key, process_id)
     local_key, env_key, eval_key = jax.random.split(local_key, 3)
-    policy_key, value_key = jax.random.split(global_key)
     del global_key
 
     # Initialize Environment:
     _randomization_fn = None
     if randomization_fn is not None:
-        randomization_batch_size = num_envs // device_count
-        randomization_key = jax.random.split(env_key, randomization_batch_size)
+        randomization_key = jax.random.split(env_key, num_envs)
         _randomization_fn = functools.partial(
-            randomization_fn, rng=randomization_key,
+            randomization_fn, rng=randomization_key,  # type: ignore
         )
 
     env = wrap(
@@ -138,123 +126,82 @@ def train(
         randomization_fn=_randomization_fn,
     )
 
-    # vmap for multiple devices:
-    if local_devices_to_use > 1:
-        reset_fn = jax.pmap(env.reset, axis_name=_PMAP_AXIS_NAME)
-    else:
-        reset_fn = jax.jit(jax.vmap(env.reset))
+    # Reset Function with Sharding
+    reset_fn = jax.jit(jax.vmap(env.reset), out_shardings=s_data)
 
-    envs_key = jax.random.split(env_key, num_envs // process_count)
-    envs_key = jnp.reshape(
-        envs_key, (local_devices_to_use, -1) + envs_key.shape[1:],
-    )
+    # Initialize Env State
+    envs_key = jax.random.split(env_key, num_envs)
+    envs_key = jax.device_put(envs_key, s_data)
     env_state = reset_fn(envs_key)
 
-    # Initialize Normalization Function:
-    normalization_fn = lambda x, y: x
-    if normalize_observations:
-        normalization_fn = running_statistics.normalize
+    # Initialize Agent and Optimizer:
+    params = nnx.state(agent, nnx.Param)
+    opt_state = optimizer.init(params)
+    current_step = 0
 
-    # Initialize Network:
-    # functools.partial network_factory to capture parameters:
-    observation_shape = jax.tree.map(lambda x: x.shape[2:], env_state.obs)
-    if restored_checkpoint is None:
-        default_kwargs = {
-            'observation_size': observation_shape,
-            'action_size': env.action_size,
-            'input_normalization_fn': normalization_fn,
-        }
+    if checkpoint_manager is not None:
+        restored = checkpoint_utilities.restore_checkpoint(checkpoint_manager, agent, opt_state)
+        if restored:
+            agent = restored.agent
+            opt_state = restored.opt_state if restored.opt_state is not None else opt_state
+            current_step = restored.env_steps
 
-        set_keywords = {}
-        if isinstance(network_factory, functools.partial):
-            set_keywords = network_factory.keywords
+    agent = jax.device_put(agent, s_replicated)
+    opt_state = jax.device_put(opt_state, s_replicated)
 
-        network_kwargs = {}
-        for key, value in default_kwargs.items():
-            if key not in set_keywords:
-                network_kwargs[key] = value
-
-        network = network_factory(**network_kwargs)
-    else:
-        network = restored_checkpoint.network
-
-    make_policy = ppo_networks.make_inference_fn(ppo_networks=network)
-
-    # Initialize Loss Function:
-    # functools.partial loss_function to capture parameters:
-    loss_fn = functools.partial(
-        loss_function,
-        ppo_networks=network,
-    )
-
-    gradient_udpate_fn = optimization_utilities.gradient_update_fn(
-        loss_fn=loss_fn,
-        optimizer=optimizer,
-        pmap_axis_name=_PMAP_AXIS_NAME,
-        has_aux=True,
-        return_grads=False,
-    )
-
-    def minibatch_step(
-        carry,
-        data: types.Transition,
-        normalization_params: running_statistics.RunningStatisticsState,
-    ):
-        opt_state, params, key = carry
+    def minibatch_step(carry, data: types.Transition,):
+        agent, opt_state, key = carry
         key, subkey = jax.random.split(key)
-        (_, metrics), params, opt_state = gradient_udpate_fn(
-            params,
-            normalization_params,
-            data,
-            subkey,
-            opt_state=opt_state,
-        )
 
-        return (opt_state, params, key), metrics
+        grad_fn = nnx.value_and_grad(loss_function, has_aux=True, wrt=nnx.Param)
+        (loss, metrics), grads = grad_fn(agent, data, subkey)
+
+        params = nnx.state(agent, nnx.Param)
+        updates, opt_state = optimizer.update(grads, opt_state, params)
+        nnx.update(agent, updates)
+
+        return (agent, opt_state, key), metrics
 
     def sgd_step(
         carry,
-        unusted_t,
+        unused_t,
         data: types.Transition,
-        normalization_params: running_statistics.RunningStatisticsState,
     ):
-        opt_state, params, key = carry
+        agent, opt_state, key = carry
         key, permutation_key, grad_key = jax.random.split(key, 3)
 
-        # Shuffle Data:
-        def permute_data(x: jnp.ndarray):
+        # Shuffle
+        def permute(x):
             x = jax.random.permutation(permutation_key, x)
             x = jnp.reshape(x, (num_minibatches, -1) + x.shape[1:])
             return x
 
-        shuffled_data = jax.tree.map(permute_data, data)
-        (opt_state, params, _), metrics = jax.lax.scan(
-            functools.partial(
-                minibatch_step, normalization_params=normalization_params,
-            ),
-            (opt_state, params, grad_key),
+        shuffled_data = jax.tree.map(permute, data)
+
+        (agent, opt_state, _), metrics = jax.lax.scan(
+            minibatch_step,
+            (agent, opt_state, grad_key),
             shuffled_data,
             length=num_minibatches,
         )
+        return (agent, opt_state, key), metrics
 
-        return (opt_state, params, key), metrics
-
-    def training_step(
-        carry: Tuple[TrainState, envs.State, types.PRNGKey],
+    def train_step(
+        carry: Tuple[Agent, optax.OptState, envs.State, types.PRNGKey],
         unused_t,
-    ) -> Tuple[Tuple[TrainState, envs.State, types.PRNGKey], types.Metrics]:
-        train_state, state, key = carry
-        next_key, sgd_key, policy_step_key = jax.random.split(key, 3)
+    ) -> Tuple[Tuple[Agent, optax.OptState, envs.State, types.PRNGKey], types.Metrics]:
+        agent, opt_state, state, key = carry
+        next_key, sgd_key, rollout_key = jax.random.split(key, 3)
 
-        policy_fn = make_policy((
-            train_state.normalization_params, train_state.params.policy_params,
-        ))
+        # Turn off training for data collection:
+        def policy_fn(x: jnp.ndarray, key: types.PRNGKey):
+            return agent.get_actions(x, key, training=False)
 
-        # Generates Episode Data:
+        # Generate Episode Data:
         def f(carry, unused_t):
             current_state, key = carry
             key, subkey = jax.random.split(key)
-            next_state, data = trainining_utilities.unroll_policy_steps(
+            next_state, data = training_utilities.unroll_policy_steps(
                 env=env,
                 state=current_state,
                 policy=policy_fn,
@@ -266,7 +213,7 @@ def train(
 
         (state, _), data = jax.lax.scan(
             f,
-            (state, policy_step_key),
+            (state, rollout_key),
             (),
             length=batch_size * num_minibatches // num_envs,
         )
@@ -277,97 +224,45 @@ def train(
             lambda x: jnp.reshape(x, (-1,) + x.shape[2:]), data,
         )
 
-        # Update Normalization:
-        normalization_params = running_statistics.update(
-            train_state.normalization_params,
-            data.observation,
-            pmap_axis_name=_PMAP_AXIS_NAME,
-        )
+        if normalize_observations:
+            # Update Policy Stats (Actor)
+            if agent.policy.input_normalization is not None:
+                flat_observation = data.observation[agent.policy.observation_key].reshape(
+                    -1, *agent.observation_size[agent.policy.observation_key],
+                )
+                agent.policy.input_normalization.update(flat_observation)
 
-        (opt_state, params, _), metrics = jax.lax.scan(
-            functools.partial(
-                sgd_step, data=data, normalization_params=normalization_params,
-            ),
-            (train_state.opt_state, train_state.params, sgd_key),
+            # Update Value Stats (Critic)
+            if agent.value.input_normalization is not None:
+                flat_observation = data.observation[agent.value.observation_key].reshape(
+                    -1, *agent.observation_size[agent.value.observation_key],
+                )
+                agent.value.input_normalization.update(flat_observation)
+
+        (agent, opt_state, _), metrics = jax.lax.scan(
+            functools.partial(sgd_step, data=data),
+            (agent, opt_state, sgd_key),
             (),
             length=num_ppo_iterations,
         )
 
-        new_train_state = TrainState(
-            opt_state=opt_state,
-            params=params,
-            normalization_params=normalization_params,
-            env_steps=train_state.env_steps + num_steps_per_train_step,
-        )
+        return (agent, opt_state, state, next_key), metrics
 
-        return (new_train_state, state, next_key), metrics
-
+    @nnx.jit(donate_argnames=('agent', 'opt_state', 'state'))
     def training_epoch(
-        train_state: TrainState,
+        agent: Agent,
+        opt_state: optax.OptState,
         state: envs.State,
         key: types.PRNGKey,
-    ) -> Tuple[TrainState, envs.State, types.Metrics]:
-        (train_state, state, _), loss_metrics = jax.lax.scan(
-            training_step,
-            (train_state, state, key),
+    ) -> Tuple[Agent, optax.OptState, envs.State, types.Metrics]:
+        (agent, opt_state, state, _), loss_metrics = jax.lax.scan(
+            train_step,
+            (agent, opt_state, state, key),
             (),
             length=num_training_steps,
         )
         loss_metrics = jax.tree.map(jnp.mean, loss_metrics)
-        return train_state, state, loss_metrics
-
-    training_epoch = jax.pmap(training_epoch, axis_name=_PMAP_AXIS_NAME)
-
-    def training_epoch_with_metrics(
-        train_state: TrainState,
-        state: envs.State,
-        key: types.PRNGKey,
-    ) -> Tuple[TrainState, envs.State, types.Metrics]:
-        # I would like to get rid of this:
-        nonlocal training_walltime
-        start_time = time.time()
-        train_state, state = strip_weak_type((train_state, state))
-        result = training_epoch(train_state, state, key)
-        train_state, state, metrics = strip_weak_type(result)
-
-        metrics = jax.tree.map(jnp.mean, metrics)
-        jax.tree.map(lambda x: x.block_until_ready(), metrics)
-
-        epoch_training_time = time.time() - start_time
-        training_walltime += epoch_training_time
-        steps_per_second = num_steps_per_epoch / epoch_training_time
-        metrics = {
-            'training/steps_per_second': steps_per_second,
-            'training/walltime': training_walltime,
-            **{f'training/{name}': value for name, value in metrics.items()},
-        }
-        return train_state, state, metrics
-
-    # Initialize Params and Train State:
-    if restored_checkpoint is None:
-        init_params = PPONetworkParams(
-            policy_params=network.policy_network.init(policy_key),
-            value_params=network.value_network.init(value_key),
-        )
-        # Can't pass optimizer function to device_put_replicated:
-        observation_shape = jax.tree.map(
-            lambda x: specs.Array(x.shape[-1:], jnp.dtype('float32')), env_state.obs
-        )
-        train_state = TrainState(
-            opt_state=optimizer.init(init_params),
-            params=init_params,
-            normalization_params=running_statistics.init_state(
-                observation_shape
-            ),
-            env_steps=0,
-        )
-    else:
-        train_state = restored_checkpoint.train_state
-
-    train_state = jax.device_put_replicated(
-        train_state,
-        jax.local_devices()[:local_devices_to_use],
-    )
+        return agent, opt_state, state, loss_metrics
 
     # Setup Evaluation Environment:
     eval_randomization_fn = None
@@ -376,11 +271,9 @@ def train(
             eval_key, num_evaluation_envs,
         )
         eval_randomization_fn = functools.partial(
-            randomization_fn,
-            rng=eval_randomization_key,
+            randomization_fn, rng=eval_randomization_key,  # type: ignore
         )
 
-    # Must be a separate object or JAX tries to resuse JIT from training environment:
     eval_env = wrap(
         env=evaluation_environment,
         episode_length=eval_episode_length,
@@ -388,23 +281,17 @@ def train(
         randomization_fn=eval_randomization_fn,
     )
 
-    if render_options is None:
+    def run_evaluation(training_metrics, current_step, iteration):
+        host_agent = jax.device_get(agent)
+
+        def evaluate_policy(obs, key):
+            return host_agent.get_actions(
+                obs, key, deterministic=deterministic_evaluation, training=False,
+            )
+
         evaluator = metrics_utilities.Evaluator(
             env=eval_env,
-            policy_generator=functools.partial(
-                make_policy, deterministic=deterministic_evaluation,
-            ),
-            num_envs=num_evaluation_envs,
-            episode_length=eval_episode_length,
-            action_repeat=action_repeat,
-            key=eval_key,
-        )
-    else:
-        evaluator = metrics_utilities.Evaluator(
-            env=eval_env,
-            policy_generator=functools.partial(
-                make_policy, deterministic=deterministic_evaluation,
-            ),
+            policy=evaluate_policy,
             num_envs=num_evaluation_envs,
             episode_length=eval_episode_length,
             action_repeat=action_repeat,
@@ -412,112 +299,93 @@ def train(
             render_options=render_options,
         )
 
-    # Initialize Metrics:
-    metrics = {}
-    if process_id == 0 and num_evaluations != 0:
-        params = unpmap((
-            train_state.normalization_params,
-            train_state.params.policy_params,
-        ))
-        metrics = evaluator.evaluate(
-            policy_params=params,
+        metrics = evaluator.evaluate(training_metrics=training_metrics, iteration=iteration)
+
+        if wandb_run is not None:
+            log_data = dict(metrics)
+            if evaluator.render_type == 'video' and evaluator.render_flag:
+                log_data['Visualizer'] = wandb.Video(
+                    evaluator.current_filepath, fps=evaluator.fps, format=evaluator.video_format
+                )
+            elif evaluator.render_type == 'html' and evaluator.render_flag:
+                log_data['Visualizer'] = wandb.Html(evaluator.current_filepath, inject=False)
+            wandb_run.log(log_data)
+
+        progress_fn(iteration, current_step, metrics)
+
+        return metrics
+
+    if process_id == 0 and num_evaluations > 0:
+        metrics = run_evaluation(
             training_metrics={},
+            current_step=current_step,
             iteration=0,
         )
 
-        logging.info(metrics)
-        if wandb_run is not None:
-            log_data = dict(metrics) if metrics else {}
-            if evaluator.render_type == 'video' and evaluator.render_flag:
-                log_data['Visualizer'] = wandb.Video(
-                    evaluator.current_filepath,
-                    fps=evaluator.fps,
-                    format=evaluator.video_format,
-                )
-            elif evaluator.render_type == 'html' and evaluator.render_flag:
-                log_data['Visualizer'] = wandb.Html(
-                    evaluator.current_filepath,
-                    inject=False,
-                )
-            wandb_run.log(log_data)
+    if checkpoint_manager is not None:
+        checkpoint_utilities.save_checkpoint(
+            manager=checkpoint_manager,
+            iteration=0,
+            agent=agent,
+            opt_state=opt_state,
+            env_steps=current_step
+        )
 
-        progress_fn(0, 0, metrics)
-        if checkpoint_fn is not None:
-            _train_state = unpmap(train_state)
-            checkpoint_fn(iteration=0, train_state=_train_state)
-
-    training_metrics = {}
-    training_walltime = 0
-    current_step = 0
+    training_walltime = 0.0
 
     # Training Loop:
-    for epoch_iteration in range(num_epochs):
-        # Logging:
-        logging.info(
-            'starting iteration %s %s', epoch_iteration, time.time() - training_start_time,
-        )
+    try:
+        with mesh:
+            for epoch_iteration in range(num_epochs):
+                start_time = time.time()
 
-        # Epoch Training Iteration:
-        local_key, epoch_key = jax.random.split(local_key)
-        epoch_keys = jax.random.split(epoch_key, local_devices_to_use)
-        (train_state, env_state, training_metrics) = (
-            training_epoch_with_metrics(train_state, env_state, epoch_keys)
-        )
+                local_key, epoch_key = jax.random.split(local_key)
 
-        current_step = int(unpmap(train_state.env_steps))
-
-        # If reset per epoch else Auto Reset:
-        if reset_per_epoch:
-            envs_key = jax.vmap(
-                lambda x, s: jax.random.split(x[0], s),
-                in_axes=(0, None),
-            )(envs_key, envs_key.shape[1])
-            env_state = reset_fn(envs_key)
-
-        if process_id == 0:
-            # Run Evaluation:
-            params = unpmap((
-                train_state.normalization_params,
-                train_state.params.policy_params,
-            ))
-            metrics = evaluator.evaluate(
-                policy_params=params,
-                training_metrics=training_metrics,
-                iteration=epoch_iteration+1,
-            )
-
-            logging.info(metrics)
-            if wandb_run is not None:
-                log_data = dict(metrics) if metrics else {}
-                if evaluator.render_type == 'video' and evaluator.render_flag:
-                    log_data['Visualizer'] = wandb.Video(
-                        evaluator.current_filepath,
-                        fps=evaluator.fps,
-                        format=evaluator.video_format,
-                    )
-                elif evaluator.render_type == 'html' and evaluator.render_flag:
-                    log_data['Visualizer'] = wandb.Html(
-                        evaluator.current_filepath,
-                        inject=False,
-                    )
-                wandb_run.log(log_data)
-
-            progress_fn(epoch_iteration+1, current_step, metrics)
-            # Save Checkpoint:
-            if checkpoint_fn is not None:
-                _train_state = unpmap(train_state)
-                checkpoint_fn(
-                    iteration=epoch_iteration+1, train_state=_train_state,
+                agent, opt_state, env_state, training_metrics = training_epoch(
+                    agent, opt_state, env_state, epoch_key
                 )
 
-    total_steps = current_step
+                # Compute Timing
+                jax.tree.map(lambda x: x.block_until_ready(), training_metrics)
+                epoch_duration = time.time() - start_time
+                training_walltime += epoch_duration
 
-    # pmap:
-    pmap.assert_is_replicated(train_state)
-    params = unpmap((
-        train_state.normalization_params,
-        train_state.params.policy_params,
-    ))
-    logging.info('total steps: %s', total_steps)
-    pmap.synchronize_hosts()
-    return (make_policy, params, metrics)
+                # Metrics:
+                training_metrics = jax.device_get(training_metrics)
+                steps_per_second = num_steps_per_epoch / epoch_duration
+                metrics = {
+                    'training/steps_per_second': steps_per_second,
+                    'training/walltime': training_walltime,
+                    **{f'training/{name}': value for name, value in training_metrics.items()},
+                }
+
+                # Update Step Counts:
+                current_step += num_steps_per_epoch
+
+                # If reset per epoch else Auto Reset:
+                if reset_per_epoch:
+                    envs_key = jax.random.split(local_key, num_envs)
+                    envs_key = jax.device_put(envs_key, s_data)
+                    env_state = reset_fn(envs_key)
+
+                if process_id == 0:
+                    metrics = run_evaluation(
+                        training_metrics=training_metrics,
+                        current_step=current_step,
+                        iteration=epoch_iteration + 1,
+                    )
+
+                if checkpoint_manager is not None:
+                    checkpoint_utilities.save_checkpoint(
+                        manager=checkpoint_manager,
+                        iteration=epoch_iteration + 1,
+                        agent=agent,
+                        opt_state=opt_state,
+                        env_steps=current_step,
+                        metrics=training_metrics
+                    )
+    finally:
+        if process_id == 0 and checkpoint_manager is not None:
+            checkpoint_manager.wait_until_finished()
+
+    return jax.device_get(agent), metrics
