@@ -1,11 +1,13 @@
+import os
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import jax
 import jax.numpy as jnp
 import numpy as np
 from absl.testing import absltest
 from absl.testing import parameterized
 
-# Import your two implementations
-# Assuming the files are named as follows:
 import brax_stats as original_impl
 import training.statistics as new_impl
 
