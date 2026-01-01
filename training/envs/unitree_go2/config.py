@@ -40,8 +40,6 @@ class RewardConfig:
     foot_clearance_sigma: float = 0.05
     # Hyperparameter for exponential kernel:
     kernel_sigma: float = 0.25
-    # Experimental Terms:
-    position_rate: float = -1.0
 
 
 @flax.struct.dataclass
@@ -83,4 +81,3 @@ class EnvironmentConfig:
     action_scale: float = 0.5
     control_timestep: float = 0.02
     optimizer_timestep: float = 0.004
-    recover_from_footstand: bool = False

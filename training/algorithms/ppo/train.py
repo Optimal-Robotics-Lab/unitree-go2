@@ -162,8 +162,6 @@ def train(
 
         params = nnx.state(agent, nnx.Param)
 
-        updates, opt_state = optimizer.update(grads, opt_state, params)
-
         if has_adaptive_kl_scheduler:
             updates, opt_state = optimizer.update(
                 grads,

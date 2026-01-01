@@ -3,23 +3,26 @@ import os
 import functools
 
 import jax
-import flax.linen as nn
+import jax.numpy as jnp
+import flax.nnx as nnx
+
 import distrax
 import optax
 
 import wandb
-import orbax.checkpoint as ocp
 
 from training.envs.unitree_go2 import unitree_go2_joystick
 from training.envs.unitree_go2 import config
 from training.envs.unitree_go2 import randomize
-from training.algorithms.ppo import network_utilities as ppo_networks
+
+import training.statistics as statistics
+import training.algorithms.ppo.agent as agent
+from training.optimizer import adaptive_kl_scheduler
+
 from training.algorithms.ppo.loss_utilities import loss_function
-from training.distribution_utilities import ParametricDistribution
 from training.algorithms.ppo.train import train
-from training import checkpoint_utilities
-from training.algorithms.ppo.load_utilities import load_checkpoint
 from training import metrics_utilities
+from training import checkpoint_utilities
 
 os.environ['XLA_FLAGS'] = (
     '--xla_gpu_enable_triton_softmax_fusion=true '
@@ -47,42 +50,86 @@ flags.DEFINE_string(
 
 
 def main(argv=None):
+    # Get FLAG.tag prefix:
+    prefix, suffix = FLAGS.tag.split('-')
+
     # Baseline Reward Config:
-    reward_config = config.RewardConfig(
-        # Rewards:
-        tracking_linear_velocity=1.5,
-        tracking_angular_velocity=0.75,
-        # Orientation Regularization Terms:
-        orientation_regularization=-5.0,
-        linear_z_velocity=-2.0,
-        angular_xy_velocity=-0.05,
-        # Energy Regularization Terms:
-        torque=-2e-4,
-        action_rate=-0.1,
-        acceleration=-2.5e-4,
-        # Auxilary Terms:
-        stand_still=-1.0,
-        termination=-1.0,
-        unwanted_contact=-1.0,
-        # Gait Reward Terms:
-        foot_slip=-0.5,
-        air_time=0.75,
-        foot_clearance=0.5,
-        gait_variance=-1.0,
-        # Gait Hyperparameters:
-        target_air_time=0.25,
-        mode_time=0.2,
-        command_threshold=0.0,
-        velocity_threshold=0.5,
-        # Foot Clearance Reward Terms:
-        target_foot_height=0.125,
-        foot_clearance_velocity_scale=2.0,
-        foot_clearance_sigma=0.05,
-        # Hyperparameter for exponential kernel:
-        kernel_sigma=0.25,
-        # Experimental Terms:
-        position_rate=-5.0,
-    )
+    if prefix == 'baseline':
+        reward_config = config.RewardConfig(
+            # Rewards:
+            tracking_linear_velocity=1.5,
+            tracking_angular_velocity=0.75,
+            # Orientation Regularization Terms:
+            orientation_regularization=-5.0,
+            linear_z_velocity=-2.0,
+            angular_xy_velocity=-0.05,
+            # Energy Regularization Terms:
+            torque=-2e-4,
+            action_rate=-0.01,
+            acceleration=-2.5e-5,
+            # Auxilary Terms:
+            stand_still=-1.0,
+            termination=-1.0,
+            unwanted_contact=-1.0,
+            # Gait Reward Terms:
+            foot_slip=-0.5,
+            air_time=0.75,
+            foot_clearance=0.5,
+            gait_variance=-1.0,
+            # Gait Hyperparameters:
+            target_air_time=0.25,
+            mode_time=0.2,
+            command_threshold=0.0,
+            velocity_threshold=0.5,
+            # Foot Clearance Reward Terms:
+            target_foot_height=0.125,
+            foot_clearance_velocity_scale=2.0,
+            foot_clearance_sigma=0.05,
+            # Hyperparameter for exponential kernel:
+            kernel_sigma=0.25,
+        )
+        command_config = config.CommandConfig()
+    elif prefix == 'finetune':
+        reward_config = config.RewardConfig(
+            # Rewards:
+            tracking_linear_velocity=1.5,
+            tracking_angular_velocity=0.75,
+            # Orientation Regularization Terms:
+            orientation_regularization=-5.0,
+            linear_z_velocity=-2.0,
+            angular_xy_velocity=-0.05,
+            # Energy Regularization Terms:
+            torque=-2e-4,
+            action_rate=-0.1,
+            acceleration=-2.5e-4,
+            # Auxilary Terms:
+            stand_still=-1.0,
+            termination=-1.0,
+            unwanted_contact=-1.0,
+            # Gait Reward Terms:
+            foot_slip=-0.5,
+            air_time=0.75,
+            foot_clearance=0.5,
+            gait_variance=-1.0,
+            # Gait Hyperparameters:
+            target_air_time=0.25,
+            mode_time=0.2,
+            command_threshold=0.0,
+            velocity_threshold=0.5,
+            # Foot Clearance Reward Terms:
+            target_foot_height=0.125,
+            foot_clearance_velocity_scale=2.0,
+            foot_clearance_sigma=0.05,
+            # Hyperparameter for exponential kernel:
+            kernel_sigma=0.25,
+        )
+        command_config = config.CommandConfig(
+            command_range=jax.numpy.array([1.5, 1.0, 3.14]),
+            command_mask_probability=0.9,
+            command_frequency=[0.5, 2.0],
+        )
+    else:
+        raise ValueError(f'Unknown FLAG.tag prefix: {prefix}')
 
     # Configs:
     noise_config = config.NoiseConfig()
@@ -90,33 +137,18 @@ def main(argv=None):
     # Default Disturbance Config:
     disturbance_config = config.DisturbanceConfig()
 
-    # Default Command Config:
-    # command_config = config.CommandConfig()
-
-    # Fast Command Tracking:
-    # command_config = config.CommandConfig(
-    #     command_range=jax.numpy.array([1.5, 1.0, 3.14]),
-    #     single_command_probability=0.0,
-    #     command_mask_probability=0.9,
-    #     command_frequency=[0.5, 2.0],
-    # )
-
-    # No Command Tracking for Footstand Recovery:
-    recover_from_footstand = False
-    command_config = config.CommandConfig(
-        command_range=jax.numpy.array([0.0, 0.0, 0.0]),
-        single_command_probability=0.0,
-        command_mask_probability=0.0,
-    )
-
-    flat_terrain = 'scene_mjx.xml'
+    if suffix == 'standard':
+        scene = 'scene_mjx.xml'
+    elif suffix == 'transparent':
+        scene = 'scene_mjx_transparent.xml'
+    else:
+        raise ValueError(f'Unknown FLAG.tag suffix: {suffix}')
 
     environment_config = config.EnvironmentConfig(
-        filename=flat_terrain,
+        filename=scene,
         action_scale=0.5,
         control_timestep=0.02,
         optimizer_timestep=0.004,
-        recover_from_footstand=recover_from_footstand,
     )
 
     env = unitree_go2_joystick.UnitreeGo2Env(
@@ -134,24 +166,60 @@ def main(argv=None):
         command_config=command_config,
     )
 
-    # Metadata:
+    observation_size = env.observation_size
+    action_size = env.action_size
+    reference_observation = {
+        key: jnp.zeros(value) for key, value in observation_size.items()
+    }
+
+    # Setup agent:
     policy_layer_size = [512, 256, 128,]
     value_layer_size = [512, 256, 128,]
-    network_metadata = checkpoint_utilities.network_metadata(
-        policy_layer_size=policy_layer_size,
-        value_layer_size=value_layer_size,
-        policy_depth=len(policy_layer_size),
-        value_depth=len(value_layer_size),
-        activation='nn.swish',
-        policy_kernel_init='jax.nn.initializers.lecun_uniform()',
-        value_kernel_init='jax.nn.initializers.variance_scaling(scale=0.01, mode="fan_in", distribution="uniform")',
-        policy_observation_key='state',
-        value_observation_key='privileged_state',
-        action_distribution='ParametricDistribution(distribution=distrax.Normal, bijector=distrax.Tanh())',
+    activation_fn = jax.nn.swish
+    policy_kernel_init = jax.nn.initializers.lecun_uniform()
+    value_kernel_init = jax.nn.initializers.variance_scaling(
+        scale=0.01, mode="fan_in", distribution="uniform",
+    )
+    policy_input_normalization = statistics.RunningStatistics(
+        reference_input=reference_observation["state"],
+    )
+    value_input_normalization = statistics.RunningStatistics(
+        reference_input=reference_observation["privileged_state"],
+    )
+    model = agent.Agent(
+        observation_size=observation_size,
+        action_size=action_size,
+        policy_input_normalization=policy_input_normalization,
+        value_input_normalization=value_input_normalization,
+        policy_layer_sizes=policy_layer_size,
+        value_layer_sizes=value_layer_size,
+        activation=activation_fn,
+        policy_kernel_init=policy_kernel_init,
+        value_kernel_init=value_kernel_init,
+        policy_observation_key="state",
+        value_observation_key="privileged_state",
+    )
+
+    # Setup Optimizer:
+    optimizer = optax.chain(
+        optax.clip_by_global_norm(1.0),
+        optax.scale_by_adam(eps=1e-5),
+        adaptive_kl_scheduler(
+            init_lr=3e-4,
+            desired_kl=0.01
+        ),
+        optax.scale(-1),
+    )
+    has_adaptive_kl_scheduler = True
+
+    # Metadata:
+    agent_metadata = checkpoint_utilities.agent_metadata(
+        agent=f"{model}"
     )
     loss_metadata = checkpoint_utilities.loss_metadata(
-        clip_coef=0.2,
-        value_coef=0.5,
+        policy_clip_coef=0.2,
+        value_clip_coef=0.4,
+        value_coef=1.0,
         entropy_coef=0.01,
         gamma=0.99,
         gae_lambda=0.95,
@@ -173,52 +241,46 @@ def main(argv=None):
         num_minibatches=32,
         num_ppo_iterations=4,
         normalize_observations=True,
-        optimizer='optax.chain(optax.clip_by_global_norm(max_norm=1.0),optax.adam(3e-4))',
+        optimizer='optax.chain( \
+            optax.clip_by_global_norm(1.0), \
+            optax.scale_by_adam(eps=1e-5), \
+            adaptive_kl_scheduler( \
+                init_lr=3e-4, \
+                desired_kl=0.01 \
+            ), \
+            optax.scale(-1), \
+        )',
+        has_adaptive_kl_scheduler=has_adaptive_kl_scheduler,
     )
 
     # Start Wandb and save metadata:
     run = wandb.init(
-        project='Unitree-Go2',
+        project='Test',
         tags=[FLAGS.tag],
         config={
             'reward_config': reward_config,
-            'network_metadata': network_metadata,
+            'agent_metadata': agent_metadata,
             'loss_metadata': loss_metadata,
             'training_metadata': training_metadata,
             'environment_config': environment_config,
+            'noise_config': noise_config,
+            'disturbance_config': disturbance_config,
+            'command_config': command_config,
         },
     )
 
     render_options = metrics_utilities.RenderOptions(
         filepath=run.name,
-        num_envs=1,
         render_interval=5,
-        spacing=1.0,
         duration=10.0,
-        # Video Options:
-        fps=10,
-        video_format='html',
     )
 
     # Initialize Functions with Params:
     randomization_fn = randomize.domain_randomize
-    make_networks_factory = functools.partial(
-        ppo_networks.make_ppo_networks,
-        policy_layer_sizes=network_metadata.policy_layer_size,
-        value_layer_sizes=network_metadata.value_layer_size,
-        activation=nn.swish,
-        policy_kernel_init=jax.nn.initializers.lecun_uniform(),
-        value_kernel_init=jax.nn.initializers.variance_scaling(scale=0.01, mode="fan_in", distribution="uniform"),
-        policy_observation_key='state',
-        value_observation_key='privileged_state',
-        action_distribution=ParametricDistribution(
-            distribution=distrax.Normal,
-            bijector=distrax.Tanh(),
-        ),
-    )
     loss_fn = functools.partial(
         loss_function,
-        clip_coef=loss_metadata.clip_coef,
+        policy_clip_coef=loss_metadata.policy_clip_coef,
+        value_clip_coef=loss_metadata.value_clip_coef,
         value_coef=loss_metadata.value_coef,
         entropy_coef=loss_metadata.entropy_coef,
         gamma=loss_metadata.gamma,
@@ -243,46 +305,21 @@ def main(argv=None):
         print('\n')
 
     # Setup Checkpoint Manager:
-    manager_options = ocp.CheckpointManagerOptions(
-        save_interval_steps=5,
-        create=True,
-    )
-    checkpoint_directory = os.path.join(
-        os.path.dirname(__file__),
-        f"checkpoints/{run.name}",
-    )
-    registry = ocp.handlers.DefaultCheckpointHandlerRegistry()
-    registry.add('train_state', ocp.args.PyTreeSave, ocp.handlers.PyTreeCheckpointHandler)
-    registry.add('network_metadata', ocp.args.PyTreeSave, ocp.handlers.PyTreeCheckpointHandler)
-    registry.add('loss_metadata', ocp.args.PyTreeSave, ocp.handlers.PyTreeCheckpointHandler)
-    registry.add('training_metadata', ocp.args.PyTreeSave, ocp.handlers.PyTreeCheckpointHandler)
-
-    registry.add('train_state', ocp.args.PyTreeRestore, ocp.handlers.PyTreeCheckpointHandler)
-    registry.add('network_metadata', ocp.args.PyTreeRestore, ocp.handlers.PyTreeCheckpointHandler)
-    registry.add('loss_metadata', ocp.args.PyTreeRestore, ocp.handlers.PyTreeCheckpointHandler)
-    registry.add('training_metadata', ocp.args.PyTreeRestore, ocp.handlers.PyTreeCheckpointHandler)
-
-    restored_checkpoint = None
-    if FLAGS.checkpoint_name is not None:
-        restored_checkpoint, metadata = load_checkpoint(
-            checkpoint_name=FLAGS.checkpoint_name,
-            environment=env,
-            restore_iteration=FLAGS.checkpoint_iteration,
+    if FLAGS.checkpoint_name is None:
+        checkpoint_directory = os.path.join(
+            os.path.dirname(__file__),
+            f"checkpoints/{run.name}",
+        )
+    else:
+        checkpoint_directory = os.path.join(
+            os.path.dirname(__file__),
+            f"checkpoints/{FLAGS.checkpoint_name}",
         )
 
-    checkpoint_fn = functools.partial(
-        checkpoint_utilities.save_checkpoint,
+    manager = checkpoint_utilities.create_checkpoint_manager(
         checkpoint_directory=checkpoint_directory,
-        manager_options=manager_options,
-        registry=registry,
-        network_metadata=network_metadata,
-        loss_metadata=loss_metadata,
-        training_metadata=training_metadata,
-    )
-
-    optimizer = optax.chain(
-        optax.clip_by_global_norm(max_norm=1.0),
-        optax.adam(learning_rate=3e-4),
+        max_to_keep=5,
+        save_interval_steps=1,
     )
 
     train_fn = functools.partial(
@@ -302,18 +339,17 @@ def main(argv=None):
         num_minibatches=training_metadata.num_minibatches,
         num_ppo_iterations=training_metadata.num_ppo_iterations,
         normalize_observations=training_metadata.normalize_observations,
-        network_factory=make_networks_factory,
         optimizer=optimizer,
         loss_function=loss_fn,
         progress_fn=progress_fn,
+        checkpoint_manager=manager,
         randomization_fn=randomization_fn,
-        checkpoint_fn=checkpoint_fn,
-        restored_checkpoint=restored_checkpoint,
         wandb_run=run,
         render_options=render_options,
     )
 
-    policy_generator, params, metrics = train_fn(
+    policy, metrics = train_fn(
+        agent=model,
         environment=env,
         evaluation_environment=eval_env,
     )

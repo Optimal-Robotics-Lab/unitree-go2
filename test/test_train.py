@@ -20,6 +20,7 @@ import wandb
 from training import statistics
 from training.algorithms.ppo import train
 from training.algorithms.ppo import agent
+from training.optimizer import adaptive_kl_scheduler
 
 from training.envs.unitree_go2 import unitree_go2_joystick
 
@@ -65,7 +66,19 @@ def main(argv=None):
         value_observation_key="privileged_state",
     )
 
-    print(f"Agent Model: \n {model}")
+    model_str = f"{model}"
+    print(f"Agent Model: \n {model_str}")
+
+    # Setup optimizer:
+    optimizer = optax.chain(
+        optax.clip_by_global_norm(1.0),
+        optax.scale_by_adam(eps=1e-5),
+        adaptive_kl_scheduler(
+            init_lr=3e-4,
+            desired_kl=0.01
+        ),
+        optax.scale(-1),
+    )
 
     render_options = metrics_utilities.RenderOptions(
         filepath="test",
@@ -83,6 +96,8 @@ def main(argv=None):
         num_envs=2,
         num_evaluation_envs=2,
         render_options=render_options,
+        optimizer=optimizer,
+        has_adaptive_kl_scheduler=True,
     )
     policy, metrics = train_fn(agent=model)
 
