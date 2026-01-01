@@ -333,11 +333,7 @@ def train(
 
         if wandb_run is not None:
             log_data = dict(metrics)
-            if evaluator.render_type == 'video' and evaluator.render_flag:
-                log_data['Visualizer'] = wandb.Video(
-                    evaluator.current_filepath, fps=evaluator.fps, format=evaluator.video_format
-                )
-            elif evaluator.render_type == 'html' and evaluator.render_flag:
+            if evaluator.render and evaluator.render_flag:
                 log_data['Visualizer'] = wandb.Html(evaluator.current_filepath, inject=False)
             wandb_run.log(log_data)
 
