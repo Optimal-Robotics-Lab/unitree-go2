@@ -69,6 +69,7 @@ def train(
     num_ppo_iterations: int = 4,
     normalize_observations: bool = True,
     optimizer: optax.GradientTransformation = optax.adam(1e-4),
+    has_adaptive_kl_scheduler: bool = False,
     loss_function: Callable[..., Tuple[jnp.ndarray, types.Metrics]] =
     loss_utilities.loss_function,
     progress_fn: Callable[[int, int, types.Metrics], None] = lambda *args: None,
@@ -136,9 +137,6 @@ def train(
     env_state = reset_fn(envs_key)
 
     # Initialize Agent and Optimizer:
-    has_adaptive_kl_scheduler = getattr(
-        optimizer, 'has_adaptive_kl_scheduler', False,
-    )
     params = nnx.state(agent, nnx.Param)
     opt_state = optimizer.init(params)
     current_step = 0
