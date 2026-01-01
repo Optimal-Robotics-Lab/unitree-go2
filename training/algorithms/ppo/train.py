@@ -136,6 +136,9 @@ def train(
     env_state = reset_fn(envs_key)
 
     # Initialize Agent and Optimizer:
+    has_adaptive_kl_scheduler = getattr(
+        optimizer, 'has_adaptive_kl_scheduler', False,
+    )
     params = nnx.state(agent, nnx.Param)
     opt_state = optimizer.init(params)
     current_step = 0
@@ -160,7 +163,19 @@ def train(
         (loss, metrics), grads = grad_fn(agent, data, subkey)
 
         params = nnx.state(agent, nnx.Param)
+
         updates, opt_state = optimizer.update(grads, opt_state, params)
+
+        if has_adaptive_kl_scheduler:
+            updates, opt_state = optimizer.update(
+                grads,
+                opt_state,
+                params,
+                kl_mean=metrics['kl_mean'],
+            )
+        else:
+            updates, opt_state = optimizer.update(updates, opt_state, params)
+
         nnx.update(agent, updates)
 
         return (agent, opt_state, key), metrics
@@ -198,7 +213,8 @@ def train(
 
         # Turn off training for data collection:
         def policy_fn(x: jnp.ndarray, key: types.PRNGKey):
-            return agent.get_actions(x, key, training=False)
+            actions, value, info = agent(x, key, training=False)
+            return actions, {**info, 'value': value}
 
         # Generate Episode Data:
         def f(carry, unused_t):
@@ -227,20 +243,29 @@ def train(
             lambda x: jnp.reshape(x, (-1,) + x.shape[2:]), data,
         )
 
-        if normalize_observations:
+        def update_normalization_statistics(
+            agent_to_update: Agent, batch_data: types.Transition,
+        ) -> Agent:
             # Update Policy Stats (Actor)
-            if agent.policy.input_normalization is not None:
-                flat_observation = data.observation[agent.policy.observation_key].reshape(
-                    -1, *agent.observation_size[agent.policy.observation_key],
+            if agent_to_update.policy.input_normalization is not None:
+                flat_observation = batch_data.observation[agent_to_update.policy.observation_key].reshape(
+                    -1, *agent_to_update.observation_size[agent_to_update.policy.observation_key],  # type: ignore
                 )
-                agent.policy.input_normalization.update(flat_observation)
-
+                agent_to_update.policy.input_normalization.update(
+                    flat_observation,
+                )
             # Update Value Stats (Critic)
-            if agent.value.input_normalization is not None:
-                flat_observation = data.observation[agent.value.observation_key].reshape(
-                    -1, *agent.observation_size[agent.value.observation_key],
+            if agent_to_update.value.input_normalization is not None:
+                flat_observation = batch_data.observation[agent_to_update.value.observation_key].reshape(
+                    -1, *agent_to_update.observation_size[agent_to_update.value.observation_key],  # type: ignore
                 )
-                agent.value.input_normalization.update(flat_observation)
+                agent_to_update.value.input_normalization.update(
+                    flat_observation,
+                )
+            return agent_to_update
+
+        if normalize_observations and not has_adaptive_kl_scheduler:
+            agent = update_normalization_statistics(agent, data)
 
         (agent, opt_state, _), metrics = jax.lax.scan(
             functools.partial(sgd_step, data=data),
@@ -248,6 +273,9 @@ def train(
             (),
             length=num_ppo_iterations,
         )
+
+        if normalize_observations and has_adaptive_kl_scheduler:
+            agent = update_normalization_statistics(agent, data)
 
         return (agent, opt_state, state, next_key), metrics
 

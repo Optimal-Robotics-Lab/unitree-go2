@@ -89,7 +89,7 @@ class Agent(nnx.Module):
         log_prob = self.action_distribution.log_prob(logits, raw_actions)
         actions = self.action_distribution.process_sample(raw_actions)
 
-        return actions, {"log_prob": log_prob, "raw_action": raw_actions}
+        return actions, {"log_prob": log_prob, "raw_action": raw_actions, "logits": logits}
 
     def get_values(
         self,

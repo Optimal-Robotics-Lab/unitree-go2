@@ -38,7 +38,8 @@ def unroll_policy_steps(
     num_steps: int,
     extra_fields: Sequence[str] = (),
 ) -> Tuple[State, Transition]:
-    @jax.jit
+    """ Generate Unroll Policy Steps """
+
     def f(carry, unused_t):
         state, key = carry
         key, subkey = jax.random.split(key)
@@ -51,8 +52,9 @@ def unroll_policy_steps(
         )
         return (state, subkey), transition
 
+    f_jit = jax.jit(f, donate_argnums=(0,))
     (final_state, _), transitions = jax.lax.scan(
-        f,
+        f_jit,
         (state, key),
         (),
         length=num_steps,

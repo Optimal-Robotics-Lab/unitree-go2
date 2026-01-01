@@ -7,6 +7,9 @@ from absl import app, logging
 
 import jax
 import jax.numpy as jnp
+
+jax.config.update("jax_enable_x64", True)
+
 import distrax
 import optax
 
@@ -30,8 +33,6 @@ os.environ['XLA_FLAGS'] = (
     '--xla_gpu_enable_latency_hiding_scheduler=true '
     '--xla_gpu_enable_highest_priority_async_stream=true '
 )
-
-jax.config.update("jax_enable_x64", True)
 
 logging.set_verbosity(logging.FATAL)
 
@@ -68,13 +69,8 @@ def main(argv=None):
 
     render_options = metrics_utilities.RenderOptions(
         filepath="test",
-        num_envs=1,
         render_interval=5,
-        spacing=1.0,
         duration=10.0,
-        # Video Options:
-        fps=10,
-        video_format='html',
     )
 
     train_fn = functools.partial(
@@ -89,6 +85,11 @@ def main(argv=None):
         render_options=render_options,
     )
     policy, metrics = train_fn(agent=model)
+
+    print("Training completed.")
+    print("Final Metrics:")
+    for key, value in metrics.items():
+        print(f"{key}: {value}")
 
 
 if __name__ == "__main__":

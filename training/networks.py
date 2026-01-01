@@ -1,4 +1,5 @@
 from typing import Any, Callable, Sequence, Mapping, Optional
+import jax.typing as jtp
 
 import jax
 import jax.numpy as jnp
@@ -8,7 +9,7 @@ from training import statistics
 
 # Custom types:
 import training.module_types as types
-ActivationFn = Callable[[jnp.ndarray], jnp.ndarray]
+ActivationFn = Callable[[jtp.ArrayLike], jax.Array]
 Initializer = Callable[..., Any]
 
 

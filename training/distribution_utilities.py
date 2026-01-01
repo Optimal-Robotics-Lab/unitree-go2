@@ -77,3 +77,24 @@ class ParametricDistribution():
         sample: jax.Array,
     ) -> jnp.ndarray:
         return self.bijector.forward(sample)
+
+    def kl_divergence(
+        self,
+        new_params: jax.Array,
+        old_params: jax.Array,
+    ) -> jnp.ndarray:
+        """
+        Calculates KL(New || Old).
+
+        Args:
+            new_params: Parameters of the new distribution.
+            old_params: Parameters of the old distribution.
+
+        Returns:
+            KL Divergence between the two distributions.
+        """
+
+        new_distribution = self.create_distribution(new_params)
+        old_distribution = self.create_distribution(old_params)
+
+        return old_distribution.kl_divergence(new_distribution)

@@ -17,13 +17,11 @@
 
 from typing import Any, Callable, Tuple, NamedTuple, Protocol, Mapping, TypeVar, Union, List
 
-import jax
-import flax.struct
 import flax.nnx as nnx
 
-import numpy as np
 import jax.numpy as jnp
 from brax import envs
+
 
 Params = Any
 PRNGKey = jnp.ndarray
@@ -58,35 +56,18 @@ NestedArray = Union[
 
 
 class Transition(NamedTuple):
-    observation: jnp.ndarray
-    action: jnp.ndarray
-    reward: jnp.ndarray
-    termination: jnp.ndarray
-    next_observation: jnp.ndarray
+    observation: NestedArray
+    action: NestedArray
+    reward: NestedArray
+    termination: NestedArray
+    next_observation: NestedArray
     extras: Mapping[str, Any]
 
 
 class Policy(Protocol):
     def __call__(
         self,
-        x: jnp.ndarray,
+        x: NestedArray,
         key: PRNGKey,
     ) -> Tuple[Action, PolicyData]:
         pass
-
-
-class InputNormalizationFn(Protocol):
-    def __call__(
-        self,
-        x: jnp.ndarray,
-        normalization_params: NormalizationParams
-    ) -> jnp.ndarray:
-        pass
-
-
-def identity_normalization_fn(
-    x: jnp.ndarray,
-    normalization_params: NormalizationParams
-) -> jnp.ndarray:
-    del normalization_params
-    return x

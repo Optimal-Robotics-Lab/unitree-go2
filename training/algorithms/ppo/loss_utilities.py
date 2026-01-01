@@ -1,4 +1,4 @@
-from typing import Any, Tuple
+from typing import Tuple
 
 import jax
 import jax.numpy as jnp
@@ -57,7 +57,8 @@ def loss_function(
     agent: agent.Agent,
     data: types.Transition,
     rng_key: types.PRNGKey,
-    clip_coef: float = 0.2,
+    policy_clip_coef: float = 0.2,
+    value_clip_coef: float | None = None,
     value_coef: float = 0.5,
     entropy_coef: float = 0.01,
     gamma: float = 0.99,
@@ -113,15 +114,24 @@ def loss_function(
     unclipped_loss = ratios * advantages
     clipped_loss = advantages * jnp.clip(
         ratios,
-        1.0 - clip_coef,
-        1.0 + clip_coef,
+        1.0 - policy_clip_coef,
+        1.0 + policy_clip_coef,
     )
     policy_loss = -jnp.mean(jnp.minimum(unclipped_loss, clipped_loss))
 
     # Value Loss:
-    value_loss = value_coef * jnp.mean(
-        jnp.square(vs - values),
-    )
+    value_error = vs - values
+    value_loss = value_error * value_error
+    if value_clip_coef is not None:
+        old_values = data.extras['policy_data']['value']
+        value_clipped = old_values + jnp.clip(
+            values - old_values,
+            -value_clip_coef,
+            value_clip_coef,
+        )
+        value_loss_clipped = (vs - value_clipped) ** 2
+        value_loss = jnp.maximum(value_loss, value_loss_clipped)
+    value_loss = jnp.mean(value_loss) * 0.5 * value_coef
 
     # Entropy Loss:
     entropy = action_distribution.entropy(
@@ -134,9 +144,20 @@ def loss_function(
 
     loss = policy_loss + value_loss + entropy_loss
 
+    # Calculate KL Divergence Metric:
+    if hasattr(action_distribution, 'kl_divergence'):
+        old_distribution_logits = data.extras['policy_data']['logits']
+        kl_values = action_distribution.kl_divergence(
+            logits, old_distribution_logits,
+        )
+        kl_mean = jnp.mean(kl_values)
+    else:
+        kl_mean = jnp.array(0.0)
+
     return loss, {
         "loss": loss,
         "policy_loss": policy_loss,
         "value_loss": value_loss,
         "entropy_loss": entropy_loss,
+        "kl_mean": kl_mean,
     }
