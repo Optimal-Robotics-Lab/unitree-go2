@@ -3,6 +3,9 @@ import os
 import functools
 
 import jax
+
+jax.config.update("jax_enable_x64", True)
+
 import jax.numpy as jnp
 import flax.nnx as nnx
 
@@ -31,8 +34,6 @@ os.environ['XLA_FLAGS'] = (
     '--xla_gpu_enable_latency_hiding_scheduler=true '
     '--xla_gpu_enable_highest_priority_async_stream=true '
 )
-
-jax.config.update("jax_enable_x64", True)
 
 logging.set_verbosity(logging.FATAL)
 
@@ -340,6 +341,7 @@ def main(argv=None):
         num_ppo_iterations=training_metadata.num_ppo_iterations,
         normalize_observations=training_metadata.normalize_observations,
         optimizer=optimizer,
+        has_adaptive_kl_scheduler=training_metadata.has_adaptive_kl_scheduler,
         loss_function=loss_fn,
         progress_fn=progress_fn,
         checkpoint_manager=manager,

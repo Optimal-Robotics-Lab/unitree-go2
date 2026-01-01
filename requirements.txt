@@ -7,4 +7,3 @@ brax
 distrax
 orbax-checkpoint
 wandb
-imageio

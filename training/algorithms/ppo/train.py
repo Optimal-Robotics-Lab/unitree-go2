@@ -170,7 +170,7 @@ def train(
                 kl_mean=metrics['kl_mean'],
             )
         else:
-            updates, opt_state = optimizer.update(updates, opt_state, params)
+            updates, opt_state = optimizer.update(grads, opt_state, params)
 
         nnx.update(agent, updates)
 
@@ -394,7 +394,7 @@ def train(
 
                 if process_id == 0:
                     metrics = run_evaluation(
-                        training_metrics=training_metrics,
+                        training_metrics=metrics,
                         current_step=current_step,
                         iteration=epoch_iteration + 1,
                     )
