@@ -15,7 +15,7 @@ import functools
 import jax2onnx
 
 from training.envs.unitree_go2.unitree_go2_joystick import UnitreeGo2Env
-from training.algorithms.ppo.load_utilities import load_policy
+from training.checkpoint_utilities import restore_checkpoint
 
 from plugins import log1p
 
