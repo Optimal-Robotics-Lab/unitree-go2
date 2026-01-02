@@ -121,9 +121,9 @@ class Policy(nnx.Module):
             rngs=rngs,
         )
 
-    def __call__(self, x: types.NestedArray, training: bool = True):
+    def __call__(self, x: types.NestedArray):
         x = x if isinstance(x, jnp.ndarray) else x[self.observation_key]
-        x = self.input_normalization(x, update_stats=training) if self.input_normalization is not None else x
+        x = self.input_normalization(x) if self.input_normalization is not None else x
         out = self.network(x)
         if self.squeeze_output:
             out = jnp.squeeze(out, axis=-1)

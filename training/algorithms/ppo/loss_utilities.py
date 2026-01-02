@@ -72,13 +72,13 @@ def loss_function(
     data = jax.tree.map(lambda x: jnp.swapaxes(x, 0, 1), data)
 
     # Policy returns logits (raw network output)
-    logits = agent.policy(data.observation, training=False)
+    logits = agent.policy(data.observation)
 
     # Value returns scalar values
-    values = agent.value(data.observation, training=False)
+    values = agent.value(data.observation)
 
     terminal_observation = jax.tree.map(lambda x: x[-1], data.next_observation)
-    bootstrap_values = agent.value(terminal_observation, training=False)
+    bootstrap_values = agent.value(terminal_observation)
 
     # Create masks for truncation and termination:
     rewards = data.reward

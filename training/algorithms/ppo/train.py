@@ -172,7 +172,9 @@ def train(
         else:
             updates, opt_state = optimizer.update(grads, opt_state, params)
 
-        nnx.update(agent, updates)
+        new_params = optax.apply_updates(params, updates)
+
+        nnx.update(agent, new_params)
 
         return (agent, opt_state, key), metrics
 
@@ -209,7 +211,7 @@ def train(
 
         # Turn off training for data collection:
         def policy_fn(x: jnp.ndarray, key: types.PRNGKey):
-            actions, value, info = agent(x, key, training=False)
+            actions, value, info = agent(x, key)
             return actions, {**info, 'value': value}
 
         # Generate Episode Data:
@@ -316,17 +318,16 @@ def train(
         render_options=render_options,
     )
 
+    def apply_inference(agent, obs, key):
+        return agent.get_actions(
+            obs, key, deterministic=deterministic_evaluation
+        )
+
     def run_evaluation(training_metrics, current_step, iteration):
-        host_agent = jax.device_get(agent)
-
-        @jax.jit
-        def evaluate_policy(obs, key):
-            return host_agent.get_actions(
-                obs, key, deterministic=deterministic_evaluation, training=False,
-            )
-
+        policy_fn = jax.tree_util.Partial(apply_inference, agent)
+        
         metrics = evaluator.evaluate(
-            policy_fn=evaluate_policy, training_metrics=training_metrics, iteration=iteration,
+            policy_fn=policy_fn, training_metrics=training_metrics, iteration=iteration,
         )
 
         if wandb_run is not None:

@@ -202,16 +202,22 @@ def main(argv=None):
     )
 
     # Setup Optimizer:
+    # optimizer = optax.chain(
+    #     optax.clip_by_global_norm(1.0),
+    #     optax.scale_by_adam(eps=1e-5),
+    #     adaptive_kl_scheduler(
+    #         init_lr=3e-4,
+    #         desired_kl=0.01
+    #     ),
+    #     optax.scale(-1),
+    # )
+    # has_adaptive_kl_scheduler = True
+
     optimizer = optax.chain(
-        optax.clip_by_global_norm(1.0),
-        optax.scale_by_adam(eps=1e-5),
-        adaptive_kl_scheduler(
-            init_lr=3e-4,
-            desired_kl=0.01
-        ),
-        optax.scale(-1),
+        optax.clip_by_global_norm(max_norm=1.0),
+        optax.adam(learning_rate=3e-4),
     )
-    has_adaptive_kl_scheduler = True
+    has_adaptive_kl_scheduler = False
 
     # Metadata:
     agent_metadata = checkpoint_utilities.agent_metadata(
@@ -219,7 +225,7 @@ def main(argv=None):
     )
     loss_metadata = checkpoint_utilities.loss_metadata(
         policy_clip_coef=0.2,
-        value_clip_coef=0.4,
+        value_clip_coef=None,
         value_coef=1.0,
         entropy_coef=0.01,
         gamma=0.99,
@@ -242,14 +248,18 @@ def main(argv=None):
         num_minibatches=32,
         num_ppo_iterations=4,
         normalize_observations=True,
+        # optimizer='optax.chain( \
+        #     optax.clip_by_global_norm(1.0), \
+        #     optax.scale_by_adam(eps=1e-5), \
+        #     adaptive_kl_scheduler( \
+        #         init_lr=3e-4, \
+        #         desired_kl=0.01 \
+        #     ), \
+        #     optax.scale(-1), \
+        # )',
         optimizer='optax.chain( \
             optax.clip_by_global_norm(1.0), \
-            optax.scale_by_adam(eps=1e-5), \
-            adaptive_kl_scheduler( \
-                init_lr=3e-4, \
-                desired_kl=0.01 \
-            ), \
-            optax.scale(-1), \
+            optax.adam(learning_rate=3e-4), \
         )',
         has_adaptive_kl_scheduler=has_adaptive_kl_scheduler,
     )

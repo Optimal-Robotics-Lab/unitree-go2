@@ -100,7 +100,7 @@ class Evaluator:
 
         start_time = time.time()
         state, states = jax.jit(
-            self.evaluation_loop, static_argnums=(0,)
+            self.evaluation_loop,
         )(policy_fn, subkey)
         evaluation_metrics = state.info['eval_metrics']
         evaluation_metrics.active_episodes.block_until_ready()

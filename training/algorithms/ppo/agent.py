@@ -70,15 +70,16 @@ class Agent(nnx.Module):
         x: types.Observation,
         key: types.PRNGKey,
         deterministic: bool = False,
-        training: bool = True,
     ) -> Tuple[types.Action, types.PolicyData]:
         """
         Forward pass for Policy Network.
 
         Args:
-            training: If True, updates running statistics (mean/var).
+            x: The observation input to the policy network.
+            key: A PRNGKey for sampling actions.
+            deterministic: Whether to use deterministic actions (e.g., for evaluation).
         """
-        logits = self.policy(x, training=training)
+        logits = self.policy(x,)
 
         if deterministic:
             actions = self.action_distribution.mode(logits)
@@ -94,18 +95,17 @@ class Agent(nnx.Module):
     def get_values(
         self,
         x: types.Observation,
-        training: bool = True,
     ) -> types.Value:
         """Forward pass for Value Network."""
-        return self.value(x, training=training)
+        return self.value(x)
 
     def __call__(
         self,
         x: types.Observation,
         key: types.PRNGKey,
-        training: bool = True,
+        deterministic: bool = False,
     ) -> Tuple[types.Action, types.Value, types.PolicyData]:
         """Unified forward pass for training or inference."""
-        actions, info = self.get_actions(x, key, training=training)
-        value = self.get_values(x, training=training)
+        actions, info = self.get_actions(x, key, deterministic=deterministic)
+        value = self.get_values(x)
         return actions, value, info

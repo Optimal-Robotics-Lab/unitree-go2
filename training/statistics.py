@@ -92,11 +92,8 @@ class RunningStatistics(nnx.Module):
     def __call__(
         self,
         x: NestedArray,
-        update_stats: bool = True,
     ) -> NestedArray:
-        if update_stats:
-            self.update(x)
-
+        """ Alias for normalize """
         return self.normalize(x)
 
     def update(
