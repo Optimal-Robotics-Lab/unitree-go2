@@ -340,27 +340,28 @@ def train(
 
         return metrics
 
-    if process_id == 0 and num_evaluations > 0:
-        metrics = run_evaluation(
-            training_metrics={},
-            current_step=current_step,
-            iteration=0,
-        )
-
-    if checkpoint_manager is not None:
-        checkpoint_utilities.save_checkpoint(
-            manager=checkpoint_manager,
-            iteration=0,
-            agent=agent,
-            opt_state=opt_state,
-            env_steps=current_step
-        )
-
-    training_walltime = 0.0
-
     # Training Loop:
     try:
         with mesh:
+            
+            if process_id == 0:
+                metrics = run_evaluation(
+                    training_metrics={},
+                    current_step=current_step,
+                    iteration=0,
+                )
+
+            if checkpoint_manager is not None:
+                checkpoint_utilities.save_checkpoint(
+                    manager=checkpoint_manager,
+                    iteration=0,
+                    agent=agent,
+                    opt_state=opt_state,
+                    env_steps=current_step,
+                )
+
+            training_walltime = 0.0
+            
             for epoch_iteration in range(num_epochs):
                 start_time = time.time()
 
@@ -407,7 +408,6 @@ def train(
                         agent=agent,
                         opt_state=opt_state,
                         env_steps=current_step,
-                        metrics=training_metrics
                     )
     finally:
         if process_id == 0 and checkpoint_manager is not None:
