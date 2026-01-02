@@ -1,4 +1,5 @@
 from typing import NamedTuple
+import dataclasses
 
 import jax
 import jax.numpy as jnp
@@ -6,18 +7,49 @@ import jax.numpy as jnp
 import optax
 
 
-def ignore_extra_args(
-    optimizer: optax.GradientTransformation
-) -> optax.GradientTransformationExtraArgs:
-    """Wraps an optimizer to silently ignore any extra keyword arguments."""
+@dataclasses.dataclass
+class OptimizerConfig:
+    learning_rate: float = 3e-4
+    grad_clip_norm: float = 1.0
+    desired_kl: float | None = None
+    min_learning_rate: float = 1e-5
+    max_learning_rate: float = 1e-2
+    kl_adjustment_factor: float = 1.5
 
-    def init_fn(params):
-        return optimizer.init(params)
 
-    def update_fn(updates, state, params=None, **extra_args):
-        return optimizer.update(updates, state, params)
+def create_optimizer(
+    optimizer_config: OptimizerConfig = OptimizerConfig(),
+) -> optax.GradientTransformation:
+    """Creates an optimizer from OptimizerConfig.
 
-    return optax.GradientTransformationExtraArgs(init_fn, update_fn)
+    Args:
+        optimizer_config: An OptimizerConfig instance.
+
+    Returns:
+        An optax.GradientTransformation.
+    """
+    if optimizer_config.desired_kl is None:
+        optimizer = optax.chain(
+            optax.clip_by_global_norm(optimizer_config.grad_clip_norm),
+            optax.adam(learning_rate=optimizer_config.learning_rate),
+        )
+        return optimizer
+    elif optimizer_config.desired_kl is not None:
+        optimizer = optax.chain(
+            optax.clip_by_global_norm(optimizer_config.grad_clip_norm),
+            optax.scale_by_adam(eps=1e-5),
+            adaptive_kl_scheduler(
+                init_lr=optimizer_config.learning_rate,
+                desired_kl=optimizer_config.desired_kl,
+                min_lr=optimizer_config.min_learning_rate,
+                max_lr=optimizer_config.max_learning_rate,
+                adjustment_factor=optimizer_config.kl_adjustment_factor,
+            ),
+            optax.scale(-1),
+        )
+        return optimizer
+    else:
+        raise ValueError("Invalid OptimizerConfig.")
 
 
 class AdaptiveKLState(NamedTuple):

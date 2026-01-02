@@ -74,6 +74,7 @@ def train(
     loss_utilities.loss_function,
     progress_fn: Callable[[int, int, types.Metrics], None] = lambda *args: None,
     checkpoint_manager: Optional[ocp.CheckpointManager] = None,
+    restored_checkpoint: Optional[checkpoint_utilities.RestoredCheckpoint] = None,
     randomization_fn: Optional[
         Callable[[base.System, jnp.ndarray], Tuple[base.System, base.System]]
     ] = None,
@@ -141,15 +142,11 @@ def train(
     opt_state = optimizer.init(params)
     current_step = 0
 
-    if checkpoint_manager is not None:
-        restored = checkpoint_utilities.restore_checkpoint(checkpoint_manager, agent, opt_state)
-        if restored:
-            agent = restored.agent
-            opt_state = restored.opt_state if restored.opt_state is not None else opt_state
-            current_step = restored.env_steps
-
     agent = jax.device_put(agent, s_replicated)
     opt_state = jax.device_put(opt_state, s_replicated)
+    if restored_checkpoint is not None:
+        agent = jax.device_put(restored_checkpoint.agent, s_replicated)
+        opt_state = jax.device_put(restored_checkpoint.opt_state, s_replicated)
 
     def minibatch_step(carry, data: types.Transition,):
         agent, opt_state, key = carry
@@ -357,7 +354,6 @@ def train(
                     iteration=0,
                     agent=agent,
                     opt_state=opt_state,
-                    env_steps=current_step,
                 )
 
             training_walltime = 0.0
@@ -407,7 +403,6 @@ def train(
                         iteration=epoch_iteration + 1,
                         agent=agent,
                         opt_state=opt_state,
-                        env_steps=current_step,
                     )
     finally:
         if process_id == 0 and checkpoint_manager is not None:

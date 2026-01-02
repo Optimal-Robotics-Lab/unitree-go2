@@ -20,7 +20,7 @@ from training.envs.unitree_go2 import randomize
 
 import training.statistics as statistics
 import training.algorithms.ppo.agent as agent
-from training.optimizer import adaptive_kl_scheduler
+from training.optimizer import OptimizerConfig, create_optimizer
 
 from training.algorithms.ppo.loss_utilities import loss_function
 from training.algorithms.ppo.train import train
@@ -134,8 +134,6 @@ def main(argv=None):
 
     # Configs:
     noise_config = config.NoiseConfig()
-
-    # Default Disturbance Config:
     disturbance_config = config.DisturbanceConfig()
 
     if suffix == 'standard':
@@ -145,6 +143,7 @@ def main(argv=None):
     else:
         raise ValueError(f'Unknown FLAG.tag suffix: {suffix}')
 
+    # Setup Environments:
     environment_config = config.EnvironmentConfig(
         filename=scene,
         action_scale=0.5,
@@ -202,37 +201,31 @@ def main(argv=None):
     )
 
     # Setup Optimizer:
-    # optimizer = optax.chain(
-    #     optax.clip_by_global_norm(1.0),
-    #     optax.scale_by_adam(eps=1e-5),
-    #     adaptive_kl_scheduler(
-    #         init_lr=3e-4,
-    #         desired_kl=0.01
-    #     ),
-    #     optax.scale(-1),
-    # )
-    # has_adaptive_kl_scheduler = True
-
-    optimizer = optax.chain(
-        optax.clip_by_global_norm(max_norm=1.0),
-        optax.adam(learning_rate=3e-4),
+    optimizer_config = OptimizerConfig(
+        learning_rate=3e-4,
+        grad_clip_norm=1.0,
+        desired_kl=0.01,
+        min_learning_rate=1e-5,
+        max_learning_rate=1e-2,
+        kl_adjustment_factor=1.5,
     )
-    has_adaptive_kl_scheduler = False
+    optimizer = create_optimizer(optimizer_config)
+    has_adaptive_kl_scheduler = True if optimizer_config.desired_kl is not None else False
 
-    # Metadata:
-    agent_metadata = checkpoint_utilities.agent_metadata(
-        agent=f"{model}"
+    # Aggregate Metadata:
+    agent_metadata = checkpoint_utilities.AgentMetadata(
+        agent=f"{model}",
     )
-    loss_metadata = checkpoint_utilities.loss_metadata(
+    loss_metadata = checkpoint_utilities.LossMetadata(
         policy_clip_coef=0.2,
-        value_clip_coef=None,
+        value_clip_coef=0.4,
         value_coef=1.0,
         entropy_coef=0.01,
         gamma=0.99,
         gae_lambda=0.95,
         normalize_advantages=True,
     )
-    training_metadata = checkpoint_utilities.training_metadata(
+    training_metadata = checkpoint_utilities.TrainingMetadata(
         num_epochs=20,
         num_training_steps=20,
         episode_length=1000,
@@ -248,20 +241,6 @@ def main(argv=None):
         num_minibatches=32,
         num_ppo_iterations=4,
         normalize_observations=True,
-        # optimizer='optax.chain( \
-        #     optax.clip_by_global_norm(1.0), \
-        #     optax.scale_by_adam(eps=1e-5), \
-        #     adaptive_kl_scheduler( \
-        #         init_lr=3e-4, \
-        #         desired_kl=0.01 \
-        #     ), \
-        #     optax.scale(-1), \
-        # )',
-        optimizer='optax.chain( \
-            optax.clip_by_global_norm(1.0), \
-            optax.adam(learning_rate=3e-4), \
-        )',
-        has_adaptive_kl_scheduler=has_adaptive_kl_scheduler,
     )
 
     # Start Wandb and save metadata:
@@ -273,6 +252,7 @@ def main(argv=None):
             'agent_metadata': agent_metadata,
             'loss_metadata': loss_metadata,
             'training_metadata': training_metadata,
+            'optimizer_config': optimizer_config,
             'environment_config': environment_config,
             'noise_config': noise_config,
             'disturbance_config': disturbance_config,
@@ -315,22 +295,41 @@ def main(argv=None):
             )
         print('\n')
 
-    # Setup Checkpoint Manager:
-    if FLAGS.checkpoint_name is None:
-        checkpoint_directory = os.path.join(
+    # Restore Checkpoint:
+    restored_checkpoint = None
+    if FLAGS.checkpoint_name is not None:
+        restore_directory = os.path.join(
             os.path.dirname(__file__),
             f"checkpoints/{run.name}",
         )
-    else:
-        checkpoint_directory = os.path.join(
-            os.path.dirname(__file__),
-            f"checkpoints/{FLAGS.checkpoint_name}",
+        restore_manager = checkpoint_utilities.create_checkpoint_manager(
+            checkpoint_directory=restore_directory,
         )
+        restored_checkpoint, _ = checkpoint_utilities.restore_training_state(
+            manager=restore_manager,
+            agent=model,
+            iteration=FLAGS.checkpoint_iteration,
+        )
+        optimizer = restored_checkpoint.optimizer
 
+    # Setup Checkpoint Manager:
+    checkpoint_directory = os.path.join(
+        os.path.dirname(__file__),
+        f"checkpoints/{run.name}",
+    )
     manager = checkpoint_utilities.create_checkpoint_manager(
         checkpoint_directory=checkpoint_directory,
         max_to_keep=5,
         save_interval_steps=1,
+    )
+    checkpoint_utilities.save_config(
+        manager=manager,
+        metadata=checkpoint_utilities.CheckpointMetadata(
+            optimizer_config=optimizer_config,
+            agent_metadata=agent_metadata,
+            loss_metadata=loss_metadata,
+            training_metadata=training_metadata,
+        ),
     )
 
     train_fn = functools.partial(
@@ -351,10 +350,11 @@ def main(argv=None):
         num_ppo_iterations=training_metadata.num_ppo_iterations,
         normalize_observations=training_metadata.normalize_observations,
         optimizer=optimizer,
-        has_adaptive_kl_scheduler=training_metadata.has_adaptive_kl_scheduler,
+        has_adaptive_kl_scheduler=has_adaptive_kl_scheduler,
         loss_function=loss_fn,
         progress_fn=progress_fn,
         checkpoint_manager=manager,
+        restored_checkpoint=restored_checkpoint,
         randomization_fn=randomization_fn,
         wandb_run=run,
         render_options=render_options,
