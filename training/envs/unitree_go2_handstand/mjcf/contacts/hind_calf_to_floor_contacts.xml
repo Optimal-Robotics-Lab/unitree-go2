@@ -1,8 +1,0 @@
-<mujoco>
-  <contact>
-        <pair name="hind_right_calf_upper_floor_contact" geom1="hind_right_calf_upper_collision" geom2="floor" condim="1" friction="0.8"/>
-        <pair name="hind_right_calf_lower_floor_contact" geom1="hind_right_calf_lower_collision" geom2="floor" condim="1" friction="0.8"/>
-        <pair name="hind_left_calf_upper_floor_contact" geom1="hind_left_calf_upper_collision" geom2="floor" condim="1" friction="0.8"/>
-        <pair name="hind_left_calf_lower_floor_contact" geom1="hind_left_calf_lower_collision" geom2="floor" condim="1" friction="0.8"/>
-    </contact>
-</mujoco>

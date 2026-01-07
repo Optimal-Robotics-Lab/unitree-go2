@@ -7,6 +7,9 @@ import jax.numpy as jnp
 import flax.struct
 
 
+from mujoco.mjx._src.types import Impl
+
+
 @flax.struct.dataclass
 class RewardConfig:
     # Rewards:
@@ -78,6 +81,7 @@ class CommandConfig:
 @flax.struct.dataclass
 class EnvironmentConfig:
     filename: str = "scene_mjx.xml"
+    impl: Impl = Impl.JAX
     action_scale: float = 0.5
     control_timestep: float = 0.02
     optimizer_timestep: float = 0.004
