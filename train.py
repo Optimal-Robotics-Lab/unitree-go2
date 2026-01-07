@@ -143,20 +143,21 @@ def main(argv=None):
 
     environment_config = config.EnvironmentConfig(
         filename=scene,
+        impl="jax",
         action_scale=0.5,
         control_timestep=0.02,
         optimizer_timestep=0.004,
     )
 
     env = unitree_go2_joystick.UnitreeGo2Env(
-        env_config=environment_config,
+        environment_config=environment_config,
         reward_config=reward_config,
         noise_config=noise_config,
         disturbance_config=disturbance_config,
         command_config=command_config,
     )
     eval_env = unitree_go2_joystick.UnitreeGo2Env(
-        env_config=environment_config,
+        environment_config=environment_config,
         reward_config=reward_config,
         noise_config=noise_config,
         disturbance_config=disturbance_config,

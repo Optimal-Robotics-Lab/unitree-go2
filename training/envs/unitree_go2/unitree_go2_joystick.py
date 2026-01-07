@@ -36,7 +36,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
 
     def __init__(
         self,
-        env_config: EnvironmentConfig = EnvironmentConfig(),
+        environment_config: EnvironmentConfig = EnvironmentConfig(),
         reward_config: RewardConfig = RewardConfig(),
         noise_config: NoiseConfig = NoiseConfig(),
         disturbance_config: DisturbanceConfig = DisturbanceConfig(),
@@ -44,7 +44,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         **kwargs,
     ) -> None:
         super().__init__(
-            environment_config=env_config,
+            environment_config=environment_config,
             reward_config=reward_config,
             noise_config=noise_config,
             disturbance_config=disturbance_config,
@@ -203,7 +203,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
 
         # Observation Initialization:
         observation = self.get_observation(
-            pipeline_state, state_info,
+            data, state_info,
         )
 
         reward, done = jnp.zeros(2)
@@ -669,7 +669,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
 
     # def _cost_foot_slip(
     #     self,
-    #     pipeline_state: base.State,
+    #     data: base.State,
     #     target_foot_height: float = 0.1,
     #     decay_rate: float = 0.95,
     # ) -> jax.Array:
@@ -678,9 +678,9 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
     #         raise ValueError("Decay rate must be between 0 and 1.")
 
     #     # Foot velocities and foot heights
-    #     foot_velocity = self.get_feet_velocity(pipeline_state)
+    #     foot_velocity = self.get_feet_velocity(data)
     #     foot_velocity_xy = foot_velocity[..., :2]
-    #     foot_position = pipeline_state.site_xpos[self.feet_site_idx]
+    #     foot_position = data.site_xpos[self.feet_site_idx]
     #     foot_height = foot_position[..., -1]
 
     #     # Calculate velocity of each foot relative to the base
@@ -730,8 +730,8 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
             xfrc_applied = xfrc_applied.at[self.base_idx, :3].set(
                 force * state.info["disturbance_direction"]
             )
-            pipeline_state = state.pipeline_state.replace(xfrc_applied=xfrc_applied)
-            state = state.replace(pipeline_state=pipeline_state)
+            data = state.data.replace(xfrc_applied=xfrc_applied)
+            state = state.replace(data=data)
             state.info["steps_since_previous_disturbance"] = jnp.where(
                 state.info["disturbance_step"] >= state.info["disturbance_duration_steps"],
                 0,
@@ -744,7 +744,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
             state.info["rng"], rng = jax.random.split(state.info["rng"])
             state.info["steps_since_previous_disturbance"] += 1
             xfrc_applied = jnp.zeros((self.mj_model.nbody, 6))
-            pipeline_state = state.pipeline_state.replace(xfrc_applied=xfrc_applied)
+            data = state.data.replace(xfrc_applied=xfrc_applied)
             state.info["disturbance_step"] = jnp.where(
                 state.info["steps_since_previous_disturbance"]
                 >= state.info["steps_until_next_disturbance"],
@@ -757,7 +757,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
                 gen_dir(rng),
                 state.info["disturbance_direction"],
             )
-            return state.replace(pipeline_state=pipeline_state)
+            return state.replace(data=data)
 
         return jax.lax.cond(
             state.info["steps_since_previous_disturbance"]
@@ -848,7 +848,7 @@ def main(argv=None):
     for i in range(num_steps):
         print(f"Step: {i}")
         state = step_fn(state, jnp.zeros_like(env.default_ctrl))
-        states.append(state.pipeline_state)
+        states.append(state.data)
 
     html_string = html.render(
         sys=env.sys.tree_replace({'opt.timestep': env.step_dt}),

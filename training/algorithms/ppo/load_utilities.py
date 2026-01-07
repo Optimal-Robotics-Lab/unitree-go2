@@ -10,7 +10,7 @@ import optax
 import distrax
 
 from brax.training.acme import running_statistics, specs
-from brax.envs.base import Env
+from mujoco_playground import mjx_env
 
 from training.algorithms.ppo import checkpoint_utilities
 from training.algorithms.ppo import network_utilities as ppo_networks
@@ -28,7 +28,7 @@ class Metadata:
     training_metadata: checkpoint_utilities.training_metadata
 
 
-def load_network(checkpoint_name: str, environment: Env, restore_iteration: Optional[int] = None) -> Any:
+def load_network(checkpoint_name: str, environment: mjx_env.MjxEnv, restore_iteration: Optional[int] = None) -> Any:
     # Load Metadata:
     checkpoint_direrctory = os.path.join(
         os.path.dirname(
@@ -54,7 +54,7 @@ def load_network(checkpoint_name: str, environment: Env, restore_iteration: Opti
         registry=registry,
         restore_iteration=restore_iteration,
     )
-    
+
     network_metadata = metadata.network_metadata
     training_metadata = metadata.training_metadata
 
@@ -123,7 +123,7 @@ def load_network(checkpoint_name: str, environment: Env, restore_iteration: Opti
     return network, params
 
 
-def load_policy(checkpoint_name: str, environment: Env, restore_iteration: Optional[int] = None) -> Tuple[Any, Any, Metadata]:
+def load_policy(checkpoint_name: str, environment: mjx_env.MjxEnv, restore_iteration: Optional[int] = None) -> Tuple[Any, Any, Metadata]:
     # Load Metadata:
     checkpoint_direrctory = os.path.join(
         os.path.dirname(
@@ -223,7 +223,7 @@ def load_policy(checkpoint_name: str, environment: Env, restore_iteration: Optio
 
 def load_checkpoint(
     checkpoint_name: str,
-    environment: Env,
+    environment: mjx_env.MjxEnv,
     restore_iteration: Optional[int] = None,
 ) -> Tuple[RestoredCheckpoint, Metadata]:
     # Load Metadata:
@@ -252,7 +252,7 @@ def load_checkpoint(
         registry=registry,
         restore_iteration=restore_iteration,
     )
-    
+
     network_metadata = metadata.network_metadata
     loss_metadata = metadata.loss_metadata
     training_metadata = metadata.training_metadata

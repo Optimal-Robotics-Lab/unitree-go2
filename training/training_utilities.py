@@ -2,8 +2,8 @@ from typing import Sequence, Tuple
 
 import jax
 
-from training.module_types import Transition
 import training.module_types as types
+from training.module_types import Transition
 from training.module_types import Env, State
 
 
@@ -79,7 +79,7 @@ def unroll_policy_trajectory(
             key,
             extra_fields=extra_fields,
         )
-        return (state, subkey), (state.pipeline_state.qpos, state.pipeline_state.xpos, state.pipeline_state.xquat)
+        return (state, subkey), (state.data.qpos, state.data.xpos, state.data.xquat)
 
     (final_state, _), trajectory = jax.lax.scan(
         f,

@@ -1,7 +1,7 @@
 from typing import Any, Callable, Tuple, NamedTuple, Protocol, Mapping, TypeVar, Union
 
 import jax.numpy as jnp
-from brax import envs
+from mujoco_playground import mjx_env
 
 Params = Any
 PRNGKey = jnp.ndarray
@@ -17,8 +17,8 @@ Action = jnp.ndarray
 PolicyData = Mapping[str, Any]
 Metrics = dict[str, Any]
 
-State = envs.State
-Env = envs.Env
+State = mjx_env.State
+Env = mjx_env.MjxEnv
 
 NetworkType = TypeVar('NetworkType')
 

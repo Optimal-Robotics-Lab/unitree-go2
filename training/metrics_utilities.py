@@ -11,8 +11,10 @@ import numpy as np
 import mujoco
 
 import brax
-from brax.io import html
-from brax import envs
+from brax.envs.wrappers.training import EvalWrapper
+from brax.io import html, mjcf
+
+from mujoco_playground import mjx_env
 
 import training.module_types as types
 from training.training_utilities import unroll_policy_trajectory
@@ -51,7 +53,7 @@ class Evaluator:
 
     def __init__(
         self,
-        env: envs.Env,
+        env: mjx_env.MjxEnv,
         policy_generator: Callable[[types.PolicyParams], types.Policy],
         num_envs: int,
         episode_length: int,
@@ -61,10 +63,14 @@ class Evaluator:
     ):
         self.key = key
         self.walltime = 0.0
-        self.sys = env.sys.tree_replace({'opt.timestep': env.dt})
-        self.dt = env.dt
+        self.mj_model = env.mj_model.tree_replace({'opt.timestep': env.step_dt})
+        self.dt = env.step_dt
 
-        env = envs.training.EvalWrapper(env)
+        # Create a brax system for HTML rendering:
+        sys = mjcf.load_model(env.mj_model)
+        self.sys = sys.tree_replace({'opt.timestep': env.step_dt})
+
+        env = EvalWrapper(env)
 
         self.render_type = None
         if render_options is not None:
@@ -118,7 +124,7 @@ class Evaluator:
             self.camera.distance = 5.0 * self.spacing * self.num_cols
 
             # Preallocate:
-            self.mj_datas = [mujoco.MjData(self.sys.mj_model) for _ in range(self.num_envs)]
+            self.mj_datas = [mujoco.MjData(self.mj_model) for _ in range(self.num_envs)]
             x_pos = np.linspace(
                 -self.spacing * (self.num_cols - 1) / 2,
                 self.spacing * (self.num_cols - 1) / 2,
@@ -152,7 +158,7 @@ class Evaluator:
         def _evaluation_loop(
             policy_params: types.PolicyParams,
             key: types.PRNGKey,
-        ) -> types.State:
+        ) -> mjx_env.MjxState:
             reset_keys = jax.random.split(key, num_envs)
             initial_state = env.reset(reset_keys)
             final_state, states = unroll_policy_trajectory(
@@ -220,17 +226,17 @@ class Evaluator:
     ) -> None:
         """ Render using Brax HTML renderer. """
         qpos, xpos, xquat = jax.tree.map(lambda x: x[:, 0, :], states)
-        data = mujoco.mjx.make_data(self.sys.mj_model)
+        data = mujoco.mjx.make_data(self.mj_model)
         data_args = data.__dict__
         data_args['contact'] = brax.mjx.pipeline._reformat_contact(
-            self.sys, data.contact,
+            self.mj_model, data.contact,
         )
         state_list = []
         for i in range(self.render_episode_length):
             state_list.append(
                 brax.mjx.base.State(
                     q=qpos[i],
-                    qd=np.zeros(self.sys.nv),
+                    qd=np.zeros(self.mj_model.nv),
                     x=brax.base.Transform(
                         pos=xpos[i][1:],
                         rot=xquat[i][1:],
@@ -272,19 +278,19 @@ class Evaluator:
         position_history.flags.writeable = True
 
         frames = []
-        with mujoco.Renderer(self.sys.mj_model, height=480, width=640) as renderer:
+        with mujoco.Renderer(self.mj_model, height=480, width=640) as renderer:
             for i, position in enumerate(position_history):
                 time_start = time.time()
                 for j, mj_data in enumerate(self.mj_datas):
                     qpos = position[j]
                     qpos[:2] += np.array([self.grid_x[j], self.grid_y[j]])
                     mj_data.qpos = qpos
-                    
-                    mujoco.mj_fwdPosition(self.sys.mj_model, mj_data)
-                    
+
+                    mujoco.mj_fwdPosition(self.mj_model, mj_data)
+
                     if j == 0:
                         mujoco.mjv_updateScene(
-                            self.sys.mj_model,
+                            self.mj_model,
                             mj_data,
                             self.vopt,
                             self.pert,
@@ -294,7 +300,7 @@ class Evaluator:
                         )
                     else:
                         mujoco.mjv_addGeoms(
-                            self.sys.mj_model,
+                            self.mj_model,
                             mj_data,
                             self.vopt,
                             self.pert,
@@ -311,7 +317,7 @@ class Evaluator:
 
                 frames.append(frame)
                 print(f"Iteration {i}: Elapsed time: {time.time() - time_start} seconds")
-            
+
             print(f"Rendering frame")
             start_time = time.time()
             filepath = os.path.join(self.filepath, f'{iteration}.{self.video_format}')

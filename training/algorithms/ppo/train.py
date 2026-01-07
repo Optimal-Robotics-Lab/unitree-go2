@@ -11,8 +11,9 @@ import optax
 import orbax.checkpoint as ocp
 import numpy as np
 
-from brax import base
-from brax import envs
+from mujoco import mjx
+from mujoco_playground import mjx_env
+
 from brax.envs.wrappers.training import wrap
 from brax.training.acme import running_statistics, specs
 from brax.training import pmap
@@ -62,8 +63,8 @@ def strip_weak_type(pytree):
 
 
 def train(
-    environment: envs.Env,
-    evaluation_environment: Optional[envs.Env],
+    environment: mjx_env.MjxEnv,
+    evaluation_environment: Optional[mjx_env.MjxEnv],
     num_epochs: int,
     num_training_steps: int,
     episode_length: int,
@@ -87,7 +88,7 @@ def train(
     progress_fn: Callable[[int, int, types.Metrics], None] = lambda *args: None,
     checkpoint_fn: Callable[..., None] = lambda *args: None,
     randomization_fn: Optional[
-        Callable[[base.System, jnp.ndarray], Tuple[base.System, base.System]]
+        Callable[[mjx.Model, types.PRNGKey], Tuple[mjx.Model, mjx.Model]]
     ] = None,
     restored_checkpoint: Optional[RestoredCheckpoint] = None,
     wandb_run: Optional[Any] = None,
@@ -240,9 +241,9 @@ def train(
         return (opt_state, params, key), metrics
 
     def training_step(
-        carry: Tuple[TrainState, envs.State, types.PRNGKey],
+        carry: Tuple[TrainState, mjx_env.State, types.PRNGKey],
         unused_t,
-    ) -> Tuple[Tuple[TrainState, envs.State, types.PRNGKey], types.Metrics]:
+    ) -> Tuple[Tuple[TrainState, mjx_env.State, types.PRNGKey], types.Metrics]:
         train_state, state, key = carry
         next_key, sgd_key, policy_step_key = jax.random.split(key, 3)
 
@@ -304,9 +305,9 @@ def train(
 
     def training_epoch(
         train_state: TrainState,
-        state: envs.State,
+        state: mjx_env.State,
         key: types.PRNGKey,
-    ) -> Tuple[TrainState, envs.State, types.Metrics]:
+    ) -> Tuple[TrainState, mjx_env.State, types.Metrics]:
         (train_state, state, _), loss_metrics = jax.lax.scan(
             training_step,
             (train_state, state, key),
@@ -320,9 +321,9 @@ def train(
 
     def training_epoch_with_metrics(
         train_state: TrainState,
-        state: envs.State,
+        state: mjx_env.State,
         key: types.PRNGKey,
-    ) -> Tuple[TrainState, envs.State, types.Metrics]:
+    ) -> Tuple[TrainState, mjx_env.State, types.Metrics]:
         # I would like to get rid of this:
         nonlocal training_walltime
         start_time = time.time()
