@@ -1,8 +1,9 @@
 import os
-from typing import Any, Optional, Dict
+from typing import Any, Dict, List
 import dataclasses
 import json
 
+import jax
 import flax.struct
 import flax.nnx as nnx
 import optax
@@ -11,10 +12,9 @@ import orbax.checkpoint as ocp
 from training.optimizer import OptimizerConfig, create_optimizer
 
 
-
 @dataclasses.dataclass
 class AgentMetadata:
-    observation_size: Dict[str, Any] 
+    observation_size: Dict[str, Any]
     action_size: int
     policy_layer_sizes: List[int]
     value_layer_sizes: List[int]
@@ -48,7 +48,6 @@ class TrainingMetadata:
     action_repeat: int
     num_envs: int
     num_evaluation_envs: int
-    num_evaluations: int
     deterministic_evaluation: bool
     reset_per_epoch: bool
     seed: int
@@ -96,12 +95,12 @@ def create_checkpoint_manager(
 def save_config(manager: ocp.CheckpointManager, metadata: CheckpointMetadata):
     if not os.path.exists(manager.directory):
         os.makedirs(manager.directory)
-        
+
     config_path = os.path.join(manager.directory, 'config.json')
-    
+
     if not os.path.exists(config_path):
-        metadata_dict = dataclasses.asdict(metadata) 
-        
+        metadata_dict = dataclasses.asdict(metadata)
+
         with open(config_path, 'w') as f:
             json.dump(metadata_dict, f, indent=2)
 
@@ -126,7 +125,7 @@ def save_checkpoint(
 def restore_training_state(manager, agent: nnx.Module, iteration=None):
     if iteration is None:
         iteration = manager.latest_step()
-        
+
     config_path = os.path.join(manager.directory, 'config.json')
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"Config file not found at {config_path}")
@@ -148,7 +147,7 @@ def restore_training_state(manager, agent: nnx.Module, iteration=None):
         agent=ocp.args.StandardRestore(abstract_params),
         opt_state=ocp.args.StandardRestore(abstract_opt_state),
     )
-    
+
     restored_state = manager.restore(iteration, args=restore_args)
 
     restored_checkpoint = RestoredCheckpoint(
@@ -156,6 +155,5 @@ def restore_training_state(manager, agent: nnx.Module, iteration=None):
         optimizer=optimizer,
         opt_state=restored_state.opt_state,
     )
-    
-    return restored_checkpoint, metadata
 
+    return restored_checkpoint, metadata

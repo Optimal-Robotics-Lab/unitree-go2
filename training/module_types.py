@@ -15,13 +15,12 @@
 # limitations under the License.
 
 
-from typing import Any, Callable, Tuple, NamedTuple, Protocol, Mapping, TypeVar, Union, List
+from typing import Any, Callable, Tuple, NamedTuple, Protocol, Mapping, Union, List
 
 import flax.nnx as nnx
 
 import jax.numpy as jnp
-from brax import envs
-
+import mujoco_playground
 
 Params = Any
 PRNGKey = jnp.ndarray
@@ -38,10 +37,8 @@ Value = jnp.ndarray
 PolicyData = Mapping[str, Any]
 Metrics = dict[str, Any]
 
-State = envs.State
-Env = envs.Env
-
-NetworkType = TypeVar('NetworkType')
+State = mujoco_playground.State
+Env = mujoco_playground.MjxEnv
 
 # Custom type for nested structures:
 Leaf = Union[jnp.ndarray, float, int]

@@ -11,8 +11,8 @@ import numpy as np
 import mujoco
 
 import brax
-from brax.io import html
-from brax import envs
+from brax.io import html, mjcf
+from brax.envs.wrappers.training import EvalWrapper
 
 import training.module_types as types
 from training.training_utilities import unroll_policy_trajectory
@@ -29,7 +29,7 @@ class Evaluator:
 
     def __init__(
         self,
-        env: envs.Env,
+        env: types.Env,
         num_envs: int,
         episode_length: int,
         action_repeat: int,
@@ -38,10 +38,15 @@ class Evaluator:
     ):
         self.key = key
         self.walltime = 0.0
-        self.sys = env.sys.tree_replace({'opt.timestep': env.dt})
+        self.mj_model = env.mj_model
+        self.dt = env.step_dt
+
+        # Create Brax System for HTML rendering:
+        sys = mjcf.load_model(self.mj_model)
+        self.sys = sys.tree_replace({'opt.timestep': env.dt})
         self.dt = env.dt
 
-        env = envs.training.EvalWrapper(env)
+        env = EvalWrapper(env)
 
         self.render = False if render_options is None else True
         if render_options is not None:
@@ -142,7 +147,7 @@ class Evaluator:
     ) -> None:
         """ Render using Brax HTML renderer. """
         qpos, xpos, xquat = jax.tree.map(lambda x: x[:, 0, :], states)
-        data = mujoco.mjx.make_data(self.sys.mj_model)
+        data = mujoco.mjx.make_data(self.mj_model)
         data_args = data.__dict__
         data_args['contact'] = brax.mjx.pipeline._reformat_contact(
             self.sys, data.contact,
@@ -152,7 +157,7 @@ class Evaluator:
             state_list.append(
                 brax.mjx.base.State(
                     q=qpos[i],
-                    qd=np.zeros(self.sys.nv),
+                    qd=np.zeros(self.mj_model.nv),
                     x=brax.base.Transform(
                         pos=xpos[i][1:],
                         rot=xquat[i][1:],

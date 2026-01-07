@@ -11,9 +11,9 @@ import flax.nnx as nnx
 
 import optax
 
-from brax import base
-from brax import envs
-from brax.envs.wrappers.training import wrap
+from mujoco import mjx
+
+from mujoco_playground import wrapper
 import training.module_types as types
 
 from training.algorithms.ppo.agent import Agent
@@ -50,8 +50,8 @@ except ImportError:
 
 def train(
     agent: Agent,
-    environment: envs.Env,
-    evaluation_environment: envs.Env,
+    environment: types.Env,
+    evaluation_environment: types.Env,
     num_epochs: int,
     num_training_steps: int,
     episode_length: int,
@@ -60,7 +60,6 @@ def train(
     action_repeat: int = 1,
     num_envs: int = 1,
     num_evaluation_envs: int = 128,
-    num_evaluations: int = 1,
     deterministic_evaluation: bool = False,
     reset_per_epoch: bool = False,
     seed: int = 0,
@@ -76,7 +75,7 @@ def train(
     checkpoint_manager: Optional[ocp.CheckpointManager] = None,
     restored_checkpoint: Optional[checkpoint_utilities.RestoredCheckpoint] = None,
     randomization_fn: Optional[
-        Callable[[base.System, jnp.ndarray], Tuple[base.System, base.System]]
+        Callable[[mjx.Model, types.PRNGKey], Tuple[mjx.Model, mjx.Model]]
     ] = None,
     wandb_run: Optional[Any] = None,
     render_options: Optional[metrics_utilities.RenderOptions] = None,
@@ -121,7 +120,7 @@ def train(
             randomization_fn, rng=randomization_key,  # type: ignore
         )
 
-    env = wrap(
+    env = wrapper.wrap_for_brax_training(
         env=environment,
         episode_length=episode_length,
         action_repeat=action_repeat,
@@ -200,9 +199,9 @@ def train(
         return (agent, opt_state, key), metrics
 
     def train_step(
-        carry: Tuple[Agent, optax.OptState, envs.State, types.PRNGKey],
+        carry: Tuple[Agent, optax.OptState, types.State, types.PRNGKey],
         unused_t,
-    ) -> Tuple[Tuple[Agent, optax.OptState, envs.State, types.PRNGKey], types.Metrics]:
+    ) -> Tuple[Tuple[Agent, optax.OptState, types.State, types.PRNGKey], types.Metrics]:
         agent, opt_state, state, key = carry
         next_key, sgd_key, rollout_key = jax.random.split(key, 3)
 
@@ -278,9 +277,9 @@ def train(
     def training_epoch(
         agent: Agent,
         opt_state: optax.OptState,
-        state: envs.State,
+        state: types.State,
         key: types.PRNGKey,
-    ) -> Tuple[Agent, optax.OptState, envs.State, types.Metrics]:
+    ) -> Tuple[Agent, optax.OptState, types.State, types.Metrics]:
         (agent, opt_state, state, _), loss_metrics = jax.lax.scan(
             train_step,
             (agent, opt_state, state, key),
@@ -300,7 +299,7 @@ def train(
             randomization_fn, rng=eval_randomization_key,  # type: ignore
         )
 
-    eval_env = wrap(
+    eval_env = wrapper.wrap_for_brax_training(
         env=evaluation_environment,
         episode_length=eval_episode_length,
         action_repeat=action_repeat,
@@ -322,7 +321,7 @@ def train(
 
     def run_evaluation(training_metrics, current_step, iteration):
         policy_fn = jax.tree_util.Partial(apply_inference, agent)
-        
+
         metrics = evaluator.evaluate(
             policy_fn=policy_fn, training_metrics=training_metrics, iteration=iteration,
         )
@@ -340,7 +339,7 @@ def train(
     # Training Loop:
     try:
         with mesh:
-            
+
             if process_id == 0:
                 metrics = run_evaluation(
                     training_metrics={},
@@ -357,7 +356,7 @@ def train(
                 )
 
             training_walltime = 0.0
-            
+
             for epoch_iteration in range(num_epochs):
                 start_time = time.time()
 
