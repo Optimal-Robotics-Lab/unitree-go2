@@ -152,14 +152,14 @@ def main(argv=None):
     )
 
     env = unitree_go2_joystick.UnitreeGo2Env(
-        env_config=environment_config,
+        environment_config=environment_config,
         reward_config=reward_config,
         noise_config=noise_config,
         disturbance_config=disturbance_config,
         command_config=command_config,
     )
     eval_env = unitree_go2_joystick.UnitreeGo2Env(
-        env_config=environment_config,
+        environment_config=environment_config,
         reward_config=reward_config,
         noise_config=noise_config,
         disturbance_config=disturbance_config,
@@ -204,7 +204,7 @@ def main(argv=None):
     optimizer_config = OptimizerConfig(
         learning_rate=3e-4,
         grad_clip_norm=1.0,
-        desired_kl=0.01,
+        desired_kl=None,
         min_learning_rate=1e-5,
         max_learning_rate=1e-2,
         kl_adjustment_factor=1.5,
@@ -214,7 +214,18 @@ def main(argv=None):
 
     # Aggregate Metadata:
     agent_metadata = checkpoint_utilities.AgentMetadata(
-        agent=f"{model}",
+        observation_size=env.observation_size,
+        action_size=env.action_size,
+        policy_layer_sizes=policy_layer_size,
+        value_layer_sizes=value_layer_size,
+        policy_input_normalization=str(policy_input_normalization),
+        value_input_normalization=str(value_input_normalization),
+        activation=str(activation_fn),
+        policy_kernel_init=str(policy_kernel_init),
+        value_kernel_init=str(value_kernel_init),
+        policy_observation_key=str("state"),
+        value_observation_key=str("privileged_state"),
+        action_distribution=str(""),
     )
     loss_metadata = checkpoint_utilities.LossMetadata(
         policy_clip_coef=0.2,

@@ -7,6 +7,8 @@ import numpy as np
 import flax
 import flax.serialization
 
+from ml_collections import config_dict
+
 import mujoco
 from mujoco import mjx
 
@@ -32,6 +34,10 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         disturbance_config: DisturbanceConfig = DisturbanceConfig(),
         command_config: CommandConfig = CommandConfig(),
     ) -> None:
+        config = config_dict.ConfigDict()
+        config.ctrl_dt = environment_config.control_timestep
+        config.sim_dt = environment_config.optimizer_timestep
+        super().__init__(config)
 
         self.filename = f'mjcf/{environment_config.filename}'
         self.filepath = os.path.join(
@@ -39,19 +45,21 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
             self.filename,
         )
 
-        self.mj_model = mujoco.MjModel.from_xml_path(
+        mj_model = mujoco.MjModel.from_xml_path(
             self.filepath,
         )
-        self.mjx_model = mjx.put_model(self.mj_model, impl=environment_config.impl)
+        mj_model.opt.timestep = environment_config.optimizer_timestep
+        self._mj_model = mj_model
+        self._mjx_model = mjx.put_model(self._mj_model, impl=environment_config.impl)
 
         # Increase offscreen framebuffer size to render at higher resolutions.
-        self.mj_model.vis.global_.offwidth = 3840
-        self.mj_model.vis.global_.offheight = 2160
+        self._mj_model.vis.global_.offwidth = 3840
+        self._mj_model.vis.global_.offheight = 2160
 
         self.step_dt = environment_config.control_timestep
-        self.time_step = self.mj_model.opt.timestep
-        self.n_substeps = int(self.step_dt / self.time_step)
-        self.mj_model.opt.ccd_iterations = 10
+        self.time_step = self._mj_model.opt.timestep
+        self._n_substeps = int(self.step_dt / self.time_step)
+        self._mj_model.opt.ccd_iterations = 20
 
         # Parse Configs:
         self.kernel_sigma = reward_config.kernel_sigma
@@ -73,26 +81,27 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         del reward_config_dict['foot_clearance_sigma']
         self.reward_config = reward_config_dict
 
+        self.environment_config = environment_config
         self.noise_config = noise_config
         self.disturbance_config = disturbance_config
         self.command_config = command_config
 
         # Constants Setup:
-        self.floor_geom_idx = self.mj_model.geom('floor').id
+        self.floor_geom_idx = self._mj_model.geom('floor').id
         self.base_idx = mujoco.mj_name2id(
-            self.mj_model, mujoco.mjtObj.mjOBJ_BODY.value, 'base_link'
+            self._mj_model, mujoco.mjtObj.mjOBJ_BODY.value, 'base_link'
         )
-        self.base_link_mass = self.mj_model.body_subtreemass[self.base_idx]
+        self.base_link_mass = self._mj_model.body_subtreemass[self.base_idx]
 
         self.action_scale = environment_config.action_scale
-        self.home_qpos = jnp.array(self.mj_model.keyframe('home').qpos)
-        self.home_qvel = jnp.zeros(self.mj_model.nv)
-        self.default_pose = jnp.array(self.mj_model.keyframe('home').qpos[7:])
-        self.default_ctrl = jnp.array(self.mj_model.keyframe('home').ctrl)
-        self.joint_lb, self.joint_ub = self.mj_model.jnt_range[1:].T
+        self.home_qpos = jnp.array(self._mj_model.keyframe('home').qpos)
+        self.home_qvel = jnp.zeros(self._mj_model.nv)
+        self.default_pose = jnp.array(self._mj_model.keyframe('home').qpos[7:])
+        self.default_ctrl = jnp.array(self._mj_model.keyframe('home').ctrl)
+        self.joint_lb, self.joint_ub = self._mj_model.jnt_range[1:].T
 
-        self.nu = self.mj_model.nu
-        self.nv = self.mj_model.nv
+        self.nu = self._mj_model.nu
+        self.nv = self._mj_model.nv
         self.num_joints = self.nv - 6
 
         # Sites and Bodies:
@@ -103,7 +112,7 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
             'hind_left_foot_collision',
         ]
         feet_geom_idx = [
-            self.mj_model.geom(name).id for name in feet_geom
+            self._mj_model.geom(name).id for name in feet_geom
         ]
         assert not any(id_ == -1 for id_ in feet_geom_idx), 'Site not found.'
         self.feet_geom_idx = np.array(feet_geom_idx)
@@ -114,7 +123,7 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
             'hind_left_foot',
         ]
         feet_site_idx = [
-            mujoco.mj_name2id(self.mj_model, mujoco.mjtObj.mjOBJ_SITE.value, f)
+            mujoco.mj_name2id(self._mj_model, mujoco.mjtObj.mjOBJ_SITE.value, f)
             for f in feet_site
         ]
         assert not any(id_ == -1 for id_ in feet_site_idx), 'Site not found.'
@@ -126,13 +135,13 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
             'hind_left_calf',
         ]
         calf_body_idx = [
-            mujoco.mj_name2id(self.mj_model, mujoco.mjtObj.mjOBJ_BODY.value, c)
+            mujoco.mj_name2id(self._mj_model, mujoco.mjtObj.mjOBJ_BODY.value, c)
             for c in calf_body
         ]
         assert not any(id_ == -1 for id_ in calf_body_idx), 'Body not found.'
         self.calf_body_idx = np.array(calf_body_idx)
         imu_site_idx = mujoco.mj_name2id(
-            self.mj_model, mujoco.mjtObj.mjOBJ_SITE.value, 'imu'
+            self._mj_model, mujoco.mjtObj.mjOBJ_SITE.value, 'imu'
         )
         assert not any(id_ == -1 for id_ in [imu_site_idx]), 'IMU site not found.'
         self.imu_site_idx = np.array(imu_site_idx)
@@ -159,7 +168,7 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
             "hind_left_foot_to_floor",
         ]
         self.feet_contact_sensor = [
-            self.mj_model.sensor(f'{foot_sensor_name}').id
+            self._mj_model.sensor(f'{foot_sensor_name}').id
             for foot_sensor_name in feet_sensor_names
         ]
 
@@ -174,7 +183,7 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
             "hind_left_calf_lower_to_floor",
         ]
         self.unwanted_contact_sensor = [
-            self.mj_model.sensor(f'{sensor_name}').id
+            self._mj_model.sensor(f'{sensor_name}').id
             for sensor_name in unwanted_contact_sensor_names
         ]
 
@@ -184,7 +193,7 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         ]
         termination_sensor_names.extend(unwanted_contact_sensor_names)
         self.termination_contact_sensor = [
-            self.mj_model.sensor(f'{termination_sensor_name}').id
+            self._mj_model.sensor(f'{termination_sensor_name}').id
             for termination_sensor_name in termination_sensor_names
         ]
 
@@ -204,43 +213,43 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         return data.sensordata[sensor_adr: sensor_adr + sensor_dim]
 
     def get_upvector(self, data: mjx.Data) -> jax.Array:
-        return self.get_sensor_data(self.mj_model, data, "upvector")
+        return self.get_sensor_data(self._mj_model, data, "upvector")
 
     def get_gravity(self, data: mjx.Data) -> jax.Array:
         return data.site_xmat[self.imu_site_idx].T @ jnp.array([0, 0, -1])
 
     def get_global_linear_velocity(self, data: mjx.Data) -> jax.Array:
         return self.get_sensor_data(
-            self.mj_model, data, "global_linear_velocity"
+            self._mj_model, data, "global_linear_velocity"
         )
 
     def get_global_angular_velocity(self, data: mjx.Data) -> jax.Array:
         return self.get_sensor_data(
-            self.mj_model, data, "global_angular_velocity"
+            self._mj_model, data, "global_angular_velocity"
         )
 
     def get_local_linear_velocity(self, data: mjx.Data) -> jax.Array:
         return self.get_sensor_data(
-            self.mj_model, data, "local_linear_velocity"
+            self._mj_model, data, "local_linear_velocity"
         )
 
     def get_accelerometer(self, data: mjx.Data) -> jax.Array:
         return self.get_sensor_data(
-            self.mj_model, data, "imu_acceleration"
+            self._mj_model, data, "imu_acceleration"
         )
 
     def get_gyro(self, data: mjx.Data) -> jax.Array:
-        return self.get_sensor_data(self.mj_model, data, "imu_gyro")
+        return self.get_sensor_data(self._mj_model, data, "imu_gyro")
 
     def get_feet_position(self, data: mjx.Data) -> jax.Array:
         return jnp.vstack([
-            self.get_sensor_data(self.mj_model, data, sensor_name)
+            self.get_sensor_data(self._mj_model, data, sensor_name)
             for sensor_name in self.feet_position_sensor
         ])
 
     def get_feet_velocity(self, data: mjx.Data) -> jax.Array:
         return jnp.vstack([
-            self.get_sensor_data(self.mj_model, data, sensor_name)
+            self.get_sensor_data(self._mj_model, data, sensor_name)
             for sensor_name in self.feet_linear_velocity_sensor
         ])
 
@@ -248,7 +257,7 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
 
     @property
     def xml_path(self) -> str:
-        return self._xml_path
+        return self.filepath
 
     @property
     def action_size(self) -> int:

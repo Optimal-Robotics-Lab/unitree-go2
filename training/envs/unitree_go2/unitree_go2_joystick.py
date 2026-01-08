@@ -126,15 +126,15 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         ctrl = qpos[7:]
 
         data = mjx_env.make_data(
-            self.mj_model,
+            self._mj_model,
             qpos=qpos,
             qvel=qvel,
             ctrl=ctrl,
-            impl=self.mjx_model.impl.value,
+            impl=self._mjx_model.impl.value,
             nconmax=self.environment_config.nconmax,
             njmax=self.environment_config.njmax,
         )
-        data = mjx.forward(self.mjx_model, data)
+        data = mjx.forward(self._mjx_model, data)
 
         # Disturbance: (Force Based)
         rng, disturbance_time_key, disturbance_duration_key, disturbance_magnitude_key = jax.random.split(rng, 4)
@@ -174,7 +174,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
 
         # Foot Contacts:
         feet_contacts = jnp.array([
-            data.sensordata[self.mj_model.sensor_adr[sensor_id]] > 0
+            data.sensordata[self._mj_model.sensor_adr[sensor_id]] > 0
             for sensor_id in self.feet_contact_sensor
         ])
 
@@ -234,21 +234,21 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
 
         # Physics step:
         motor_targets = self.default_ctrl + action * self.action_scale
-        data = self.mjx_env(
-            self.mjx_model, state.data, motor_targets, self.n_substeps
+        data = mjx_env.step(
+            self._mjx_model, state.data, motor_targets, self._n_substeps,
         )
 
         imu_height = data.site_xpos[self.imu_site_idx][2]
-        joint_angles = data.q[7:]
-        joint_velocities = data.qd[6:]
+        joint_angles = data.qpos[7:]
+        joint_velocities = data.qvel[6:]
 
         # Sensor Contacts:
         feet_contacts = jnp.array([
-            data.sensordata[self.mj_model.sensor_adr[sensor_id]] > 0
+            data.sensordata[self._mj_model.sensor_adr[sensor_id]] > 0
             for sensor_id in self.feet_contact_sensor
         ])
         unwanted_contacts = jnp.array([
-            data.sensordata[self.mj_model.sensor_adr[sensor_id]] > 0
+            data.sensordata[self._mj_model.sensor_adr[sensor_id]] > 0
             for sensor_id in self.unwanted_contact_sensor
         ])
 
@@ -380,7 +380,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
 
         # Proxy Metrics:
         state.metrics['total_distance'] = mjx_math.norm(
-            data.x.pos[self.base_idx - 1],
+            data.xpos[self.base_idx - 1],
         )
         state.metrics['swing_peak'] = jnp.mean(
             state.info['swing_peak']
@@ -398,10 +398,10 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         return state
 
     def get_termination(self, data: mjx.Data) -> jax.Array:
-        joint_angles = data.q[7:]
+        joint_angles = data.qpos[7:]
 
         termination_contacts = jnp.array([
-            data.sensordata[self.mj_model.sensor_adr[sensor_id]] > 0
+            data.sensordata[self._mj_model.sensor_adr[sensor_id]] > 0
             for sensor_id in self.termination_contact_sensor
         ])
 
@@ -426,8 +426,8 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
                 command,
             ]
         """
-        q = data.q[7:]
-        qd = data.qd[6:]
+        q = data.qpos[7:]
+        qd = data.qvel[6:]
 
         # Gyroscope Noise:
         gyroscope = self.get_gyro(data)
@@ -726,7 +726,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
                 * state.info["disturbance_magnitude"]  # m/s
                 / state.info["disturbance_duration"]  # 1/s
             )
-            xfrc_applied = jnp.zeros((self.mj_model.nbody, 6))
+            xfrc_applied = jnp.zeros((self._mj_model.nbody, 6))
             xfrc_applied = xfrc_applied.at[self.base_idx, :3].set(
                 force * state.info["disturbance_direction"]
             )
@@ -743,7 +743,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         def wait(state: mjx_env.State) -> mjx_env.State:
             state.info["rng"], rng = jax.random.split(state.info["rng"])
             state.info["steps_since_previous_disturbance"] += 1
-            xfrc_applied = jnp.zeros((self.mj_model.nbody, 6))
+            xfrc_applied = jnp.zeros((self._mj_model.nbody, 6))
             data = state.data.replace(xfrc_applied=xfrc_applied)
             state.info["disturbance_step"] = jnp.where(
                 state.info["steps_since_previous_disturbance"]
