@@ -134,17 +134,18 @@ def restore_training_state(manager, agent: nnx.Module, iteration=None):
         metadata_dict = json.load(f)
 
     opt_config = OptimizerConfig(**metadata_dict.pop('optimizer_config'))
-    metadata = TrainingMetadata(optimizer_config=opt_config, **metadata_dict)
+    metadata = CheckpointMetadata(optimizer_config=opt_config, **metadata_dict)
 
     optimizer = create_optimizer(opt_config)
-
+    
+    abstract_agent_state = nnx.state(agent)
     abstract_params = nnx.state(agent, nnx.Param)
     abstract_opt_state = jax.eval_shape(
         lambda: optimizer.init(abstract_params)
     )
 
     restore_args = ocp.args.Composite(
-        agent=ocp.args.StandardRestore(abstract_params),
+        agent=ocp.args.StandardRestore(abstract_agent_state),
         opt_state=ocp.args.StandardRestore(abstract_opt_state),
     )
 

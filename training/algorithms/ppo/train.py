@@ -141,11 +141,12 @@ def train(
     opt_state = optimizer.init(params)
     current_step = 0
 
+    if restored_checkpoint is not None:
+        nnx.update(agent, restored_checkpoint.agent)
+        opt_state = restored_checkpoint.opt_state
+    
     agent = jax.device_put(agent, s_replicated)
     opt_state = jax.device_put(opt_state, s_replicated)
-    if restored_checkpoint is not None:
-        agent = jax.device_put(restored_checkpoint.agent, s_replicated)
-        opt_state = jax.device_put(restored_checkpoint.opt_state, s_replicated)
 
     def minibatch_step(carry, data: types.Transition,):
         agent, opt_state, key = carry

@@ -218,14 +218,20 @@ def main(argv=None):
         action_size=env.action_size,
         policy_layer_sizes=policy_layer_size,
         value_layer_sizes=value_layer_size,
-        policy_input_normalization=str(policy_input_normalization),
-        value_input_normalization=str(value_input_normalization),
-        activation=str(activation_fn),
-        policy_kernel_init=str(policy_kernel_init),
-        value_kernel_init=str(value_kernel_init),
-        policy_observation_key=str("state"),
-        value_observation_key=str("privileged_state"),
-        action_distribution=str(""),
+        policy_input_normalization='statistics.RunningStatistics( \
+            reference_input=reference_observation["state"], \
+        )',
+        value_input_normalization='statistics.RunningStatistics( \
+            reference_input=reference_observation["privileged_state"], \
+        )',
+        activation='jax.nn.swish',
+        policy_kernel_init='jax.nn.initializers.lecun_uniform()',
+        value_kernel_init='value_kernel_init = jax.nn.initializers.variance_scaling( \
+            scale=0.01, mode="fan_in", distribution="uniform", \
+        )',
+        policy_observation_key='state',
+        value_observation_key='privileged_state',
+        action_distribution='ParametricDistribution(distribution=distrax.Normal, bijector=distrax.Tanh())',
     )
     loss_metadata = checkpoint_utilities.LossMetadata(
         policy_clip_coef=0.2,
@@ -310,7 +316,7 @@ def main(argv=None):
     if FLAGS.checkpoint_name is not None:
         restore_directory = os.path.join(
             os.path.dirname(__file__),
-            f"checkpoints/{run.name}",
+            f"checkpoints/{FLAGS.checkpoint_name}",
         )
         restore_manager = checkpoint_utilities.create_checkpoint_manager(
             checkpoint_directory=restore_directory,
