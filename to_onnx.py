@@ -101,7 +101,6 @@ def main(argv=None):
         iteration=FLAGS.checkpoint_iteration,
     )
 
-    # Update Agent Module with restored Agent State:
     nnx.update(model, restored_checkpoint.agent)
 
     def inference_wrapper(observation: jax.Array) -> jax.Array:
@@ -126,9 +125,10 @@ def main(argv=None):
         enable_double_precision=False,
     )
 
+    # jax2onnx does not currently support naming inputs and outputs directly:
     def rename_io(model_proto, input_names: list[str], output_names: list[str]):
         """
-            Renames IO and removes any outputs that weren't explicitly named.
+            Name the input and output nodes of the ONNX model.
         """
         graph = model_proto.graph
         
@@ -158,6 +158,7 @@ def main(argv=None):
         output_names=["actions"]
     )
 
+    # Simplify ONNX model: jax2onnx produces models with redundant/dead nodes
     model_simp, check = simplify(model_proto)
 
     assert check, "Simplified ONNX model could not be validated"
