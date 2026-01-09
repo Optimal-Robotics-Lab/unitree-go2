@@ -79,7 +79,7 @@ class Agent(nnx.Module):
             key: A PRNGKey for sampling actions.
             deterministic: Whether to use deterministic actions (e.g., for evaluation).
         """
-        logits = self.policy(x,)
+        logits = self.policy(x)
 
         if deterministic:
             actions = self.action_distribution.mode(logits)
