@@ -114,7 +114,8 @@ def main(argv=None):
 
         return actions
 
-    reference_input = reference_observation["state"]
+    # ONNX Runtime needs Rank 2 Inputs:
+    reference_input = reference_observation["state"][None, ...]
 
     model_proto = jax2onnx.to_onnx(
         fn=inference_wrapper,
