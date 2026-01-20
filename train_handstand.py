@@ -57,13 +57,13 @@ def main(argv=None):
         # Rewards:
         tracking_base_pose=1.0,
         tracking_orientation=1.0,
-        tracking_joint_pose=0.0,
+        tracking_joint_pose=0.5,
         # Energy Regularization Terms:
         torque=-0.0,
         action_rate=-0.0,
         acceleration=-0.0,
         # Penalty Terms:
-        base_velocity=-0.0,
+        base_velocity=-1.0,
         stand_still=0.0,
         feet_contact=0.5,
         feet_slip=-1.0,
