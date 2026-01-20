@@ -128,18 +128,20 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
             data.sensordata[self._mj_model.sensor_adr[sensor_id]] > 0
             for sensor_id in self.feet_contact_sensor
         ])
+        unwanted_contacts = jnp.array([
+            data.sensordata[self._mj_model.sensor_adr[sensor_id]] > 0
+            for sensor_id in self.unwanted_contact_sensor
+        ])
 
         state_info = {
             'rng': rng,
             'previous_action': jnp.zeros(self.nu),
-            'previous_joint_positions': jnp.zeros(self.num_joints),
             'previous_velocity': jnp.zeros(self.num_joints),
-            'previous_contact': feet_contacts,
-            'feet_air_time': jnp.zeros(4),
-            'feet_contact_time': jnp.zeros(4),
-            'previous_air_time': jnp.zeros(4),
-            'previous_contact_time': jnp.zeros(4),
-            'swing_peak': jnp.zeros(4),
+            'previous_feet_contact': feet_contacts,
+            'previous_unwanted_contacts': unwanted_contacts,
+            'previous_motor_targets': self.default_ctrl,
+            'front_feet_air_time': 0.0,
+            'first_contact': False,
             'rewards': {k: 0.0 for k in self.reward_config.keys()},
             'steps_until_next_disturbance': steps_until_next_disturbance,
             'disturbance_duration': disturbance_duration,
@@ -148,6 +150,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
             'disturbance_step': 0,
             'disturbance_magnitude': disturbance_magnitude,
             'disturbance_direction': jnp.array([0.0, 0.0, 0.0]),
+            'time': 0.0,
         }
 
         # Observation Initialization:

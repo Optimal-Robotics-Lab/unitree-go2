@@ -213,7 +213,6 @@ def main(argv=None):
             'environment_config': environment_config,
             'noise_config': noise_config,
             'disturbance_config': disturbance_config,
-            'command_config': command_config,
         },
     )
 
