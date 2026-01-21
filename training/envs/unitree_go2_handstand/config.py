@@ -62,4 +62,4 @@ class EnvironmentConfig:
     optimizer_timestep: float = 0.004
     nconmax: int = 8 * 8192
     njmax: int = 12 + 48
-    terminate_on_contact: bool = False
+    terminate_on_unwanted_contacts: bool = False

@@ -1,0 +1,6 @@
+<mujoco>
+  <contact>
+        <pair name="hind_right_thigh_floor_contact" geom1="hind_right_thigh_collision" geom2="floor" condim="1" friction="0.8"/>
+        <pair name="hind_left_thigh_floor_contact" geom1="hind_left_thigh_collision" geom2="floor" condim="1" friction="0.8"/>
+    </contact>
+</mujoco>

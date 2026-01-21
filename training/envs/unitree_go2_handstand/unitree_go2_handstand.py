@@ -220,7 +220,8 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         done = self._get_termination(
             data,
             termination_contacts,
-            terminate_on_contact=self.terminate_on_contact,
+            unwanted_contacts,
+            terminate_on_unwanted_contacts=self.terminate_on_unwanted_contacts,
         )
 
         # Rewards:
@@ -398,11 +399,13 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         self,
         data: mjx.Data,
         termination_contacts: jax.Array,
-        terminate_on_contact: bool = False,
+        unwanted_contacts: jax.Array,
+        terminate_on_unwanted_contacts: bool = False,
     ) -> jax.Array:
         # Termination Condition:
         done = self.get_upvector(data)[-1] < -0.25
-        done |= terminate_on_contact * jnp.any(termination_contacts)
+        done |= jnp.any(termination_contacts)
+        done |= terminate_on_unwanted_contacts * jnp.any(unwanted_contacts)
         return done
 
     def _reward_tracking_base_pose(

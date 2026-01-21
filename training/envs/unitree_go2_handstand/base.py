@@ -181,6 +181,8 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
             "hind_right_calf_lower_to_floor",
             "hind_left_calf_upper_to_floor",
             "hind_left_calf_lower_to_floor",
+            "hind_right_thigh_to_floor",
+            "hind_left_thigh_to_floor",
         ]
         self.unwanted_contact_sensor = [
             self._mj_model.sensor(f'{sensor_name}').id
@@ -196,7 +198,7 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
             self._mj_model.sensor(f'{termination_sensor_name}').id
             for termination_sensor_name in termination_sensor_names
         ]
-        self.terminate_on_contact = environment_config.terminate_on_contact
+        self.terminate_on_unwanted_contacts = environment_config.terminate_on_unwanted_contacts
 
         # Observation Size:
         self.num_observations = 30 + self.nu

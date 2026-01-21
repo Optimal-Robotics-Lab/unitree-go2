@@ -57,16 +57,16 @@ def main(argv=None):
         # Rewards:
         tracking_base_pose=1.0,
         tracking_orientation=1.0,
-        tracking_joint_pose=0.5,
+        tracking_joint_pose=0.25,
         # Energy Regularization Terms:
-        torque=-0.0,
-        action_rate=-0.0,
-        acceleration=-0.0,
+        torque=-2e-4,
+        action_rate=-0.01,
+        acceleration=-2.5e-5,
         # Penalty Terms:
         base_velocity=-1.0,
         stand_still=0.0,
         feet_contact=0.5,
-        feet_slip=-1.0,
+        feet_slip=-0.0,
         unwanted_contact=-1.0,
         termination=-1.0,
         # MuJoCo Terms:
@@ -82,7 +82,9 @@ def main(argv=None):
 
     # Configs:
     noise_config = config.NoiseConfig()
-    disturbance_config = config.DisturbanceConfig()
+    # disturbance_config = config.DisturbanceConfig()
+
+    disturbance_config = config.DisturbanceConfig(magnitudes=[0.0, 0.0])
 
     scene = 'scene_mjx.xml'
 
@@ -92,6 +94,7 @@ def main(argv=None):
         action_scale=0.3,
         control_timestep=0.02,
         optimizer_timestep=0.004,
+        terminate_on_unwanted_contacts=True,
     )
 
     env = unitree_go2_handstand.UnitreeGo2Env(
@@ -184,7 +187,7 @@ def main(argv=None):
         normalize_advantages=True,
     )
     training_metadata = checkpoint_utilities.TrainingMetadata(
-        num_epochs=20,
+        num_epochs=50,
         num_training_steps=20,
         episode_length=1000,
         num_policy_steps=40,

@@ -27,11 +27,13 @@
 
     <!-- Add Task Specific Contacts -->
     <include file="contacts/walking_task_contacts.xml"/>
+    <include file="contacts/hind_thigh_to_floor_contacts.xml"/>
 
     <!-- Add Task Specific Sensors -->
     <include file="sensors/torso_to_floor_collision_sensor.xml"/>
     <include file="sensors/foot_to_floor_collision_sensor.xml"/>
     <include file="sensors/front_calf_to_floor_collision_sensor.xml"/>
     <include file="sensors/hind_calf_to_floor_collision_sensor.xml"/>
+    <include file="sensors/hind_thigh_to_floor_collision_sensor.xml"/>
 
 </mujoco>
