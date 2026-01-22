@@ -241,7 +241,7 @@ checkpoints/*
 
 # PNG files
 *.png
-!models/*/assets/*.png
+**/assets/hfield.png
 
 # PDF files
 *.pdf
