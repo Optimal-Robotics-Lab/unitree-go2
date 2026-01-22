@@ -257,7 +257,7 @@ def main(argv=None):
             num_envs=8192,
             num_evaluation_envs=128,
             deterministic_evaluation=True,
-            reset_per_epoch=True,
+            reset_per_epoch=False,
             seed=42,
             batch_size=256,
             num_minibatches=32,
@@ -330,7 +330,6 @@ def main(argv=None):
             restored_checkpoint, _ = checkpoint_utilities.restore_training_state(
                 manager=restore_manager,
                 agent=model,
-                iteration=FLAGS.checkpoint_iteration,
             )
             optimizer = restored_checkpoint.optimizer
 
@@ -386,6 +385,9 @@ def main(argv=None):
             environment=env,
             evaluation_environment=eval_env,
         )
+
+        # Update for next iteration:
+        previous_run = run.name
 
         run.finish()
 
