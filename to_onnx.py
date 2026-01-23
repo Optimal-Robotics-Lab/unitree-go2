@@ -42,7 +42,8 @@ flags.DEFINE_integer(
 
 def main(argv=None):
     # Setup Environments:
-    scene = 'scene_mjx.xml'
+    # scene = 'scene_mjx_standard_position.xml'
+    scene = 'scene_mjx_standard_velocity.xml'
     environment_config = config.EnvironmentConfig(
         filename=scene,
         action_scale=0.5,

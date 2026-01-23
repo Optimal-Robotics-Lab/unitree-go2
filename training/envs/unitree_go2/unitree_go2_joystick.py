@@ -123,7 +123,12 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         qpos = qpos.at[7:].set(qpos[7:] + delta)
 
         # Initialize State:
-        ctrl = qpos[7:]
+        ctrl = jnp.pad(
+            qpos[7:],
+            (0, self.nu - qpos[7:].shape[0]),
+            mode='constant',
+            constant_values=0,
+        )
 
         data = mjx_env.make_data(
             self._mj_model,

@@ -40,12 +40,6 @@ logging.set_verbosity(logging.FATAL)
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
-    'checkpoint_name', None, 'Desired checkpoint folder name to load.', short_name='c',
-)
-flags.DEFINE_integer(
-    'checkpoint_iteration', None, 'Desired checkpoint iteration.', short_name='i',
-)
-flags.DEFINE_string(
     'tag', '', 'Tag for wandb run.', short_name='t',
 )
 
@@ -98,6 +92,7 @@ def main(argv=None):
                 kernel_sigma=0.25,
             )
             command_config = config.CommandConfig()
+            num_epochs = 20
         elif training_type == 'finetune' or training_type == 'rough':
             reward_config = config.RewardConfig(
                 # Rewards:
@@ -137,6 +132,7 @@ def main(argv=None):
                 command_mask_probability=0.9,
                 command_frequency=[0.5, 2.0],
             )
+            num_epochs = 10
         else:
             raise ValueError(f'Unknown training_type: {training_type}')
 
@@ -249,7 +245,7 @@ def main(argv=None):
             normalize_advantages=True,
         )
         training_metadata = checkpoint_utilities.TrainingMetadata(
-            num_epochs=20,
+            num_epochs=num_epochs,
             num_training_steps=20,
             episode_length=1000,
             num_policy_steps=40,
