@@ -35,17 +35,16 @@ def main(argv=None):
     data_directory = pathlib.Path(__file__).parent.parent
 
     # Robot Command, State, Contact, IMU Data:
-    command_history = data_directory / f"processed/{FLAGS.directory_name}/command_history.csv"
-    state_history = data_directory / f"processed/{FLAGS.directory_name}/state_history.csv"
-    # contact_history = data_directory / f"processed/{FLAGS.directory_name}/contact_history.csv"
-    imu_history = data_directory / f"processed/{FLAGS.directory_name}/imu_history.csv"
+    command_history = data_directory / f"processed/{FLAGS.directory_name}/postprocessed_command_history.csv"
+    state_history = data_directory / f"processed/{FLAGS.directory_name}/postprocessed_state_history.csv"
+    imu_history = data_directory / f"processed/{FLAGS.directory_name}/postprocessed_imu_history.csv"
 
     # Velocity Command:
-    policy_command_history = data_directory / f"processed/{FLAGS.directory_name}/policy_command_history.csv"
+    policy_command_history = data_directory / f"processed/{FLAGS.directory_name}/postprocessed_policy_command_history.csv"
 
     # Vicon and Filtered Vicon Data:
-    vicon_history = data_directory / f"processed/{FLAGS.directory_name}/vicon_history.csv"
-    filtered_history = data_directory / f"processed/{FLAGS.directory_name}/filtered_history.csv"
+    vicon_history = data_directory / f"processed/{FLAGS.directory_name}/postprocessed_vicon_history.csv"
+    filtered_history = data_directory / f"processed/{FLAGS.directory_name}/postprocessed_filtered_vicon_history.csv"
 
     files_exist = all([
         command_history.exists(),
@@ -53,7 +52,6 @@ def main(argv=None):
         imu_history.exists(),
         vicon_history.exists(),
         filtered_history.exists(),
-        # contact_history.exists(),
         policy_command_history.exists(),
     ])
 

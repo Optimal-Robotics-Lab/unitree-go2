@@ -74,7 +74,6 @@ def process_data(
     imu_history: np.ndarray,
     policy_command_history: np.ndarray,
     vicon_history: np.ndarray,
-    trim_time: float = 5.0,
     sample_frequency: float = 100.0,
 ) -> dict[str, np.ndarray]:
     """ Process data from CSV files """
@@ -128,9 +127,14 @@ def process_data(
         frequency=sample_frequency,
     )
 
+    # Find when robot shuts off (no more commands):
+    policy_command_norm = np.linalg.norm(policy_command_history[:, 1:], axis=1)
+    shutoff_idx = np.where(policy_command_norm > 0.0)[0][-1]
+    shutoff_time = policy_command_history[shutoff_idx][0]
+
     # Resample Data:
     dt = 1.0 / sample_frequency
-    time_points = np.arange(0, trim_time, dt)
+    time_points = np.arange(0, shutoff_time, dt)
 
     state_interpolation_function = scipy.interpolate.interp1d(
         x=state_history[:, 0],

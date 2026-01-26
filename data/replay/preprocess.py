@@ -69,7 +69,6 @@ def main(argv=None):
         imu_history,
         policy_command_history,
         vicon_history,
-        trim_time=20.0,
         sample_frequency=50.0,
     )
 
@@ -81,36 +80,37 @@ def main(argv=None):
     filtered_history = data_dictionary["filtered_history"]
 
     # Save Processed Data:
-    output_directory = data_directory / f"processed/{FLAGS.directory_name}"
+    output_directory_name = FLAGS.directory_name.replace('_', '-')
+    output_directory = data_directory / f"processed/{output_directory_name}"
     output_directory.mkdir(parents=True, exist_ok=True)
 
     np.savetxt(
-        output_directory / "command_history.csv",
+        output_directory / "preprocessed_command_history.csv",
         command_history,
         delimiter=',',
     )
     np.savetxt(
-        output_directory / "state_history.csv",
+        output_directory / "preprocessed_state_history.csv",
         state_history,
         delimiter=',',
     )
     np.savetxt(
-        output_directory / "imu_history.csv",
+        output_directory / "preprocessed_imu_history.csv",
         imu_history,
         delimiter=',',
     )
     np.savetxt(
-        output_directory / "policy_command_history.csv",
+        output_directory / "preprocessed_policy_command_history.csv",
         policy_command_history,
         delimiter=',',
     )
     np.savetxt(
-        output_directory / "vicon_history.csv",
+        output_directory / "preprocessed_vicon_history.csv",
         vicon_history,
         delimiter=',',
     )
     np.savetxt(
-        output_directory / "filtered_history.csv",
+        output_directory / "preprocessed_filtered_history.csv",
         filtered_history,
         delimiter=',',
     )

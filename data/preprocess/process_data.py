@@ -37,8 +37,9 @@ def process_data(
     state_history = state_history[:state_idx, :]
     command_history = command_history[:command_idx, :]
 
-    # Trim Time Length: X seconds
-    trim_time = 3.0
+    # Find when test ends:
+
+    
     state_idx = np.where(
         state_history[:, 0] >= trim_time
     )[0][0]
