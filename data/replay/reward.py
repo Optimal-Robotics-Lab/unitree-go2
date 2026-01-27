@@ -19,12 +19,12 @@ reward_config = {
     'tracking_linear_velocity': 1.5,
     'tracking_angular_velocity': 0.75,
     # Orientation Regularization Terms:
-    'orientation_regularization': -2.5,
+    'orientation_regularization': -5.0,
     'linear_z_velocity': -2.0,
     'angular_xy_velocity': -0.05,
     # Energy Regularization Terms:
     'torque': -2e-4,
-    'action_rate': -0.01,
+    'action_rate': -0.1,
     # Auxilary Terms:
     'stand_still': -1.0,
 }
