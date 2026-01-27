@@ -1,0 +1,26 @@
+rosbag2_bagfile_information:
+  version: 5
+  storage_identifier: sqlite3
+  duration:
+    nanoseconds: 104933551160
+  starting_time:
+    nanoseconds_since_epoch: 1769548534656090584
+  message_count: 31232
+  topics_with_message_count:
+    - topic_metadata:
+        name: /vicon/Unitree_Go2/Unitree_Go2
+        type: vicon_receiver/msg/Position
+        serialization_format: cdr
+        offered_qos_profiles: "- history: 3\n  depth: 0\n  reliability: 1\n  durability: 2\n  deadline:\n    sec: 9223372036\n    nsec: 854775807\n  lifespan:\n    sec: 9223372036\n    nsec: 854775807\n  liveliness: 1\n  liveliness_lease_duration:\n    sec: 9223372036\n    nsec: 854775807\n  avoid_ros_namespace_conventions: false"
+      message_count: 31232
+  compression_format: ""
+  compression_mode: ""
+  relative_file_paths:
+    - standard_position_vicon_forward_0.db3
+  files:
+    - path: standard_position_vicon_forward_0.db3
+      starting_time:
+        nanoseconds_since_epoch: 1769548534656090584
+      duration:
+        nanoseconds: 104933551160
+      message_count: 31232

@@ -6,3 +6,4 @@ angular_xy_velocity: -0.07966294935054136
 torque: -0.018795837572185645
 action_rate: -0.08784378410796641
 stand_still: 0.0
+sum: 1.913
