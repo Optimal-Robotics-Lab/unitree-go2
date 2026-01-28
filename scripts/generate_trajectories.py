@@ -1,3 +1,4 @@
+import functools
 from absl import app, flags
 
 import os
@@ -36,7 +37,7 @@ flags.DEFINE_boolean(
 
 
 def main(argv=None):
-    filename = f'mjcf/{filename}'
+    filename = 'mjcf/scene_mjx.xml'
     filepath = os.path.join(
         os.path.dirname(__file__),
         filename,
@@ -48,17 +49,18 @@ def main(argv=None):
     control_rate = 0.02
 
     num_time_steps = 500
+    max_switches = 10
     trajectory_time = num_time_steps * control_rate
-    period_lb, period_ub = 0.2, 5.0
+    period_lb, period_ub = 1.0, 10.0
     frequency_lb = 2 * np.pi / period_ub
     frequency_ub = 2 * np.pi / period_lb
 
     # Get Joint Limits:
-    joint_lb, joint_ub = mj_model.jnt_range[1:].T
+    joint_lb, joint_ub = mj_model.jnt_range.T
     num_joints = joint_lb.shape[0]
 
     # Soft Joint Limits:
-    limit_factor = 0.8
+    limit_factor = 0.5
     joint_center = (joint_lb + joint_ub) / 2
     joint_range = joint_ub - joint_lb
     soft_range = limit_factor * joint_range
@@ -66,16 +68,12 @@ def main(argv=None):
     soft_ub = joint_center + soft_range
 
     # Probability of Step Function Trajectory
-    step_function_prob = 0.2
+    step_function_prob = 0.9
 
     def generate_sinusoid_trajectory(
         key: jax.Array,
         num_time_steps: int = 500,
     ) -> jax.Array:
-        """
-            Generates a random sinusoidal trajectory.
-            Output Shape: (num_time_steps, 12)
-        """
         key, offset_key, amplitude_key, frequency_key = jax.random.split(key, 4)
 
         # Generate Sinusoid Parameters
@@ -147,10 +145,9 @@ def main(argv=None):
         key, trajectory_key = jax.random.split(key)
         trajectory = jax.lax.cond(
             mask,
-            generate_step_trajectory,
-            generate_sinusoid_trajectory,
+            functools.partial(generate_step_trajectory, num_time_steps=num_time_steps, max_switches=max_switches),
+            functools.partial(generate_sinusoid_trajectory, num_time_steps=num_time_steps),
             trajectory_key,
-            num_time_steps,
         )
 
         return key, trajectory
@@ -163,12 +160,19 @@ def main(argv=None):
         length=FLAGS.num_trajectories,
     )
 
-    # Save Trajectories:
-    output_path = os.path.join(
-        os.path.dirname(__file__),
-        f'data/{FLAGS.output_filename}.csv',
-    )
-    np.savetxt(output_path, np.array(trajectories))
+    # Play trajectories to check of collisions:
+    collisions = 0
+    for i, trajectory in enumerate(trajectories):
+        # Initialize Mujoco Data:
+        data = mujoco.MjData(mj_model)
+        for t in range(num_time_steps):
+            data.qpos = np.array(trajectory[t])
+            mujoco.mj_forward(mj_model, data)
+            if data.ncon > 0:
+                collisions += 1
+                print(f"Collision detected at trajecotry {i} and time step {t}.")
+
+    print(f"Total Collisions Detected: {collisions} out of {FLAGS.num_trajectories} trajectories.")
 
     if FLAGS.view_trajectories:
         # Visualize Trajectories:
@@ -179,7 +183,6 @@ def main(argv=None):
             viewer.cam.distance = 5
             while viewer.is_running() and not termination_flag:
                 for trajectory in trajectories:
-                    data = mujoco.MjData(mj_model)
                     for t in range(num_time_steps):
                         data.qpos = np.array(trajectory[t])
                         mujoco.mj_forward(mj_model, data)
@@ -188,6 +191,17 @@ def main(argv=None):
                         if not viewer.is_running():
                             break
                 termination_flag = True
+
+    # Save Trajectories:
+    data_directory = os.path.join(os.path.dirname(__file__), 'data')
+    if not os.path.exists(data_directory):
+        os.makedirs(data_directory)
+
+    output_path = os.path.join(
+        data_directory,
+        f'{FLAGS.output_filename}.csv',
+    )
+    np.savetxt(output_path, np.array(trajectories))
 
 
 if __name__ == '__main__':
