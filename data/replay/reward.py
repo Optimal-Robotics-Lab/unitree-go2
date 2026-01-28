@@ -217,6 +217,7 @@ def main(argv=None):
         values = list(map(lambda rd: rd[key].item(), reward_dicts))
         avg = np.mean(values).item()
         mean_rewards[key] = avg
+    mean_rewards['sum'] = sum(mean_rewards.values())
 
     output_directory = data_directory / f"processed/{FLAGS.directory_name}"
     output_directory.mkdir(parents=True, exist_ok=True)
