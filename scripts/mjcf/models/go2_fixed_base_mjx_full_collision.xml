@@ -90,6 +90,13 @@
 
 	<worldbody>
 		<body name="base_link" pos="0 0 0.445" childclass="go2">
+			
+			<!-- IK Task Space: -->
+			<geom type="box" size="0.2 0.1 0.15" pos="0.2 -0.15 -0.2" rgba="1 0 0 0.3" contype="0" conaffinity="0" group="5"/>
+        	<geom type="box" size="0.2 0.1 0.15" pos="0.2 0.15 -0.2" rgba="1 0 0 0.3" contype="0" conaffinity="0" group="5"/>
+			<geom type="box" size="0.2 0.1 0.15" pos="-0.2 -0.15 -0.2" rgba="1 0 0 0.3" contype="0" conaffinity="0" group="5"/>
+			<geom type="box" size="0.2 0.1 0.15" pos="-0.2 0.15 -0.2" rgba="1 0 0 0.3" contype="0" conaffinity="0" group="5"/>
+
 			<geom mesh="base_0" material="black" class="go2"/>
 			<geom mesh="base_1" material="black" class="go2"/>
 			<geom mesh="base_2" material="black" class="go2"/>
@@ -227,6 +234,17 @@
 			</body>
 		</body>
 	</worldbody>
+
+	<contact>
+		<exclude body1="base_link" body2="front_right_hip"/>
+		<exclude body1="base_link" body2="front_left_hip"/>
+		<exclude body1="base_link" body2="hind_right_hip"/>
+		<exclude body1="base_link" body2="hind_left_hip"/>
+		<exclude body1="front_right_hip" body2="front_right_thigh"/>
+		<exclude body1="front_left_hip" body2="front_left_thigh"/>
+		<exclude body1="hind_right_hip" body2="hind_right_thigh"/>
+		<exclude body1="hind_left_hip" body2="hind_left_thigh"/>
+	</contact>
 
 	<sensor>
 		<!-- IMU: -->
