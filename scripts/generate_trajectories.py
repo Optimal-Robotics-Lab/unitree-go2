@@ -56,7 +56,7 @@ def main(argv=None):
     trajectory_time = num_time_steps * control_rate
 
     # Probability of Step Function Trajectory
-    step_function_prob = 1.0
+    step_function_prob = 0.2
     minimum_duration_between_steps = 1.0
     minimum_step_duration = int(
         minimum_duration_between_steps / control_rate
