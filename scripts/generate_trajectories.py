@@ -324,8 +324,9 @@ def main(argv=None):
 
     # Flatten and Save: (Trials, Time, Joints) -> (Trials * Time, Joints)
     num_joints = trajectories.shape[-1]
+    header = f"SHAPE:{FLAGS.num_trajectories},{num_time_steps},{num_joints}"
     flattened_data = np.reshape(np.array(trajectories), (-1, num_joints))
-    np.savetxt(output_path, flattened_data)
+    np.savetxt(output_path, flattened_data, delimiter=',', header=header, comments='')
 
 
 if __name__ == '__main__':
