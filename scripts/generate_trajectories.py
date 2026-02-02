@@ -313,7 +313,9 @@ def main(argv=None):
                 termination_flag = True
 
     # Save Trajectories:
-    data_directory = os.path.join(os.path.dirname(__file__), 'data')
+    data_directory = os.path.join(
+        os.path.dirname(__file__), 'data/generated_trajectories',
+    )
     if not os.path.exists(data_directory):
         os.makedirs(data_directory)
 
