@@ -9,7 +9,9 @@ import jax.numpy as jnp
 import numpy as np
 
 import mujoco
+import mujoco.viewer
 from mujoco import mjx
+
 import optax
 
 jax.config.update('jax_enable_x64', True)
@@ -56,7 +58,7 @@ def main(argv=None):
     trajectory_time = num_time_steps * control_rate
 
     # Probability of Step Function Trajectory
-    step_function_prob = 0.2
+    step_function_prob = 0.0
     minimum_duration_between_steps = 1.0
     minimum_step_duration = int(
         minimum_duration_between_steps / control_rate
@@ -93,13 +95,13 @@ def main(argv=None):
         safe random Cartesian targets using Gradient Descent IK.
         """
 
-        # Task Space Safe Zones for Feet:
-        half_size = jnp.array([0.2, 0.1, 0.15])
+        # Safe Task Space Bounds:
+        half_size = jnp.array([0.2, 0.2, 0.3])
         center_wrt_base = jnp.array([
-            [0.2, -0.15, -0.2,],    # Front Right
-            [0.2,  0.15, -0.2,],    # Front Left
-            [-0.2, -0.15, -0.2,],   # Rear Right
-            [-0.2,  0.15, -0.2,],   # Rear Left
+            [0.2, -0.25, -0.15,],    # Front Right
+            [0.2,  0.25, -0.15,],    # Front Left
+            [-0.2, -0.25, -0.15,],   # Rear Right
+            [-0.2,  0.25, -0.15,],   # Rear Left
         ])
         lb = center_wrt_base - half_size[None, :]   # (4, 3) Lower Bounds
         ub = center_wrt_base + half_size[None, :]   # (4, 3) Upper Bounds
@@ -182,15 +184,90 @@ def main(argv=None):
 
             return targets
 
+        def generate_chirp_targets(key: jax.Array) -> jnp.ndarray:
+            # Feet Home Relative to Base:
+            feet_home = jnp.array([
+                [0.19215678, -0.142, -0.26637250],      # Front Right
+                [0.19215678, 0.142, -0.26637250],       # Front Left
+                [-0.19464322, -0.142, -0.26637250],     # Hind Right
+                [-0.19464322, 0.142, -0.26637250],  # Hind Left
+            ])
+
+            safe_margin = jnp.array([0.05, 0.05, 0.05])
+            bias_lb = lb + safe_margin
+            bias_ub = ub - safe_margin
+
+            # Random Bias Offset:
+            key, bias_key = jax.random.split(key)
+            bias_offset = jax.random.uniform(bias_key, shape=(4, 3), minval=bias_lb, maxval=bias_ub)
+
+            # Max Amplitudes:
+            # X: Forward/Back, Y: Left/Right, Z: Up/Down
+            max_amp = jnp.array([0.3, 0.08, 0.3])
+
+            # Generate Chirp Signal:
+            t = jnp.linspace(0, trajectory_time, num_time_steps)[:, None, None]
+
+            # Generate Random Frequency Range:
+            key, frequency_key = jax.random.split(key)
+            f_start = 0.1
+            f_end = jax.random.uniform(frequency_key, minval=2.5, maxval=4.5)
+
+            freq_inst = f_start + (f_end - f_start) * (t / trajectory_time)
+            k = (f_end - f_start) / trajectory_time
+            chirp_phase = 2 * jnp.pi * (f_start * t + (k / 2) * t**2)
+
+            # Phase Offsets:
+            # phase_offsets = jnp.array([
+            #     [0.0, 0.0, 0.0],          # FR
+            #     [jnp.pi, jnp.pi, 0.0],    # FL (Opposite X/Y to FR)
+            #     [jnp.pi, 0.0, jnp.pi],    # RR (Opposite X to FR)
+            #     [0.0, jnp.pi, jnp.pi],    # RL (Opposite Y to FR)
+            # ])
+            # phase_offsets = jnp.zeros((4, 3))  # No phase offsets for simplicity
+            key, phase_key = jax.random.split(key)
+            phase_offsets = jax.random.uniform(
+                phase_key, shape=(4, 3), minval=0.0, maxval=2 * jnp.pi
+            )
+
+            # Amplitude Variation:
+            key, scale_key, sign_key = jax.random.split(key, 3)
+            amp_scale = jax.random.uniform(
+                scale_key, shape=(4, 3), minval=0.5, maxval=1.0,
+            )
+            amp_sign = jax.random.choice(
+                sign_key, jnp.array([-1.0, 1.0]), shape=(4, 3)
+            )
+
+            # Amplitude Scaling:
+            key, velocity_key = jax.random.split(key)
+            target_velocity = jax.random.uniform(
+                velocity_key, shape=(4, 3), minval=0.5, maxval=2.0,
+            )
+            safe_amp_scaling = target_velocity / (2 * jnp.pi * freq_inst)
+
+            min_amp = 0.015
+            safe_amp_scaling = jnp.maximum(min_amp, safe_amp_scaling)
+
+            current_amp = jnp.minimum(max_amp[None, None, :], safe_amp_scaling)
+            final_amp = current_amp * amp_scale[None, :, :] * amp_sign[None, :, :]
+
+            # Calculate Targets using the frequency-adjusted amplitude
+            targets = bias_offset[None, :, :] + \
+                final_amp * jnp.sin(chirp_phase + phase_offsets[None, :, :])
+
+            return targets
+
         # Choose Target Generation Method
         key, target_key, bernoulli_key = jax.random.split(key, 3)
         step_targets = generate_step_targets(target_key, max_switches=max_switches, minimum_step_duration=minimum_step_duration)
         sinusoidal_targets = generate_sinusoidal_targets(target_key)
+        chirp_targets = generate_chirp_targets(target_key)
         mask = jax.random.bernoulli(bernoulli_key, p=step_function_prob)
         targets = jnp.where(
             mask,
             step_targets,
-            sinusoidal_targets,
+            chirp_targets,
         )
 
         # Clip to Safe Zones:
@@ -215,7 +292,7 @@ def main(argv=None):
             current_pos = fk_fn(q)
             dist_error = jnp.sum((current_pos - target_pos) ** 2)
             reg_error = jnp.sum((q - home_position) ** 2)
-            return dist_error + 0.05 * reg_error
+            return dist_error + 0.001 * reg_error
 
         # Gradient Step
         grad_fn = jax.value_and_grad(ik_loss)
@@ -259,7 +336,7 @@ def main(argv=None):
         init_q = home_position
         final_q, q_trajectory = jax.lax.scan(solve_step, init_q, targets)
 
-        return q_trajectory
+        return q_trajectory, targets
 
     # Generate Trajectories:
     def loop(carry, unused_t):
@@ -267,14 +344,14 @@ def main(argv=None):
 
         # Generate Trajectory Based on Mask
         key, trajectory_key = jax.random.split(key)
-        trajectory = functools.partial(
+        qpos_trajectory, target_trajectory = functools.partial(
             generate_ik_trajectory, num_time_steps=num_time_steps,
         )(trajectory_key)
 
-        return key, trajectory
+        return key, (qpos_trajectory, target_trajectory)
 
     key = jax.random.key(FLAGS.seed)
-    _, trajectories = jax.lax.scan(
+    _, (trajectories, target_trajectories) = jax.lax.scan(
         loop,
         init=key,
         xs=None,
@@ -302,12 +379,35 @@ def main(argv=None):
             viewer.cam.trackbodyid = 1
             viewer.cam.distance = 5
             while viewer.is_running() and not termination_flag:
-                for trajectory in trajectories:
+                for qpos_trajectory, target_trajectory in zip(trajectories, target_trajectories):
                     for t in range(num_time_steps):
-                        data.qpos = np.array(trajectory[t])
+                        data.qpos = np.array(qpos_trajectory[t])
                         mujoco.mj_forward(mj_model, data)
+
+                        # Draw Targets:
+                        base_pos = data.xpos[base_id]
+                        base_mat = data.xmat[base_id].reshape(3, 3)
+
+                        targets_local = target_trajectory[t]
+                        targets_world = base_pos + (targets_local @ base_mat.T)
+
+                        # Draw Spheres
+                        viewer.user_scn.ngeom = 0
+                        for foot_idx in range(4):
+                            mujoco.mjv_initGeom(
+                                viewer.user_scn.geoms[foot_idx],
+                                type=mujoco.mjtGeom.mjGEOM_SPHERE,
+                                size=[0.02, 0, 0],
+                                pos=targets_world[foot_idx],
+                                mat=np.eye(3).flatten(),
+                                rgba=[1, 0, 0, 0.8]
+                            )
+
+                        viewer.user_scn.ngeom = 4
+
                         viewer.sync()
                         time.sleep(control_rate)
+
                         if not viewer.is_running():
                             break
                 termination_flag = True

@@ -92,10 +92,10 @@
 		<body name="base_link" pos="0 0 0.445" childclass="go2">
 			
 			<!-- IK Task Space: -->
-			<geom type="box" size="0.2 0.1 0.15" pos="0.2 -0.15 -0.2" rgba="1 0 0 0.3" contype="0" conaffinity="0" group="5"/>
-        	<geom type="box" size="0.2 0.1 0.15" pos="0.2 0.15 -0.2" rgba="1 0 0 0.3" contype="0" conaffinity="0" group="5"/>
-			<geom type="box" size="0.2 0.1 0.15" pos="-0.2 -0.15 -0.2" rgba="1 0 0 0.3" contype="0" conaffinity="0" group="5"/>
-			<geom type="box" size="0.2 0.1 0.15" pos="-0.2 0.15 -0.2" rgba="1 0 0 0.3" contype="0" conaffinity="0" group="5"/>
+			<geom type="box" size="0.2 0.2 0.3" pos="0.2 -0.25 -0.15" rgba="1 0 0 0.3" contype="0" conaffinity="0" group="5"/>
+        	<geom type="box" size="0.2 0.2 0.3" pos="0.2 0.25 -0.15" rgba="1 0 0 0.3" contype="0" conaffinity="0" group="5"/>
+			<geom type="box" size="0.2 0.2 0.3" pos="-0.2 -0.25 -0.15" rgba="1 0 0 0.3" contype="0" conaffinity="0" group="5"/>
+			<geom type="box" size="0.2 0.2 0.3" pos="-0.2 0.25 -0.15" rgba="1 0 0 0.3" contype="0" conaffinity="0" group="5"/>
 
 			<geom mesh="base_0" material="black" class="go2"/>
 			<geom mesh="base_1" material="black" class="go2"/>
