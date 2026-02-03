@@ -1,6 +1,5 @@
-from absl import app, flags
+from absl import app
 
-from collections.abc import Callable
 from typing import Dict, Tuple
 
 from pathlib import Path
@@ -21,116 +20,92 @@ import wandb
 import mujoco
 from mujoco import mjx
 
-from utils import (
-    Dataset,
-    JOINT_NAMES,
-    chunk_and_flatten_dataset,
-    shuffle_data,
-    sample_random_windows,
-)
+from ml_collections import config_flags, ConfigDict
+
+from utilities.config import get_default_config
+from utilities.typedefs import Dataset, ObjectiveFunction, TrainState
+from utilities.constants import JOINT_NAMES
+from utilities.data_utils import chunk_and_flatten_dataset, shuffle_data
+from utilities.factories import create_optimizer, get_objective_fn
+from utilities.autodiff import forward_mode_value_and_grad
+import utilities.evaluation as evaluation
 
 jax.config.update('jax_enable_x64', True)
 
-FLAGS = flags.FLAGS
-flags.DEFINE_string('directory_name', None, 'Directory containing hardware data.', required=True, short_name='d')
-flags.DEFINE_bool('reverse_mode', False, 'Use reverse-mode autodiff.', required=False, short_name='r')
-flags.DEFINE_integer('num_batches_per_epoch', 256, 'Number of batches per epoch.', required=False, short_name='n')
-flags.DEFINE_integer('minibatch_size', 25, 'Size of each minibatch.', required=False, short_name='b')
-flags.DEFINE_integer('window_length', 25, 'Window length for rollout.', required=False, short_name='w')
+_CONFIG = config_flags.DEFINE_config_dict('config', get_default_config())
 
 
-ObjectiveFunction = Callable[[jax.Array, jax.Array], jax.Array]
+def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
+    # Load MuJoCo Model
+    directory = Path(__file__).resolve().parent
+    filepath = (directory / config.scene_file).resolve()
+    mj_model = mujoco.MjModel.from_xml_path(str(filepath))
+    
+    # Override Physics Settings:
+    solver_map = {
+        'newton': mujoco.mjtSolver.mjSOL_NEWTON,
+        'cg': mujoco.mjtSolver.mjSOL_CG,
+        'pgs': mujoco.mjtSolver.mjSOL_PGS,
+    }
+    if config.physics.solver in solver_map:
+        mj_model.opt.solver = solver_map[config.physics.solver]
+    mj_model.opt.iterations = config.physics.iterations
+    mj_model.opt.ls_iterations = config.physics.ls_iterations
+    mj_model.opt.timestep = config.physics.timestep
 
-
-REGRESSION_CONFIG = {
-    'frictionloss': {'field': 'dof_frictionloss', 'bounds': (1e-4, 1e2)},
-    'armature':     {'field': 'dof_armature',     'bounds': (1e-4, 1e2)},
-    'damping':      {'field': 'dof_damping',      'bounds': (1e-4, 1e2)},
-    'qpos0':        {'field': 'qpos0',            'bounds': None},
-}
-
-
-def main(argv=None):
-    filename = 'mjcf/scene_mjx_transparent.xml'
-    filepath = Path(__file__).resolve().parent / filename
-
-    mj_model = mujoco.MjModel.from_xml_path(
-        str(filepath),
-    )
+    # Create Static MJX Model:
     mjx_model_static = mjx.put_model(mj_model, impl="jax")
+    n_substeps = int(config.physics.control_rate / mj_model.opt.timestep)
 
-    control_rate = 0.02
-    n_substeps = int(control_rate / mj_model.opt.timestep)
+    # Load Data:
+    data_path = directory / config.dataset_directory / config.dataset_name / 'processed_data.pkl'
+    if not data_path.exists():
+        raise FileNotFoundError(f"{data_path} not found")
+        
+    with open(data_path, 'rb') as f:
+        data_dict = pickle.load(f)
 
-    # Load Data
-    base_directory = Path(__file__).resolve().parent
-    directory = base_directory / 'data' / FLAGS.directory_name
+    effective_window = config.training.window_length + 1
+    
+    dataset = chunk_and_flatten_dataset(
+        jnp.array(data_dict['qpos']),
+        jnp.array(data_dict['qvel']),
+        jnp.array(data_dict['actuator_force']),
+        jnp.array(data_dict['ctrl']),
+        effective_window,
+    )
+    
+    total_samples = dataset.ctrl.shape[0]
+    steps_per_epoch = total_samples // config.training.minibatch_size
+    total_steps = steps_per_epoch * config.training.num_epochs
 
-    # Verify Directory Exists:
-    if not directory.exists():
-        raise FileNotFoundError(
-            f'Directory {directory} does not exist.',
-        )
+    # Initialize Parameters:
+    params = {}
+    regression_spec = config.regression.to_dict()
+    
+    for name, spec in regression_spec.items():
+        val = getattr(mjx_model_static, spec['field'])
+        if 'column' in spec:
+            val = val[:, spec['column']]
+        params[name] = val
 
-    with open(directory / 'processed_data.pkl', 'rb') as file:
-        data_dict = pickle.load(file)
+    # Initialize Optimizer and State:
+    initial_params = params.copy()
+    optimizer = create_optimizer(config, total_steps)
+    opt_state = optimizer.init(params)
 
-    dataset = Dataset(
-        qpos=jnp.array(data_dict['qpos']),
-        qvel=jnp.array(data_dict['qvel']),
-        actuator_force=jnp.array(data_dict['actuator_force']),
-        ctrl=jnp.array(data_dict['ctrl']),
+    # Define Objective Function
+    objective_metric = get_objective_fn(config.loss.type)
+    objective_weights = config.loss.weights.to_dict()
+
+    # Wrap Step Function:
+    init_function = evaluation.init_function
+    step_function = functools.partial(
+        evaluation.step_function,
+        n_substeps=n_substeps,
     )
 
-    # VMAP and Jit the init and step functions:
-    def init_function(
-        model: mjx.Model,
-        qpos: jax.Array,
-        qvel: jax.Array,
-        ctrl: jax.Array,
-    ) -> mjx.Data:
-        data = mjx.make_data(model)
-        data = data.replace(qpos=qpos, qvel=qvel, ctrl=ctrl)
-        data = mjx.forward(model, data)
-        return data
-
-    def step_function(
-        model: mjx.Model,
-        data: mjx.Data,
-        ctrl: jax.Array,
-    ) -> mjx.Data:
-        data = data.replace(ctrl=ctrl)
-
-        def loop(carry: mjx.Data, unused_t):
-            return mjx.step(model, carry), None
-
-        data, _ = jax.lax.scan(loop, data, None, length=n_substeps)
-        return data
-
-    # Initialize the parameter and optimizer:
-    num_epochs = 20
-    learning_rate = 1e-2
-    optimizer = optax.adam(learning_rate=learning_rate)
-
-    # Parameters to Regress:
-    """
-        MuJoCo Joint Parameters:
-        - Friction Loss
-        - Armature
-        - Damping
-        - Reference
-        Actuator Parameters:
-        - Time Constant
-    """
-    params = {}
-    print("Initial Parameters:")
-    for name, config in REGRESSION_CONFIG.items():
-        initial_value = getattr(mjx_model_static, config['field'])
-        if 'column' in config:
-            initial_value = initial_value[:, config['column']]
-        params[name] = initial_value
-        print(f"{name}: {initial_value}")
-
+    # Loss Function:
     def loss_fn(
         params: Dict[str, jax.Array],
         model_static: mjx.Model,
@@ -141,15 +116,15 @@ def main(argv=None):
         # Rehydrate the model with new parameters:
         replace_kwargs = {}
         for name, value in params.items():
-            config = REGRESSION_CONFIG[name]
-            field_name = config['field']
-            if 'column' in config:
-                col_idx = config['column']
-                original_array = getattr(model_static, field_name)
-                new_matrix = original_array.at[:, col_idx].set(value)
-                replace_kwargs[field_name] = new_matrix
+            spec = regression_spec[name]
+            field = spec['field']
+            if 'column' in spec:
+                col_idx = spec['column']
+                original_array = getattr(model_static, field)
+                new_array = original_array.at[:, col_idx].set(value)
+                replace_kwargs[field] = new_array
             else:
-                replace_kwargs[field_name] = value
+                replace_kwargs[field] = value
             
         model_dynamic = model_static.replace(**replace_kwargs)
 
@@ -201,38 +176,36 @@ def main(argv=None):
 
         return loss
 
-    objective_function = lambda pred, target: jnp.sqrt(jnp.mean((pred - target) ** 2))
-    objective_weights = {
-        'position': 1.0,
-        'velocity': 1.0,
-        'actuator_force': 1.0,
-    }
+    # Select Gradient Mode:
     loss_fn = functools.partial(
         loss_fn,
-        objective_function=objective_function,
+        objective_function=objective_metric,
         objective_weights=objective_weights,
     )
 
-    if FLAGS.reverse_mode:
+    if config.physics.use_reverse_mode:
         # Reverse Mode:
         value_and_grad_fn = jax.value_and_grad(loss_fn)
     else:
         # Forward Mode:
-        def fwd_value_and_grad_fn(
-            params: Dict[str, jax.Array],
-            mjx_model_static: mjx.Model,
-            batch: Dataset,
-        ) -> Tuple[jax.Array, Dict[str, jax.Array]]:
-            l = loss_fn(params, mjx_model_static, batch)
-            g = jax.jacfwd(loss_fn, argnums=0)(params, mjx_model_static, batch)
-            return l, g
-        value_and_grad_fn = fwd_value_and_grad_fn
+        # def fwd_value_and_grad_fn(
+        #     params: Dict[str, jax.Array],
+        #     mjx_model_static: mjx.Model,
+        #     batch: Dataset,
+        # ) -> Tuple[jax.Array, Dict[str, jax.Array]]:
+        #     l = loss_fn(params, mjx_model_static, batch)
+        #     g = jax.jacfwd(loss_fn, argnums=0)(params, mjx_model_static, batch)
+        #     return l, g
+        # value_and_grad_fn = fwd_value_and_grad_fn
 
+        value_and_grad_fn = forward_mode_value_and_grad(loss_fn)
+
+    # Training Step:
     @jax.jit
     def train_step(
-        state: Tuple[Dict[str, jax.Array], optax.OptState],
+        state: TrainState,
         batch: Dataset,
-    ) -> Tuple[Tuple[Dict[str, jax.Array], optax.OptState], jax.Array]:
+    ) -> Tuple[TrainState, jax.Array]:
         params, opt_state = state
 
         loss, grads = value_and_grad_fn(
@@ -244,7 +217,7 @@ def main(argv=None):
 
         clipped_params = {}
         for name, value in params.items():
-            bounds = REGRESSION_CONFIG[name]['bounds']
+            bounds = regression_spec[name].get('bounds')
             if bounds is not None:
                 min_val, max_val = bounds
                 value = jnp.clip(value, min_val, max_val)
@@ -252,55 +225,29 @@ def main(argv=None):
 
         return (clipped_params, opt_state), loss
 
-    # sample_data_fn = functools.partial(
-    #     sample_random_windows,
-    #     dataset=dataset,
-    #     batch_size=FLAGS.minibatch_size,
-    #     window_length=FLAGS.window_length,
-    #     num_batches_per_epoch=FLAGS.num_batches_per_epoch,
-    # )
-
-    effective_window_length = FLAGS.window_length + 1
-    dataset = chunk_and_flatten_dataset(
-        jnp.array(data_dict['qpos']),
-        jnp.array(data_dict['qvel']),
-        jnp.array(data_dict['actuator_force']),
-        jnp.array(data_dict['ctrl']),
-        effective_window_length,
-    )
-
-    sample_data_fn = functools.partial(
-        shuffle_data,
-        dataset=dataset,
-        batch_size=FLAGS.minibatch_size,
-    )
-
     # Initialize Weights and Biases Logging:
-    run = wandb.init(
-        project='Parameter-Regression-Unitree-Go2',
-        config={
-            'directory_name': FLAGS.directory_name,
-            'reverse_mode': FLAGS.reverse_mode,
-            'num_batches_per_epoch': FLAGS.num_batches_per_epoch,
-            'minibatch_size': FLAGS.minibatch_size,
-            'window_length': FLAGS.window_length,
-            'learning_rate': learning_rate,
-            'config': REGRESSION_CONFIG,
-        },
+    wand_run = wandb.init(
+        project=config.wandb.project,
+        group=config.wandb.group,
+        config=config.to_dict()
     )
 
     # Training Loop:
-    key = jax.random.PRNGKey(42)
-    state = (params, optimizer.init(params))
+    key = jax.random.key(config.training.seed)
+    state = (params, opt_state)
+    sample_fn = functools.partial(shuffle_data, dataset=dataset, batch_size=config.training.minibatch_size)
     loss_history = []
-    wall_start_time = time.time()
-    for epoch in range(num_epochs):
+    wallclock = time.time()
+    for epoch in range(config.training.num_epochs):
         start_time = time.time()
+
+        # Sample Shuffled Data:
         key, subkey = jax.random.split(key)
-        shuffled_data = sample_data_fn(
+        shuffled_data = sample_fn(
             subkey,
         )
 
+        # Train Epoch:
         state, batch_losses = jax.lax.scan(train_step, state, shuffled_data)
         elapsed_time = time.time() - start_time
         
@@ -315,12 +262,12 @@ def main(argv=None):
             f"Time: {elapsed_time:.2f}s"
         )
         with jnp.printoptions(precision=4, suppress=True, linewidth=200):
-            for k, v in state[0].items():
+            for k, v in current_params.items():
                 print(f"\t {k}:\t {v}")
 
         log_dict = {
             'loss': avg_loss,
-            'wall_time': time.time() - wall_start_time,
+            'wall_time': time.time() - wallclock,
         }
         for k, v in current_params.items():
             for i, name in enumerate(JOINT_NAMES):
@@ -328,17 +275,44 @@ def main(argv=None):
 
         wandb.log(log_dict)
 
-    # Save Regressed Parameters and Loss History:
+    # Save Initial / Regressed Parameters and Loss History:
     output_params = {}
-    for k, v in state[0].items():
+    for k, v in current_params.items():
         output_params[f'{k}'] = np.array(v)
 
-    with open(directory / run.name / 'regressed_params.pkl', 'wb') as file:
+    for k, v in initial_params.items():
+        output_params[f'initial_{k}'] = np.array(v)
+    
+    loss_history = np.array(loss_history)
+
+    # Make Output Directory and Save Regressed Parameters:
+    output_directory = directory / config.dataset_directory / config.dataset_name / wand_run.name
+    output_directory.mkdir(parents=True, exist_ok=True)
+    with open(output_directory / 'regressed_params.pkl', 'wb') as file:
         pickle.dump(output_params, file)
 
-    with open(directory / run.name / 'loss_history.pkl', 'wb') as file:
-        pickle.dump(np.array(loss_history), file)
-    
+    with open(output_directory / 'loss_history.pkl', 'wb') as file:
+        pickle.dump(loss_history, file)
+
+    # Evaluate and Plot Trajectory Comparison:
+    evaluation.evaluate(
+        key,
+        mjx_model_static,
+        initial_params,
+        current_params,
+        data_dict,
+        config,
+        wand_run,
+    )
+
+    wand_run.finish()
+
+    return jax.device_get(state), loss_history
+
+
+def main(argv):
+    train(_CONFIG.value)
+
 
 if __name__ == '__main__':
     app.run(main)

@@ -1,22 +1,7 @@
 import jax
 import jax.numpy as jnp
-import flax.struct
 
-
-@flax.struct.dataclass
-class Dataset:
-    qpos: jax.Array
-    qvel: jax.Array
-    actuator_force: jax.Array
-    ctrl: jax.Array
-
-
-JOINT_NAMES = [
-    "FR_Abduction", "FR_Hip", "FR_Knee",
-    "FL_Abduction", "FL_Hip", "FL_Knee",
-    "RR_Abduction", "RR_Hip", "RR_Knee",
-    "RL_Abduction", "RL_Hip", "RL_Knee"
-]
+from utilities.typedefs import Dataset
 
 
 def chunk_and_flatten_dataset(

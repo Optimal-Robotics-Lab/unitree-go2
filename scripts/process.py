@@ -62,7 +62,6 @@ def main(argv=None):
     qvel = state_history[:, :, num_setpoints:2*num_setpoints]
     actuator_force = state_history[:, :, 2*num_setpoints:3*num_setpoints]
 
-    # Process Data into Minibatches:
     data = {
         'shape': shape,
         'ctrl': ctrl,
