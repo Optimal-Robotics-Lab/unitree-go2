@@ -1,5 +1,7 @@
-import functools
 from absl import app, flags
+
+from typing import Tuple
+import functools
 
 import os
 import time
@@ -89,10 +91,10 @@ def main(argv=None):
     def generate_ik_trajectory(
         key: jax.Array,
         num_time_steps: int = 500,
-    ) -> jnp.ndarray:
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """
-        Generates a joint-space trajectory (T, n_joints) by tracking
-        safe random Cartesian targets using Gradient Descent IK.
+            Generates a joint-space trajectory (T, n_joints) by tracking
+            safe random Cartesian targets using Gradient Descent IK.
         """
 
         # Safe Task Space Bounds:
@@ -105,11 +107,52 @@ def main(argv=None):
         ])
         lb = center_wrt_base - half_size[None, :]   # (4, 3) Lower Bounds
         ub = center_wrt_base + half_size[None, :]   # (4, 3) Upper Bounds
-        bound_range = ub - lb
+
+        # Generate Joint-Space Chirp Targets:
+        def generate_joint_chirps(key):
+            # Amplitude Profile: [Hip, Thigh, Calf]
+            profile = jnp.array([0.2, 0.3, 0.6] * 4)
+
+            # Randomize Frequencies per joint:
+            key, frequency_key = jax.random.split(key)
+            f_start = 0.1
+            f_end = jax.random.uniform(frequency_key, shape=(12,), minval=1.5, maxval=4.0)
+
+            # Chirp Signal
+            t = jnp.linspace(0, trajectory_time, num_time_steps)[:, None]
+            k = (f_end - f_start) / trajectory_time
+            phase = 2 * jnp.pi * (f_start * t + (k / 2) * t**2)
+
+            # Randomize Phase Offsets:
+            key, phase_key = jax.random.split(key)
+            offsets = jax.random.uniform(phase_key, shape=(12,), minval=0, maxval=2*jnp.pi)
+
+            # Randomize Amplitude Scaling:
+            key, amp_key = jax.random.split(key)
+            amplitude_scale = jax.random.uniform(amp_key, shape=(12,), minval=0.01, maxval=1.0)
+            amplitude_scale = jnp.sqrt(amplitude_scale)
+            amplitude = profile * amplitude_scale
+
+            # Calculate Desired Joint Trajectory
+            q_desired = home_position[None, :] + \
+                amplitude[None, :] * jnp.sin(phase + offsets[None, :])
+
+            return q_desired
 
         def generate_step_targets(
             rng: jax.Array, max_switches: int = 10, minimum_step_duration: int = 20,
         ) -> jnp.ndarray:
+            # Task Space Safe Zones for Step Targets:
+            half_size = jnp.array([0.2, 0.1, 0.15])
+            center_wrt_base = jnp.array([
+                [0.2, -0.15, -0.2,],    # Front Right
+                [0.2,  0.15, -0.2,],    # Front Left
+                [-0.2, -0.15, -0.2,],   # Rear Right
+                [-0.2,  0.15, -0.2,],   # Rear Left
+            ])
+            lb = center_wrt_base - half_size[None, :]
+            ub = center_wrt_base + half_size[None, :]
+
             key_switches, key_deltas, key_values = jax.random.split(rng, 3)
 
             # Random number of switches:
@@ -159,123 +202,8 @@ def main(argv=None):
 
             return trajectory
 
-        def generate_sinusoidal_targets(key: jax.Array) -> jnp.ndarray:
-            key, frequency_key, phase_key, amplitude_key, center_key = jax.random.split(key, 5)
-            period_lb, period_ub = 0.5, 10.0
-            frequency_lb, frequency_ub = 2 * jnp.pi / period_ub, 2 * jnp.pi / period_lb
-            frequency = jax.random.uniform(
-                frequency_key, shape=(4, 3), minval=frequency_lb, maxval=frequency_ub,
-            )
-            phase = jax.random.uniform(
-                phase_key, shape=(4, 3), minval=0.0, maxval=2*jnp.pi,
-            )
-            amplitude = jax.random.uniform(
-                amplitude_key, shape=(4, 3), minval=-bound_range, maxval=bound_range,
-            )
-            centers = jax.random.uniform(
-                center_key, shape=(4, 3), minval=lb, maxval=ub,
-            )
-
-            # Create Task Space Trajectory
-            t = jnp.linspace(0, trajectory_time, num_time_steps)[:, None, None]
-            targets = centers[None, :, :] + amplitude[None, :, :] * jnp.sin(
-                frequency[None, :, :] * t + phase[None, :, :]
-            )
-
-            return targets
-
-        def generate_chirp_targets(key: jax.Array) -> jnp.ndarray:
-            # Feet Home Relative to Base:
-            feet_home = jnp.array([
-                [0.19215678, -0.142, -0.26637250],      # Front Right
-                [0.19215678, 0.142, -0.26637250],       # Front Left
-                [-0.19464322, -0.142, -0.26637250],     # Hind Right
-                [-0.19464322, 0.142, -0.26637250],  # Hind Left
-            ])
-
-            safe_margin = jnp.array([0.05, 0.05, 0.05])
-            bias_lb = lb + safe_margin
-            bias_ub = ub - safe_margin
-
-            # Random Bias Offset:
-            key, bias_key = jax.random.split(key)
-            bias_offset = jax.random.uniform(bias_key, shape=(4, 3), minval=bias_lb, maxval=bias_ub)
-
-            # Max Amplitudes:
-            # X: Forward/Back, Y: Left/Right, Z: Up/Down
-            max_amp = jnp.array([0.3, 0.08, 0.3])
-
-            # Generate Chirp Signal:
-            t = jnp.linspace(0, trajectory_time, num_time_steps)[:, None, None]
-
-            # Generate Random Frequency Range:
-            key, frequency_key = jax.random.split(key)
-            f_start = 0.1
-            f_end = jax.random.uniform(frequency_key, minval=2.5, maxval=4.5)
-
-            freq_inst = f_start + (f_end - f_start) * (t / trajectory_time)
-            k = (f_end - f_start) / trajectory_time
-            chirp_phase = 2 * jnp.pi * (f_start * t + (k / 2) * t**2)
-
-            # Phase Offsets:
-            # phase_offsets = jnp.array([
-            #     [0.0, 0.0, 0.0],          # FR
-            #     [jnp.pi, jnp.pi, 0.0],    # FL (Opposite X/Y to FR)
-            #     [jnp.pi, 0.0, jnp.pi],    # RR (Opposite X to FR)
-            #     [0.0, jnp.pi, jnp.pi],    # RL (Opposite Y to FR)
-            # ])
-            # phase_offsets = jnp.zeros((4, 3))  # No phase offsets for simplicity
-            key, phase_key = jax.random.split(key)
-            phase_offsets = jax.random.uniform(
-                phase_key, shape=(4, 3), minval=0.0, maxval=2 * jnp.pi
-            )
-
-            # Amplitude Variation:
-            key, scale_key, sign_key = jax.random.split(key, 3)
-            amp_scale = jax.random.uniform(
-                scale_key, shape=(4, 3), minval=0.5, maxval=1.0,
-            )
-            amp_sign = jax.random.choice(
-                sign_key, jnp.array([-1.0, 1.0]), shape=(4, 3)
-            )
-
-            # Amplitude Scaling:
-            key, velocity_key = jax.random.split(key)
-            target_velocity = jax.random.uniform(
-                velocity_key, shape=(4, 3), minval=0.5, maxval=2.0,
-            )
-            safe_amp_scaling = target_velocity / (2 * jnp.pi * freq_inst)
-
-            min_amp = 0.015
-            safe_amp_scaling = jnp.maximum(min_amp, safe_amp_scaling)
-
-            current_amp = jnp.minimum(max_amp[None, None, :], safe_amp_scaling)
-            final_amp = current_amp * amp_scale[None, :, :] * amp_sign[None, :, :]
-
-            # Calculate Targets using the frequency-adjusted amplitude
-            targets = bias_offset[None, :, :] + \
-                final_amp * jnp.sin(chirp_phase + phase_offsets[None, :, :])
-
-            return targets
-
-        # Choose Target Generation Method
-        key, target_key, bernoulli_key = jax.random.split(key, 3)
-        step_targets = generate_step_targets(target_key, max_switches=max_switches, minimum_step_duration=minimum_step_duration)
-        sinusoidal_targets = generate_sinusoidal_targets(target_key)
-        chirp_targets = generate_chirp_targets(target_key)
-        mask = jax.random.bernoulli(bernoulli_key, p=step_function_prob)
-        targets = jnp.where(
-            mask,
-            step_targets,
-            chirp_targets,
-        )
-
-        # Clip to Safe Zones:
-        targets = jnp.clip(targets, lb[None, ...], ub[None, ...])
-
-        # Inverse Kinematics:
+        # Forward Kinematics Function:
         def fk_fn(q):
-            # Update Physics
             d = mjx.make_data(mjx_model)
             d = d.replace(qpos=q)
             d = mjx.kinematics(mjx_model, d)
@@ -288,21 +216,20 @@ def main(argv=None):
             return feet_pos - base_pos
 
         # Loss Function: Distance to Target + Regularization
-        def ik_loss(q, target_pos):
+        def ik_loss(q, target_pos, target_qpos, weight):
             current_pos = fk_fn(q)
             dist_error = jnp.sum((current_pos - target_pos) ** 2)
-            reg_error = jnp.sum((q - home_position) ** 2)
-            return dist_error + 0.001 * reg_error
+            reg_error = jnp.sum((q - target_qpos) ** 2)
+            return dist_error + weight * reg_error
 
-        # Gradient Step
-        grad_fn = jax.value_and_grad(ik_loss)
-
-        def solve_step(carry_q, target):
+        def solve_step(carry, target):
             """
                 Solves IK for a single timestep using an inner optimization loop.
-                carry_q: The solution from the previous timestep (Warm start)
-                target: The Cartesian target for the current timestep
+                carry: The solution from the previous timestep (Warm start)
+                target: The Cartesian and Joint targets for the current timestep
             """
+            carry_q, _ = carry
+            target_pos, target_q = target
 
             # Initialize Optimizer State for this timestep
             opt_state = optimizer.init(carry_q)
@@ -312,11 +239,11 @@ def main(argv=None):
                 q, opt_state = carry
 
                 # Calculate Gradients
-                loss, grads = grad_fn(q, target)
+                loss, grads = grad_fn(q, target_pos, target_q)
                 updates, opt_state = optimizer.update(grads, opt_state, params=q)
                 q_new = optax.apply_updates(q, updates)
 
-                # Project back to Joint Limits (Safety)
+                # Project back to Joint Limits:
                 q_new = jnp.clip(
                     q_new, mj_model.jnt_range[:, 0], mj_model.jnt_range[:, 1],
                 )
@@ -330,11 +257,52 @@ def main(argv=None):
             )
 
             # Return the result for the trajectory scan
-            return q_solved, q_solved
+            return (q_solved, q_solved), q_solved
+
+        # Choose Target Generation Method
+        key, target_key, bernoulli_key = jax.random.split(key, 3)
+        chirp_joint_targets = generate_joint_chirps(target_key)
+        chirp_taskspace_targets = jax.vmap(fk_fn)(chirp_joint_targets)
+        chirp_taskspace_targets = jnp.clip(
+            chirp_taskspace_targets,
+            lb[None, ...],
+            ub[None, ...],
+        )
+        step_taskspace_targets = generate_step_targets(
+            target_key, max_switches=max_switches, minimum_step_duration=minimum_step_duration,
+        )
+        mask = jax.random.bernoulli(bernoulli_key, p=step_function_prob)
+        targets = jnp.where(
+            mask,
+            step_taskspace_targets,
+            chirp_taskspace_targets,
+        )
+
+        # Corresponding Regularization Joint Targets
+        joint_targets = jnp.where(
+            mask,
+            home_position,
+            chirp_joint_targets,
+        )
+
+        # Corresponding Regularization Weights
+        weight = jnp.where(
+            mask,
+            0.05,
+            0.1,
+        )
+
+        # Gradient Step
+        loss_fn = functools.partial(ik_loss, weight=weight)
+        grad_fn = jax.value_and_grad(loss_fn)
 
         # Warm start and run scan:
-        init_q = home_position
-        final_q, q_trajectory = jax.lax.scan(solve_step, init_q, targets)
+        init_q = (home_position, home_position)
+        final_q, q_trajectory = jax.lax.scan(
+            solve_step,
+            init_q,
+            (targets, joint_targets),
+        )
 
         return q_trajectory, targets
 

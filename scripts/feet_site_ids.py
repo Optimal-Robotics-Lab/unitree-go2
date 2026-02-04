@@ -2,6 +2,7 @@ from absl import app
 import os
 import mujoco
 import numpy as np
+import time
 
 def main(argv=None):
     # Path to your model
@@ -15,6 +16,26 @@ def main(argv=None):
     # Load Model and Data
     m = mujoco.MjModel.from_xml_path(filepath)
     d = mujoco.MjData(m)
+
+    with mujoco.viewer.launch_passive(m, d) as viewer:
+        while viewer.is_running():
+            # Lower Bound Z:
+            # d.qpos[:3] = [0.3, 0.33, -0.83]
+            # # Upper Bound Z:
+            # d.qpos[:3] = [-0.13, 3.45, -0.83]
+            # # Upper Bound X:
+            # d.qpos[:3] = [-0.13, -1.1, -0.83]
+            # # Bound Y:
+            # d.qpos[:3] = [-1.05, 0.33, -0.83]
+
+            mujoco.mj_forward(m, d)
+
+            site_position = d.site("front_right_foot").xpos
+            print(f"Site Pos: {site_position}")
+
+            # Sync viewer with the new physics state
+            viewer.sync()
+            time.sleep(0.01)
 
     # 1. Set Robot to Home Position
     # Check if 'home' keyframe exists, otherwise use default qpos

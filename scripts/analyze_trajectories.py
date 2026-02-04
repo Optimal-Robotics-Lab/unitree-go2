@@ -41,62 +41,70 @@ def main(argv=None):
     flat_vel = data_vel.reshape(-1, shape[2])
 
     # Plotting Setup
-    # We will focus on the first leg (3 joints) for clarity: Hip, Thigh, Calf
     joint_names = ['Hip', 'Thigh', 'Calf']
-    leg_offset = 0  # 0 for Front Right
+    front_right_leg_indices = [0, 1, 2]
+    front_left_leg_indices = [3, 4, 5]
+    hind_right_leg_indices = [6, 7, 8]
+    hind_left_leg_indices = [9, 10, 11]
 
-    fig = plt.figure(figsize=(16, 10))
-    fig.suptitle(f'SysID Space Coverage Analysis (Front Right Leg)', fontsize=16)
+    leg_map = {
+        'Front Right Leg': front_right_leg_indices,
+        'Front Left Leg': front_left_leg_indices,
+        'Hind Right Leg': hind_right_leg_indices,
+        'Hind Left Leg': hind_left_leg_indices,
+    }
 
-    # --- ROW 1: PHASE PLOTS (Pos vs Vel) ---
-    # Goal: Check if we separate stiffness (pos) from damping (vel)
-    for i in range(3):
-        ax = fig.add_subplot(3, 3, i + 1)
-        j_idx = leg_offset + i
+    # Phase Plots:
+    for i, (leg_name, leg_ids) in enumerate(leg_map.items()):
 
-        # Plot a subset of points to save render time, or use hexbin for density
-        ax.hexbin(flat_pos[:, j_idx], flat_vel[:, j_idx], gridsize=50, cmap='inferno', mincnt=1)
+        fig = plt.figure(figsize=(16, 10))
+        fig.suptitle(f'SysID Space Coverage Analysis ({leg_name})', fontsize=16)
 
-        ax.set_title(f'{joint_names[i]} Phase Plane')
-        ax.set_xlabel('Position (rad)')
-        ax.set_ylabel('Velocity (rad/s)')
-        ax.grid(True, alpha=0.3)
+        for j, idx in enumerate(leg_ids):
+            ax = fig.add_subplot(3, 3, j + 1)
 
-    # --- ROW 2: SPATIAL COUPLING (Joint vs Joint) ---
-    # Goal: Check if IK is restricting us to a manifold (bad) or exploring volume (good)
+            ax.hexbin(flat_pos[:, idx], flat_vel[:, idx], gridsize=50, cmap='inferno', mincnt=1)
 
-    # Plot 1: Hip vs Thigh
-    ax4 = fig.add_subplot(3, 3, 4)
-    ax4.plot(flat_pos[:, 0], flat_pos[:, 1], '.', markersize=1, alpha=0.1)
-    ax4.set_title('Hip vs Thigh Position')
-    ax4.set_xlabel('Hip (rad)')
-    ax4.set_ylabel('Thigh (rad)')
+            ax.set_title(f'{joint_names[j]} Phase Plane')
+            ax.set_xlabel('Position (rad)')
+            ax.set_ylabel('Velocity (rad/s)')
+            ax.grid(True, alpha=0.3)
 
-    # Plot 2: Thigh vs Calf
-    ax5 = fig.add_subplot(3, 3, 5)
-    ax5.plot(flat_pos[:, 1], flat_pos[:, 2], '.', markersize=1, alpha=0.1)
-    ax5.set_title('Thigh vs Calf Position')
-    ax5.set_xlabel('Thigh (rad)')
-    ax5.set_ylabel('Calf (rad)')
+        # Spatial Coupling Plots:
+        # Plot 1: Hip vs Thigh
+        ax4 = fig.add_subplot(3, 3, 4)
+        ax4.plot(flat_pos[:, leg_ids[0]], flat_pos[:, leg_ids[1]], '.', markersize=1, alpha=0.1)
+        ax4.set_title('Hip vs Thigh Position')
+        ax4.set_xlabel('Hip (rad)')
+        ax4.set_ylabel('Thigh (rad)')
 
-    # --- ROW 3: FREQUENCY ANALYSIS (Spectrogram) ---
-    # Goal: Verify the Chirp actually output linear frequency growth
-    # We take the mean across trials for one joint to see the signal structure
-    ax7 = fig.add_subplot(3, 1, 3)
+        # Plot 2: Thigh vs Calf
+        ax5 = fig.add_subplot(3, 3, 5)
+        ax5.plot(flat_pos[:, leg_ids[1]], flat_pos[:, leg_ids[2]], '.', markersize=1, alpha=0.1)
+        ax5.set_title('Thigh vs Calf Position')
+        ax5.set_xlabel('Thigh (rad)')
+        ax5.set_ylabel('Calf (rad)')
 
-    # Analyze the Thigh joint (usually most active)
-    # Concatenate first 5 trajectories to see the pattern over time
-    sample_signal = data_pos[:5, :, 1].flatten()
+        # Frequency Analysis (Spectrogram)
+        ax7 = fig.add_subplot(3, 1, 3)
 
-    f, t, Sxx = signal.spectrogram(sample_signal, fs=1.0/dt, nperseg=256)
-    ax7.pcolormesh(t, f, np.log10(Sxx + 1e-10), shading='gouraud', cmap='viridis')
-    ax7.set_ylabel('Frequency [Hz]')
-    ax7.set_xlabel('Time [s]')
-    ax7.set_title('Spectrogram (Check for Rising Chirp Lines)')
-    ax7.set_ylim(0, 10)
+        # Analyze the Thigh joint (usually most active)
+        # Concatenate first 5 trajectories to see the pattern over time
+        sample_signal = data_pos[:, :, leg_ids[1]].flatten()
 
-    plt.tight_layout()
-    plt.show()
+        f, t, Sxx = signal.spectrogram(sample_signal, fs=1.0/dt, nperseg=256)
+        ax7.pcolormesh(t, f, np.log10(Sxx + 1e-10), shading='gouraud', cmap='viridis')
+        ax7.set_ylabel('Frequency [Hz]')
+        ax7.set_xlabel('Time [s]')
+        ax7.set_title('Spectrogram')
+        ax7.set_ylim(0, 10)
+
+        plt.tight_layout()
+        plt.show()
+
+        fig.savefig(directory / 'data' / 'generated_trajectories' / f"{FLAGS.filename}_{leg_name.replace(' ', '_')}_analysis.png")
+
+        fig.clear()
 
 
 if __name__ == "__main__":
