@@ -116,7 +116,7 @@ def main(argv=None):
             # Randomize Frequencies per joint:
             key, frequency_key = jax.random.split(key)
             f_start = 0.1
-            f_end = jax.random.uniform(frequency_key, shape=(12,), minval=1.5, maxval=4.0)
+            f_end = jax.random.uniform(frequency_key, shape=(12,), minval=2.0, maxval=4.0)
 
             # Chirp Signal
             t = jnp.linspace(0, trajectory_time, num_time_steps)[:, None]
