@@ -32,14 +32,16 @@ def domain_randomize(
             mjx_model.body_ipos[TORSO_BODY_ID] + inertia_offset,
         )
 
-        # Link mass randomization:
+        # Torso mass randomization:
         rng, key = jax.random.split(rng)
         delta = jax.random.uniform(
-            key, (mjx_model.nbody,), minval=0.9, maxval=1.1,
+            key, minval=0.9, maxval=1.1,
         )
-        body_mass = mjx_model.body_mass.at[:].set(mjx_model.body_mass * delta)
+        body_mass = mjx_model.body_mass.at[TORSO_BODY_ID].set(
+            mjx_model.body_mass[TORSO_BODY_ID] * delta
+        )
 
-        # Torso mass randomization:
+        # Payload mass randomization:
         rng, key = jax.random.split(rng)
         delta = jax.random.uniform(
             key, minval=-1.0, maxval=1.0,

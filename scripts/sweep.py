@@ -36,24 +36,9 @@ def main(argv):
     summary_results = []
 
     # Create all combinations of the keys:
-    # keys = ["friction", "damping", "armature", "qpos0"]
-    # experiments = generate_experiments(keys)
+    keys = ["dof_frictionloss", "dof_damping", "dof_armature", "qpos0"]
+    experiments = generate_experiments(keys)
 
-    # Manually run these experiments:
-    experiments = [
-        {
-            "name": 'experiment_friction_armature_qpos0',
-            "regress_keys": ['friction', 'armature', 'qpos0'],
-        },
-        {
-            "name": 'experiment_damping_armature_qpos0',
-            "regress_keys": ['damping', 'armature', 'qpos0'],
-        },
-        {
-            "name": 'experiment_friction_damping_armature_qpos0',
-            "regress_keys": ["friction", "damping", "armature", "qpos0"],
-        },
-    ]
 
     datasets = flags.FLAGS.datasets
     scene_files = flags.FLAGS.scene_files
