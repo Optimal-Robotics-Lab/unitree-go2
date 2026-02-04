@@ -1,0 +1,32 @@
+rosbag2_bagfile_information:
+  version: 5
+  storage_identifier: sqlite3
+  duration:
+    nanoseconds: 747590657182
+  starting_time:
+    nanoseconds_since_epoch: 1770177449438978565
+  message_count: 50000
+  topics_with_message_count:
+    - topic_metadata:
+        name: lowcmd
+        type: unitree_go/msg/LowCmd
+        serialization_format: cdr
+        offered_qos_profiles: ""
+      message_count: 25000
+    - topic_metadata:
+        name: lowstate
+        type: unitree_go/msg/LowState
+        serialization_format: cdr
+        offered_qos_profiles: ""
+      message_count: 25000
+  compression_format: ""
+  compression_mode: ""
+  relative_file_paths:
+    - chirp-trajectories_0.db3
+  files:
+    - path: chirp-trajectories_0.db3
+      starting_time:
+        nanoseconds_since_epoch: 1770177449438978565
+      duration:
+        nanoseconds: 747590657182
+      message_count: 50000

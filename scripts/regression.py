@@ -58,23 +58,32 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
     n_substeps = int(config.physics.control_rate / mj_model.opt.timestep)
 
     # Load Data:
-    data_path = directory / config.dataset_directory / config.dataset_name / 'processed_data.pkl'
-    if not data_path.exists():
-        raise FileNotFoundError(f"{data_path} not found")
-        
-    with open(data_path, 'rb') as f:
-        data_dict = pickle.load(f)
+    datasets = []
+    dataset_directories = config.dataset_directories if isinstance(config.dataset_directories, tuple) else (config.dataset_directories,)
+    for directory_name in dataset_directories:
+        data_path = Path(__file__).resolve().parent / directory_name / 'processed_data.pkl'
+        if not data_path.exists():
+            raise FileNotFoundError(f"{data_path} not found")
+            
+        print(f"Loading dataset: {directory_name}")
+        with open(data_path, 'rb') as f:
+            data_dict = pickle.load(f)
 
-    effective_window = config.training.window_length + 1
-    
-    dataset = chunk_and_flatten_dataset(
-        jnp.array(data_dict['qpos']),
-        jnp.array(data_dict['qvel']),
-        jnp.array(data_dict['actuator_force']),
-        jnp.array(data_dict['ctrl']),
-        effective_window,
+        effective_window = config.training.window_length + 1
+        ds_chunked = chunk_and_flatten_dataset(
+            jnp.array(data_dict['qpos']),
+            jnp.array(data_dict['qvel']),
+            jnp.array(data_dict['actuator_force']),
+            jnp.array(data_dict['ctrl']),
+            effective_window,
+        )
+        datasets.append(ds_chunked)
+
+    dataset = jax.tree_util.tree_map(
+        lambda *arrays: jnp.concatenate(arrays, axis=0),
+        *datasets
     )
-    
+
     total_samples = dataset.ctrl.shape[0]
     steps_per_epoch = total_samples // config.training.minibatch_size
     total_steps = steps_per_epoch * config.training.num_epochs
@@ -187,17 +196,6 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
         # Reverse Mode:
         value_and_grad_fn = jax.value_and_grad(loss_fn)
     else:
-        # Forward Mode:
-        # def fwd_value_and_grad_fn(
-        #     params: Dict[str, jax.Array],
-        #     mjx_model_static: mjx.Model,
-        #     batch: Dataset,
-        # ) -> Tuple[jax.Array, Dict[str, jax.Array]]:
-        #     l = loss_fn(params, mjx_model_static, batch)
-        #     g = jax.jacfwd(loss_fn, argnums=0)(params, mjx_model_static, batch)
-        #     return l, g
-        # value_and_grad_fn = fwd_value_and_grad_fn
-
         value_and_grad_fn = forward_mode_value_and_grad(loss_fn)
 
     # Training Step:
@@ -286,7 +284,7 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
     loss_history = np.array(loss_history)
 
     # Make Output Directory and Save Regressed Parameters:
-    output_directory = directory / config.dataset_directory / config.dataset_name / wand_run.name
+    output_directory = directory / 'checkpoints' / wand_run.name
     output_directory.mkdir(parents=True, exist_ok=True)
     with open(output_directory / 'regressed_params.pkl', 'wb') as file:
         pickle.dump(output_params, file)

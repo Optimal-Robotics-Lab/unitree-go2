@@ -5,8 +5,7 @@ def get_default_config():
     
     # File Paths
     config.scene_file = 'mjcf/scene_mjx_transparent.xml'
-    config.dataset_directory = 'data'
-    config.dataset_name = 'parameter-regression-data-test-1'
+    config.dataset_directories = ('data/trajectories',)
     
     # Physics Settings
     config.physics = ConfigDict()

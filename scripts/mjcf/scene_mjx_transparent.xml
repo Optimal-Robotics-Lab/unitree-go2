@@ -1,5 +1,5 @@
 <mujoco model="go2-mjx scene">
-  <include file="models/go2_fixed_base_mjx_full_collision_transparent.xml"/>
+  <include file="models/go2_fixed_base_mjx_transparent.xml"/>
 
   <statistic center="0 0 0.1" extent="0.8"/>
 

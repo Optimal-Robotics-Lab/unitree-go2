@@ -14,7 +14,13 @@ flags.DEFINE_string(
     required=True,
     short_name='d',
 )
-
+flags.DEFINE_string(
+    'filename',
+    'trajectories',
+    'Filename of the setpoints.',
+    required=False,
+    short_name='f',
+)
 
 def main(argv=None):
     # Load Data
@@ -28,7 +34,7 @@ def main(argv=None):
         )
 
     # Load Setpoints:
-    with open(directory / 'trajectories.csv', 'r') as f:
+    with open(directory / f'{FLAGS.filename}.csv', 'r') as f:
         header = f.readline().strip().replace('SHAPE:', '')
         shape = tuple(map(int, header.split(',')))
         setpoints = np.loadtxt(f, delimiter=',').reshape(shape)
