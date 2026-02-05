@@ -1,46 +1,174 @@
-from typing import Dict, Any
+from typing import Dict, Any, List
+from collections import defaultdict
 from ml_collections import ConfigDict
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 
-import mujoco
 from mujoco import mjx
 
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 import wandb
 
 from utilities.constants import JOINT_NAMES
-from utilities.typedefs import ObjectiveFunction
 from utilities.factories import get_objective_fn
+from utilities.mjx_utilities import init_function, step_function
 
 
-def init_function(
-    model: mjx.Model,
-    qpos: jax.Array,
-    qvel: jax.Array,
-    ctrl: jax.Array,
-) -> mjx.Data:
-    data = mjx.make_data(model)
-    data = data.replace(qpos=qpos, qvel=qvel, ctrl=ctrl)
-    data = mjx.forward(model, data)
-    return data
+def _group_joints_by_leg(joint_names: List[str]) -> Dict[str, List[int]]:
+    """
+        Helper to group joints into legs based on naming prefixes (e.g., FL_hip -> FL).
+    """
+    groups = defaultdict(list)
+    for i, name in enumerate(joint_names):
+        prefix = name.split('_')[0] 
+        groups[prefix].append(i)
+    return dict(groups)
 
-def step_function(
-    model: mjx.Model,
-    data: mjx.Data,
-    ctrl: jax.Array,
-    n_substeps: int,
-) -> mjx.Data:
-    data = data.replace(ctrl=ctrl)
 
-    def loop(carry: mjx.Data, unused_t):
-        return mjx.step(model, carry), None
+def create_interactive_plot(
+    t: np.ndarray,
+    joint_names: List[str],
+    targets: Dict[str, np.ndarray],
+    baseline: Dict[str, np.ndarray],
+    optimized: Dict[str, np.ndarray],
+    trial_idx: int
+) -> go.Figure:
+    """
+        Generates a Plotly figure with Tabs for each leg.
+        
+        Layout Structure:
+        - Columns: Joints (Hip, Thigh, Calf)
+        - Rows: Metrics (Position, Velocity, Torque)
+    """
+    leg_groups = _group_joints_by_leg(joint_names)
+    leg_names = list(leg_groups.keys())
+    
+    # Grid: 3 Rows (Metrics) x 3 Cols (Joints)
+    rows = 3
+    cols = 3
+    
+    # Titles for the Columns (First Row Only)
+    column_titles = ["Hip", "Thigh", "Calf"]
+    
+    fig = make_subplots(
+        rows=rows, 
+        cols=cols, 
+        shared_xaxes=True,
+        subplot_titles=column_titles,
+        vertical_spacing=0.08,
+        horizontal_spacing=0.05
+    )
 
-    data, _ = jax.lax.scan(loop, data, None, length=n_substeps)
-    return data
+    # Metric Configurations
+    # Row 0 -> Position, Row 1 -> Velocity, Row 2 -> Torque
+    metric_keys = ['qpos', 'qvel', 'actuator_force']
+    y_axis_labels = ["Position (rad)", "Velocity (rad/s)", "Torque (Nm)"]
+    hover_units = ["(rad)", "(rad/s)", "(Nm)"]
+    
+    colors = {'Target': 'black', 'Baseline': 'red', 'Optimized': 'blue'}
+    line_styles = {'Target': 'solid', 'Baseline': 'dash', 'Optimized': 'solid'}
+    opacities = {'Target': 0.4, 'Baseline': 1.0, 'Optimized': 1.0}
+
+    # -- Create Traces --
+    trace_indices_per_leg = defaultdict(list)
+    current_trace_idx = 0
+
+    for leg_name in leg_names:
+        joint_indices = leg_groups[leg_name]
+        
+        for col_idx, joint_global_idx in enumerate(joint_indices[:3]): 
+            
+            joint_name = joint_names[joint_global_idx]
+            
+            for row_idx, metric in enumerate(metric_keys):
+                
+                unit = hover_units[row_idx]
+
+                data_map = {
+                    'Target': targets[metric][:, joint_global_idx],
+                    'Baseline': baseline[metric][:, joint_global_idx],
+                    'Optimized': optimized[metric][:, joint_global_idx]
+                }
+
+                for label, data_array in data_map.items():
+                    is_visible = (leg_name == leg_names[0])
+                    
+                    trace = go.Scatter(
+                        x=t,
+                        y=data_array,
+                        mode='lines',
+                        name=f"{label}",
+                        legendgroup=label,
+                        showlegend=(col_idx == 0 and row_idx == 0),
+                        line=dict(
+                            color=colors[label], 
+                            dash=line_styles[label],
+                            width=2 if label == 'Optimized' else 1.5
+                        ),
+                        opacity=opacities[label],
+                        visible=is_visible,
+                        hovertemplate=f"<b>{label}</b><br>Joint: {joint_name}<br>Time: %{{x:.2f}}s<br>Val: %{{y:.3f}} {unit}<extra></extra>"
+                    )
+                    
+                    fig.add_trace(trace, row=row_idx+1, col=col_idx+1)
+                    
+                    trace_indices_per_leg[leg_name].append(current_trace_idx)
+                    current_trace_idx += 1
+    
+    # Y-Axes: Only label the first column
+    for r in range(1, 4):
+        fig.update_yaxes(title_text=y_axis_labels[r-1], row=r, col=1)
+
+    # X-Axes: Only label the last row
+    for c in range(1, 4):
+        fig.update_xaxes(title_text="Time (s)", row=3, col=c)
+
+    buttons = []
+    for leg_name in leg_names:
+        visibility = [False] * current_trace_idx
+        for idx in trace_indices_per_leg[leg_name]:
+            visibility[idx] = True
+            
+        button = dict(
+            label=leg_name,
+            method="update",
+            args=[
+                {"visible": visibility},
+                {"title.text": f"Comparison: Leg {leg_name} (Trial {trial_idx})"}
+            ]
+        )
+        buttons.append(button)
+
+    # -- Layout Updates --
+    fig.update_layout(
+        title=dict(
+            text=f"Comparison: Leg {leg_names[0]} (Trial {trial_idx})",
+            x=0.5,
+            y=0.98
+        ),
+        margin=dict(t=140),
+        updatemenus=[dict(
+            type="buttons",
+            direction="left",
+            buttons=buttons,
+            pad={"r": 10, "t": 10},
+            showactive=True,
+            x=0.0,
+            xanchor="left",
+            y=1.12,
+            yanchor="top"
+        )],
+        height=900,
+        hovermode="x unified",
+        template="plotly_white"
+    )
+
+    return fig
+
 
 def evaluate(
     key: jax.Array,
@@ -51,7 +179,6 @@ def evaluate(
     config: ConfigDict,
     wandb_run: Any,
 ):  
-
     # Get Config Settings:
     regression_spec = config.regression.to_dict()
     n_substeps = int(config.physics.control_rate / config.physics.timestep)
@@ -110,11 +237,11 @@ def evaluate(
     opt_qpos, opt_qvel, opt_actuator_force = rollout_fn(optimized_params)
     
     # Calculate Metrics:
-    def compute_weighted_loss(qpos_prediction, qvel_prediction, actuator_force_prediction):
+    def compute_weighted_loss(qpos_pred, qvel_pred, force_pred):
         losses = {
-            'position': objective_metric(qpos_prediction, qpos_target),
-            'velocity': objective_metric(qvel_prediction, qvel_target),
-            'actuator_force': objective_metric(actuator_force_prediction, actuator_force_target),
+            'position': objective_metric(qpos_pred, qpos_target),
+            'velocity': objective_metric(qvel_pred, qvel_target),
+            'actuator_force': objective_metric(force_pred, actuator_force_target),
         }
         losses = {k: v * objective_weights[k] for k, v in losses.items()}
         return losses, sum(losses.values())
@@ -133,44 +260,35 @@ def evaluate(
         "eval/optimized_loss": opt_loss,
     }
     
-    # Generate Plots
     t = np.arange(1, n_time) * config.physics.control_rate
-    
-    fig, axes = plt.subplots(12, 3, figsize=(15, 30), sharex=True)
-    fig.suptitle(f'Trajectory Comparison (Trial {trial_idx})', fontsize=16)
     
     def to_np(x): return np.array(x)
 
-    # Rows: Joints | Columns: Position, Velocity, Force
-    for i, joint_name in enumerate(JOINT_NAMES):
-        # Position
-        ax = axes[i, 0]
-        ax.plot(t, to_np(qpos_target[:, i]), 'k-', alpha=0.6, label='Ground Truth')
-        ax.plot(t, to_np(base_qpos[:, i]), 'r--', label='Baseline')
-        ax.plot(t, to_np(opt_qpos[:, i]), 'b-', label='Optimized')
-        ax.set_ylabel(f'{joint_name}\nPos (rad)')
-        if i == 0: ax.set_title("Position")
-        if i == 11: ax.legend()
+    targets_dict = {
+        'qpos': to_np(qpos_target),
+        'qvel': to_np(qvel_target),
+        'actuator_force': to_np(actuator_force_target)
+    }
+    baseline_dict = {
+        'qpos': to_np(base_qpos),
+        'qvel': to_np(base_qvel),
+        'actuator_force': to_np(base_actuator_force)
+    }
+    optimized_dict = {
+        'qpos': to_np(opt_qpos),
+        'qvel': to_np(opt_qvel),
+        'actuator_force': to_np(opt_actuator_force)
+    }
 
-        # Velocity
-        ax = axes[i, 1]
-        ax.plot(t, to_np(qvel_target[:, i]), 'k-', alpha=0.6)
-        ax.plot(t, to_np(base_qvel[:, i]), 'r--')
-        ax.plot(t, to_np(opt_qvel[:, i]), 'b-')
-        ax.set_ylabel('Vel (rad/s)')
-        if i == 0: ax.set_title("Velocity")
-
-        # Force
-        ax = axes[i, 2]
-        ax.plot(t, to_np(actuator_force_target[:, i]), 'k-', alpha=0.6)
-        ax.plot(t, to_np(base_actuator_force[:, i]), 'r--')
-        ax.plot(t, to_np(opt_actuator_force[:, i]), 'b-')
-        ax.set_ylabel('Force (Nm)')
-        if i == 0: ax.set_title("Actuator Force")
-
-    plt.tight_layout(rect=[0, 0.03, 1, 0.97])
+    fig = create_interactive_plot(
+        t, 
+        JOINT_NAMES, 
+        targets_dict, 
+        baseline_dict, 
+        optimized_dict,
+        int(trial_idx)
+    )
     
-    metrics["eval/trajectory"] = wandb.Image(fig)
+    metrics["eval/trajectory_evaluation"] = wandb.Plotly(fig)
+    
     wandb_run.log(metrics)
-    
-    plt.close(fig)

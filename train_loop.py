@@ -47,12 +47,12 @@ flags.DEFINE_string(
 def main(argv=None):
     # Get FLAG.tag prefix:
     prefix, suffix = FLAGS.tag.split('-')
-    if prefix not in ['standard', 'transparent']:
+    if prefix not in ['standard', 'transparent', 'vendor']:
         raise ValueError(f'Unknown FLAG.tag prefix: {prefix}')
     if suffix not in ['position', 'velocity']:
         raise ValueError(f'Unknown FLAG.tag suffix: {suffix}')
 
-    training_types = ['baseline', 'finetune', 'rough']
+    training_types = ['baseline', 'finetune']
 
     previous_run = None
     for training_type in training_types:

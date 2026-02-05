@@ -8,7 +8,7 @@ from ml_collections import ConfigDict
 from regression import train
 from utilities.config import get_default_config
 
-flags.DEFINE_list('datasets', None, 'The dataset/datasets to use for all experiments.', required=True)
+flags.DEFINE_list('datasets', None, 'The data/datasets to use for all experiments.', required=True)
 flags.DEFINE_list('scene_files', None, 'The scene/scenes to use for all experiments.', required=True)
 flags.DEFINE_string('group', None, 'The group to use for all experiments.', required=True)
 
@@ -33,8 +33,6 @@ def generate_experiments(keys, min_size=2, max_size=None):
     return experiments
 
 def main(argv):
-    summary_results = []
-
     # Create all combinations of the keys:
     keys = ["dof_frictionloss", "dof_damping", "dof_armature", "qpos0"]
     experiments = generate_experiments(keys)

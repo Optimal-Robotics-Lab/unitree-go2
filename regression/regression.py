@@ -23,12 +23,14 @@ from mujoco import mjx
 from ml_collections import config_flags, ConfigDict
 
 from utilities.config import get_default_config
-from utilities.typedefs import Dataset, ObjectiveFunction, TrainState
+from utilities.typedefs import Dataset, TrainState
 from utilities.constants import JOINT_NAMES
-from utilities.data_utils import chunk_and_flatten_dataset, shuffle_data
+from utilities.data_utilities import chunk_and_flatten_dataset, shuffle_data
 from utilities.factories import create_optimizer, get_objective_fn
 from utilities.autodiff import forward_mode_value_and_grad
-import utilities.evaluation as evaluation
+from utilities.loss_utilities import loss_function
+from utilities.mjx_utilities import init_function, step_function
+from utilities.evaluation import evaluate
 
 jax.config.update('jax_enable_x64', True)
 
@@ -108,88 +110,21 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
     objective_weights = config.loss.weights.to_dict()
 
     # Wrap Step Function:
-    init_function = evaluation.init_function
-    step_function = functools.partial(
-        evaluation.step_function,
+    init_fn = init_function
+    step_fn = functools.partial(
+        step_function,
         n_substeps=n_substeps,
     )
 
     # Loss Function:
-    def loss_fn(
-        params: Dict[str, jax.Array],
-        model_static: mjx.Model,
-        batch: Dataset,
-        objective_function: ObjectiveFunction,
-        objective_weights: Dict[str, float],
-    ) -> jax.Array:
-        # Rehydrate the model with new parameters:
-        replace_kwargs = {}
-        for name, value in params.items():
-            spec = regression_spec[name]
-            field = spec['field']
-            if 'column' in spec:
-                col_idx = spec['column']
-                original_array = getattr(model_static, field)
-                new_array = original_array.at[:, col_idx].set(value)
-                replace_kwargs[field] = new_array
-            else:
-                replace_kwargs[field] = value
-
-        model_dynamic = model_static.replace(**replace_kwargs)
-
-        # Rollout Trajectory:
-        def rollout(setpoints, qpos_init, qvel_init):
-            d = init_function(
-                model_dynamic, qpos_init, qvel_init, setpoints[0],
-            )
-
-            def step(carry, xs):
-                d = step_function(model_dynamic, carry, xs)
-                return d, (d.qpos, d.qvel, d.actuator_force)
-
-            _, (qpos, qvel, actuator_force) = jax.lax.scan(step, d, setpoints)
-            return qpos, qvel, actuator_force
-
-        # Extract Initial States and Setpoints:
-        initial_qpos = batch.qpos[:, 0]
-        initial_qvel = batch.qvel[:, 0]
-        setpoints = batch.ctrl[:, :-1]
-
-        qpos_targets = batch.qpos[:, 1:]
-        qvel_targets = batch.qvel[:, 1:]
-        actuator_force_targets = batch.actuator_force[:, 1:]
-
-        qpos_prediction, qvel_prediction, actuator_force_prediction = jax.vmap(rollout)(
-            setpoints,
-            initial_qpos,
-            initial_qvel
-        )
-
-        losses = {
-            'position': objective_function(
-                qpos_prediction, qpos_targets,
-            ),
-            'velocity': objective_function(
-                qvel_prediction, qvel_targets,
-            ),
-            'actuator_force': objective_function(
-                actuator_force_prediction, actuator_force_targets,
-            ),
-        }
-
-        losses = {
-            k: v * objective_weights[k] for k, v in losses.items()
-        }
-
-        loss = sum(losses.values())
-
-        return loss
-
-    # Select Gradient Mode:
     loss_fn = functools.partial(
-        loss_fn,
+        loss_function,
+        model_static=mjx_model_static,
+        init_function=init_fn,
+        step_function=step_fn,
         objective_function=objective_metric,
         objective_weights=objective_weights,
+        regression_spec=regression_spec,
     )
 
     if config.physics.use_reverse_mode:
@@ -207,7 +142,7 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
         params, opt_state = state
 
         loss, grads = value_and_grad_fn(
-            params, mjx_model_static, batch
+            params, batch,
         )
 
         updates, opt_state = optimizer.update(grads, opt_state, params)
@@ -283,7 +218,7 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
 
     loss_history = np.array(loss_history)
 
-    # Make Output Directory and Save Regressed Parameters:
+    # Make Output Directory and Save Regressed Parameters, Loss History, and Config:
     output_directory = directory / 'checkpoints' / wand_run.name
     output_directory.mkdir(parents=True, exist_ok=True)
     with open(output_directory / 'regressed_params.pkl', 'wb') as file:
@@ -292,8 +227,14 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
     with open(output_directory / 'loss_history.pkl', 'wb') as file:
         pickle.dump(loss_history, file)
 
+    with open(output_directory / 'config.pkl', 'wb') as file:
+        pickle.dump(config.to_dict(), file)
+
+    with open(output_directory / 'config.yaml', 'w') as file:
+        file.write(config.to_yaml())
+
     # Evaluate and Plot Trajectory Comparison:
-    evaluation.evaluate(
+    evaluate(
         key,
         mjx_model_static,
         initial_params,
