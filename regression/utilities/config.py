@@ -1,12 +1,13 @@
 from ml_collections import ConfigDict
 
+
 def get_default_config():
     config = ConfigDict()
-    
+
     # File Paths
     config.scene_file = 'mjcf/scene_mjx_transparent.xml'
     config.dataset_directories = ('data/trajectories',)
-    
+
     # Physics Settings
     config.physics = ConfigDict()
     config.physics.timestep = 0.004
@@ -23,7 +24,7 @@ def get_default_config():
     config.training.batches_per_epoch = 256
     config.training.minibatch_size = 25
     config.training.window_length = 25
-    
+
     # Optimizer Settings
     config.optimizer = ConfigDict()
     config.optimizer.lr_init = 1e-5
@@ -40,14 +41,14 @@ def get_default_config():
         'velocity': 1.0,
         'actuator_force': 1.0,
     })
-    
+
     # Loss Function Type: rmse, mse, mae, huber
     config.loss.type = 'rmse'
 
     # Parameters to Regress:
     # Format: {param_name: {field: mjx_attr, column: optional_int, bounds: (min, max)}}
     config.regression = ConfigDict()
-    
+
     config.regression.friction = ConfigDict({
         'field': 'dof_frictionloss', 'bounds': (1e-4, 1e2)
     })

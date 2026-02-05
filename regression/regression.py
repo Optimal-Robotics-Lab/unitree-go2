@@ -40,7 +40,7 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
     directory = Path(__file__).resolve().parent
     filepath = (directory / config.scene_file).resolve()
     mj_model = mujoco.MjModel.from_xml_path(str(filepath))
-    
+
     # Override Physics Settings:
     solver_map = {
         'newton': mujoco.mjtSolver.mjSOL_NEWTON,
@@ -64,7 +64,7 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
         data_path = Path(__file__).resolve().parent / directory_name / 'processed_data.pkl'
         if not data_path.exists():
             raise FileNotFoundError(f"{data_path} not found")
-            
+
         print(f"Loading dataset: {directory_name}")
         with open(data_path, 'rb') as f:
             data_dict = pickle.load(f)
@@ -91,7 +91,7 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
     # Initialize Parameters:
     params = {}
     regression_spec = config.regression.to_dict()
-    
+
     for name, spec in regression_spec.items():
         val = getattr(mjx_model_static, spec['field'])
         if 'column' in spec:
@@ -134,7 +134,7 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
                 replace_kwargs[field] = new_array
             else:
                 replace_kwargs[field] = value
-            
+
         model_dynamic = model_static.replace(**replace_kwargs)
 
         # Rollout Trajectory:
@@ -248,7 +248,7 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
         # Train Epoch:
         state, batch_losses = jax.lax.scan(train_step, state, shuffled_data)
         elapsed_time = time.time() - start_time
-        
+
         current_params = jax.device_get(state[0])
         avg_loss = float(jax.device_get(jnp.mean(batch_losses)))
 
@@ -280,7 +280,7 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
 
     for k, v in initial_params.items():
         output_params[f'initial_{k}'] = np.array(v)
-    
+
     loss_history = np.array(loss_history)
 
     # Make Output Directory and Save Regressed Parameters:
