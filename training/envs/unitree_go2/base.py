@@ -66,7 +66,7 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
                     value = getattr(mj_model, k)
                     value[7:] = v
                     setattr(mj_model, k, value)
-        
+
         mj_model.opt.timestep = environment_config.optimizer_timestep
         self._mj_model = mj_model
         self._mjx_model = mjx.put_model(self._mj_model, impl=environment_config.impl)
