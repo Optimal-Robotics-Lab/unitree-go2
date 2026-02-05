@@ -49,21 +49,21 @@ def get_default_config():
     # Format: {param_name: {field: mjx_attr, column: optional_int, bounds: (min, max)}}
     config.regression = ConfigDict()
 
-    config.regression.friction = ConfigDict({
+    config.regression.dof_friction = ConfigDict({
         'field': 'dof_frictionloss', 'bounds': (1e-4, 1e2)
     })
-    config.regression.damping = ConfigDict({
+    config.regression.dof_damping = ConfigDict({
         'field': 'dof_damping', 'bounds': (1e-4, 1e2)
     })
-    config.regression.armature = ConfigDict({
+    config.regression.dof_armature = ConfigDict({
         'field': 'dof_armature', 'bounds': (1e-4, 1e2)
     })
-    config.regression.qpos0 = ConfigDict({
-        'field': 'qpos0', 'bounds': None
-    })
-    config.regression.time_const = ConfigDict({
-        'field': 'actuator_dynprm', 'column': 0, 'bounds': (1e-4, 1e2)
-    })
+    # config.regression.qpos0 = ConfigDict({
+    #     'field': 'qpos0', 'bounds': None
+    # })
+    # config.regression.actuator_dynprm = ConfigDict({
+    #     'field': 'actuator_dynprm', 'column': 0, 'bounds': (1e-4, 1e2)
+    # })
 
     # WandB
     config.wandb = ConfigDict()
