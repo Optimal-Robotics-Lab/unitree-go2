@@ -1,6 +1,6 @@
 from absl import app
 
-from typing import Dict, Tuple
+from typing import Tuple
 
 from pathlib import Path
 import pickle
@@ -12,7 +12,6 @@ import jax.numpy as jnp
 
 import numpy as np
 
-import flax.struct
 import optax
 
 import wandb

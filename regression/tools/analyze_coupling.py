@@ -10,15 +10,16 @@ import jax.numpy as jnp
 import mujoco
 from mujoco import mjx
 
-from regression.utilities import evaluation
-from regression.utilities.data_utilities import chunk_and_flatten_dataset, shuffle_data
-from regression.utilities.model_utilities import hydrate_model
-from regression.utilities.loss_utilities import loss_function
-from regression.utilities.evaluation import init_function, step_function
-from regression.utilities.typedefs import Dataset
+from ..utilities import evaluation
+from ..utilities.data_utilities import chunk_and_flatten_dataset, shuffle_data
+from ..utilities.model_utilities import hydrate_model
+from ..utilities.loss_utilities import loss_function
+from ..utilities.evaluation import init_function, step_function
+from ..utilities.typedefs import Dataset
 
 
 FLAGS = flags.FLAGS
+flags.DEFINE_string('parameter_checkpoint', None, 'Path to the directory containing the regressed parameters and config.pkl', required=True)
 
 
 def analyze_parameter_coupling(loss_fn, params, batch):
@@ -27,7 +28,7 @@ def analyze_parameter_coupling(loss_fn, params, batch):
     """
     # Flatten the Params:
     flat_params, unflatten_fn = jax.flatten_util.ravel_pytree(params)
-    
+
     def flat_loss_fn(theta):
         p = unflatten_fn(theta)
         return loss_fn(p, batch)
@@ -43,15 +44,15 @@ def analyze_parameter_coupling(loss_fn, params, batch):
     diag = jnp.diag(Sigma)
     std_devs = jnp.sqrt(diag)
     outer_std = jnp.outer(std_devs, std_devs)
-    
+
     Correlation = Sigma / outer_std
-    
+
     return Correlation, unflatten_fn
 
 
 def main(argv=None):
     # Set up paths:
-    directory = Path(__file__).resolve().parent
+    package_root = Path(__file__).resolve().parent.parent
 
     # Load Regressed Parameters and Config:
     parameter_checkpoint_path = Path(FLAGS.parameter_checkpoint) / 'regressed_params.pkl'
@@ -68,25 +69,25 @@ def main(argv=None):
         'friction': 'dof_frictionloss',
         'damping': 'dof_damping',
     }
-    
+
     params = {
-        rename_map.get(k, k): v 
-        for k, v in params.items() 
+        rename_map.get(k, k): v
+        for k, v in params.items()
         if not k.startswith('initial_')
     }
 
     # Load and Hydrate MuJoCo Model:
-    mj_model_filepath = (directory / "mjcf/scene_mjx_vendor.xml").resolve()
+    mj_model_filepath = (package_root / "mjcf/scene_mjx_vendor.xml").resolve()
     mj_model = mujoco.MjModel.from_xml_path(str(mj_model_filepath))
-    mj_model = hydrate_model(params, mj_model)
+    mj_model = hydrate_model(params, mj_model, config.regression.to_dict())
 
     # Create Static MJX Model:
     mjx_model_static = mjx.put_model(mj_model, impl="jax")
     n_substeps = int(config.physics.control_rate / mj_model.opt.timestep)
 
     # Wrap Step Function:
-    init_function = evaluation.init_function
-    step_function = functools.partial(
+    init_fn = evaluation.init_function
+    step_fn = functools.partial(
         evaluation.step_function,
         n_substeps=n_substeps,
     )
@@ -128,8 +129,8 @@ def main(argv=None):
     loss_fn = functools.partial(
         loss_function,
         model_static=mjx_model_static,
-        init_function=init_function,
-        step_function=step_function,
+        init_function=init_fn,
+        step_function=step_fn,
         objective_function=evaluation.get_objective_fn(config.loss.type),
         objective_weights=config.loss.weights.to_dict(),
         regression_spec=config.regression.to_dict(),
@@ -141,6 +142,7 @@ def main(argv=None):
         params,
         batch,
     )
+
 
 if __name__ == '__main__':
     app.run(main)
