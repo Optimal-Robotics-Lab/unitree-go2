@@ -1,6 +1,9 @@
 from absl import app, flags, logging
+
 import os
 import functools
+from pathlib import Path
+import pickle
 
 import jax
 
@@ -222,18 +225,6 @@ def main(argv=None):
             value_observation_key="privileged_state",
         )
 
-        # Setup Optimizer:
-        optimizer_config = OptimizerConfig(
-            learning_rate=3e-4,
-            grad_clip_norm=1.0,
-            desired_kl=None,
-            min_learning_rate=1e-5,
-            max_learning_rate=1e-2,
-            kl_adjustment_factor=1.5,
-        )
-        optimizer = create_optimizer(optimizer_config)
-        has_adaptive_kl_scheduler = True if optimizer_config.desired_kl is not None else False
-
         # Aggregate Metadata:
         agent_metadata = checkpoint_utilities.AgentMetadata(
             observation_size=env.observation_size,
@@ -281,6 +272,25 @@ def main(argv=None):
             normalize_observations=True,
         )
 
+        # Setup Optimizer:
+        optimizer_config = OptimizerConfig(
+            optimizer_type="adam",
+            scheduler_type="constant_schedule",
+            optimizer_params={
+                "eps": 1e-5,
+            },
+            scheduler_params={
+                "value": 3e-4
+            },
+            grad_clip_norm=1.0,
+        )
+        optimizer = create_optimizer(optimizer_config)
+        has_adaptive_kl_scheduler = (optimizer_config.scheduler_type == "adaptive_kl_schedule")
+
+        # Sanitize Optimizer Config for Logging and Checkpointing:
+        sanitized_optimizer_config = checkpoint_utilities.sanitize_config(optimizer_config)
+
+
         # Start Wandb and save metadata:
         run = wandb.init(
             project='UnitreeGo2-Tests',
@@ -290,11 +300,12 @@ def main(argv=None):
                 'agent_metadata': agent_metadata,
                 'loss_metadata': loss_metadata,
                 'training_metadata': training_metadata,
-                'optimizer_config': optimizer_config,
                 'environment_config': environment_config,
                 'noise_config': noise_config,
                 'disturbance_config': disturbance_config,
                 'command_config': command_config,
+                'model_params': model_params,
+                'optimizer_config': sanitized_optimizer_config,
             },
         )
 
@@ -362,7 +373,7 @@ def main(argv=None):
         checkpoint_utilities.save_config(
             manager=manager,
             metadata=checkpoint_utilities.CheckpointMetadata(
-                optimizer_config=optimizer_config,
+                optimizer_config=sanitized_optimizer_config,
                 agent_metadata=agent_metadata,
                 loss_metadata=loss_metadata,
                 training_metadata=training_metadata,

@@ -158,3 +158,38 @@ def restore_training_state(manager, agent: nnx.Module, iteration=None):
     )
 
     return restored_checkpoint, metadata
+
+
+def sanitize_config(obj: Any) -> Any:
+    """
+        Recursively converts objects to JSON-serializable formats for WandB.
+        - Dataclasses -> Dicts
+        - JAX/Numpy Arrays -> String with Shape/Dtype
+        - Functions -> String with Name
+        - Others -> String with Type
+    """
+    if isinstance(obj, (int, float, str, bool, type(None))):
+        return obj
+    
+    # Handle Dataclasses:
+    if dataclasses.is_dataclass(obj):
+        return {k: sanitize_config(v) for k, v in dataclasses.asdict(obj).items()}
+    
+    # Handle Dicts:
+    if isinstance(obj, dict):
+        return {k: sanitize_config(v) for k, v in obj.items()}
+    
+    # Handle Lists/Tuples:
+    if isinstance(obj, (list, tuple)):
+        return [sanitize_config(x) for x in obj]
+    
+    # Handle JAX/Numpy Arrays:
+    if hasattr(obj, 'shape') and hasattr(obj, 'dtype'):
+        return f"<{type(obj).__name__} shape={obj.shape} dtype={obj.dtype}>"
+    
+    # Handle Functions/Callables:
+    if callable(obj):
+        return f"<function {obj.__name__}>"
+    
+    # Fallback:
+    return f"<{type(obj).__name__}>"
