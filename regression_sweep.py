@@ -5,12 +5,15 @@ import itertools
 import jax
 from ml_collections import ConfigDict
 
-from regression import train
-from utilities.config import get_default_config
+from regression.regression import train
+from regression.utilities.config import get_default_config
 
 flags.DEFINE_list('datasets', None, 'The data/datasets to use for all experiments.', required=True)
+flags.DEFINE_string('evaluation_dataset', None, 'The data/dataset to use for evaluation.', required=True)
 flags.DEFINE_list('scene_files', None, 'The scene/scenes to use for all experiments.', required=True)
 flags.DEFINE_string('group', None, 'The group to use for all experiments.', required=True)
+flags.DEFINE_integer('seed', 42, 'JAX rng seed.')
+
 
 def generate_experiments(keys, min_size=2, max_size=None):
     if max_size is None:
@@ -34,11 +37,12 @@ def generate_experiments(keys, min_size=2, max_size=None):
 
 def main(argv):
     # Create all combinations of the keys:
-    keys = ["dof_frictionloss", "dof_damping", "dof_armature", "qpos0"]
-    experiments = generate_experiments(keys)
+    keys = ["dof_frictionloss", "dof_damping", "dof_armature"]
+    experiments = generate_experiments(keys, min_size=1, max_size=len(keys))
 
 
     datasets = flags.FLAGS.datasets
+    evaluation_dataset = flags.FLAGS.evaluation_dataset
     scene_files = flags.FLAGS.scene_files
 
     for scene_file in scene_files:
@@ -47,7 +51,12 @@ def main(argv):
 
             config = get_default_config()
 
-            config.dataset_directories = datasets
+            config.training.seed = flags.FLAGS.seed
+
+            config.loss.type = 'mse'
+
+            config.datasets = datasets
+            config.evaluation_dataset = evaluation_dataset
             config.scene_file = scene_file
 
             config.wandb.group = flags.FLAGS.group

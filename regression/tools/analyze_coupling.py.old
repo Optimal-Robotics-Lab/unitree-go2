@@ -1,4 +1,4 @@
-from typing import Callable, Tuple, Dict
+from typing import Callable, Tuple
 
 from absl import app, flags
 
@@ -28,69 +28,38 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string('parameter_checkpoint', None, 'Path to the directory containing the regressed parameters and config.pkl', required=True)
 
 
-def analyze_parameter_coupling(
-    loss_fn: Callable, params: Dict[str, jax.Array], dataset: Dataset, batch_size: int,
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
+def analyze_parameter_coupling(loss_fn: Callable, params: Dict[str, jax.Array], batch: Dataset) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
         Computes the Correlation Matrix of the parameters using the Hessian.
     """
+    # Flatten the Params:
     flat_params, unflatten_fn = jax.flatten_util.ravel_pytree(params)
 
     def flat_loss_fn(theta, b):
         p = unflatten_fn(theta)
         return loss_fn(p, b)
 
-    @jax.jit
-    def accumulate_hessian(carry, batch):
-        # Forward-over-Forward Hessian for MJX compatibility
-        hessian_sum, loss_sum = carry
-        hessian_batch = jax.jacfwd(jax.jacfwd(flat_loss_fn))(flat_params, batch)
-        loss_batch = flat_loss_fn(flat_params, batch)
-        hessian_sum = hessian_sum + hessian_batch
-        loss_sum = loss_sum + loss_batch
-        return (hessian_sum, loss_sum), None
+    @jax.jit(static_argnames=['flat_loss_fn'])
+    def _compute_kernel(flat_loss_fn, flat_params, batch):
+        # Compute Hessian (Forward-over-Forward for MJX Compatibility)
+        H = jax.jacfwd(jax.jacfwd(flat_loss_fn))(flat_params, batch)
 
-    @jax.jit
-    def _compute_kernel(hessian: jnp.ndarray, mse_value: float) -> Tuple[jnp.ndarray, jnp.ndarray]:        
-        # For MSE loss, Covariance approx = 2 * sigma^2 * H^-1
-        # we assume sigma^2 (noise variance) is approximated by the loss value itself:
+        # Invert to get Covariance (Sigma)
         epsilon = 1e-6
-        hessian_inv = jnp.linalg.inv(hessian + jnp.eye(hessian.shape[0]) * epsilon)
-        
-        # Covariance: (Approximation for Least Squares)
-        sigma = 2.0 * mse_value * hessian_inv
+        Sigma = jnp.linalg.inv(H + jnp.eye(H.shape[0]) * epsilon)
 
-        # Normalize (Correlation)
-        diag = jnp.diag(sigma)
+        # Normalize to get Correlation Matrix
+        diag = jnp.diag(Sigma)
         std_devs = jnp.sqrt(jnp.maximum(diag, 1e-16)) 
         outer_std = jnp.outer(std_devs, std_devs)
         
-        correlation = sigma / outer_std
-        return correlation, hessian
+        correlation = Sigma / outer_std
+        return correlation, H
 
-    # Reshape (num_trials, time, joints) -> (num_batches, batch_size, time, joints)
-    def reshape_to_batches(x):
-        n_trials = x.shape[0]
-        n_batches = n_trials // batch_size
-        cutoff = n_batches * batch_size
-        subset = x[:cutoff]
-        return subset.reshape(n_batches, batch_size, *x.shape[1:])
-    
-    batched_dataset = jax.tree.map(reshape_to_batches, dataset)
-    num_batches = jax.tree.leaves(batched_dataset)[0].shape[0]
-
-    # Initialize Accumulators:
-    hessian_init = jnp.zeros((flat_params.shape[0], flat_params.shape[0]))
-    loss_init = 0.0
-
-    (hessian_sum, loss_sum), _ = jax.lax.scan(accumulate_hessian, (hessian_init, loss_init), batched_dataset)
-
-    hessian = hessian_sum / num_batches
-    loss = loss_sum / num_batches
-    
     correlation_matrix, hessian_matrix = _compute_kernel(
-        hessian,
-        loss,
+        flat_loss_fn,
+        flat_params, 
+        batch, 
     )
 
     return correlation_matrix, hessian_matrix
@@ -159,6 +128,13 @@ def main(argv=None):
         *datasets
     )
 
+    # Sample a Random Batch
+    key = jax.random.key(config['training']['seed'])
+    key, subkey = jax.random.split(key)
+    sample_fn = functools.partial(shuffle_data, dataset=dataset, batch_size=config['training']['minibatch_size'])
+    batch = sample_fn(subkey)
+    batch = jax.tree.map(lambda x: x[0], batch)
+
     # Loss Function: (MSE for Correlation Analysis)
     loss_fn = functools.partial(
         loss_function,
@@ -171,12 +147,10 @@ def main(argv=None):
     )
 
     # Compute Correlation Matrix:
-    batch_size = 32
     correlation_matrix, hessian_matrix = analyze_parameter_coupling(
         loss_fn,
         params,
-        dataset,
-        batch_size,
+        batch,
     )
 
     correlation_matrix = np.asarray(correlation_matrix)
@@ -196,21 +170,6 @@ def main(argv=None):
     print("Hessian Matrix Analysis:")
     print(f"Hessian Matrix Eigenvalues: {hessian_eigenvalues}")
     print(f"Hessian Matrix Condition Number: {hessian_condition_number}")
-
-    # Save Analysis Results:
-    analysis_results = {
-        "correlation_matrix": correlation_matrix,
-        "correlation_matrix_eigenvalues": eigenvalues,
-        "correlation_matrix_eigenvectors": eigenvectors,
-        "correlation_matrix_condition_number": condition_number,
-        "hessian_matrix": hessian_matrix,
-        "hessian_matrix_eigenvalues": hessian_eigenvalues,
-        "hessian_matrix_eigenvectors": hessian_eigenvectors,
-        "hessian_matrix_condition_number": hessian_condition_number,
-    }
-    pickle_path = Path(FLAGS.parameter_checkpoint) / "coupling_analysis.pkl"
-    with open(pickle_path, 'wb') as f:
-        pickle.dump(analysis_results, f)
 
     # Plot Correlation Matrix:
     labels = []
@@ -241,8 +200,7 @@ def main(argv=None):
         yaxis_title="Parameters",
     )
     
-    html_path = Path(FLAGS.parameter_checkpoint) / "correlation_matrix.html"
-    fig.write_html(str(html_path))
+    fig.write_html("correlation_matrix.html")
 
 
 if __name__ == '__main__':

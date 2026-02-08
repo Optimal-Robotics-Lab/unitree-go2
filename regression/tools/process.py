@@ -24,8 +24,8 @@ flags.DEFINE_string(
 
 def main(argv=None):
     # Load Data
-    base_directory = Path(__file__).resolve().parent.parent
-    directory = base_directory / 'data' / FLAGS.directory_name
+    package_directory = Path(__file__).resolve().parent.parent
+    directory = package_directory / 'data' / FLAGS.directory_name
 
     # Verify Directory Exists:
     if not directory.exists():

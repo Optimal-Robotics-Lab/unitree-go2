@@ -21,15 +21,15 @@ from mujoco import mjx
 
 from ml_collections import config_flags, ConfigDict
 
-from utilities.config import get_default_config
-from utilities.typedefs import Dataset, TrainState
-from utilities.constants import JOINT_NAMES
-from utilities.data_utilities import chunk_and_flatten_dataset, shuffle_data
-from utilities.factories import create_optimizer, get_objective_fn
-from utilities.autodiff import forward_mode_value_and_grad
-from utilities.loss_utilities import loss_function
-from utilities.mjx_utilities import init_function, step_function
-from utilities.evaluation import evaluate
+from regression.utilities.config import get_default_config
+from regression.utilities.typedefs import Dataset, TrainState
+from regression.utilities.constants import JOINT_NAMES
+from regression.utilities.data_utilities import chunk_and_flatten_dataset, shuffle_data
+from regression.utilities.factories import create_optimizer, get_objective_fn
+from regression.utilities.autodiff import forward_mode_value_and_grad
+from regression.utilities.loss_utilities import loss_function
+from regression.utilities.mjx_utilities import init_function, step_function
+from regression.utilities.evaluation import evaluate
 
 jax.config.update('jax_enable_x64', True)
 
@@ -39,7 +39,7 @@ _CONFIG = config_flags.DEFINE_config_dict('config', get_default_config())
 def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
     # Load MuJoCo Model
     directory = Path(__file__).resolve().parent
-    filepath = (directory / config.scene_file).resolve()
+    filepath = Path(config.scene_file).resolve()
     mj_model = mujoco.MjModel.from_xml_path(str(filepath))
 
     # Override Physics Settings:
@@ -58,11 +58,15 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
     mjx_model_static = mjx.put_model(mj_model, impl="jax")
     n_substeps = int(config.physics.control_rate / mj_model.opt.timestep)
 
-    # Load Data:
+    # Dataset Directories:
     datasets = []
-    dataset_directories = config.dataset_directories if isinstance(config.dataset_directories, tuple) else (config.dataset_directories,)
-    for directory_name in dataset_directories:
-        data_path = Path(__file__).resolve().parent / directory_name / 'processed_data.pkl'
+    training_dataset_directories = config.datasets if isinstance(config.datasets, tuple) else (config.datasets,)
+    evaluation_dataset_directory = config.evaluation_dataset
+    
+    # Load Training Datasets:
+    datasets = []
+    for directory_name in training_dataset_directories:
+        data_path = Path(directory_name) / 'processed_data.pkl'
         if not data_path.exists():
             raise FileNotFoundError(f"{data_path} not found")
 
@@ -79,7 +83,17 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
             effective_window,
         )
         datasets.append(ds_chunked)
+    
+    # Load Evaluation Data:
+    evaluation_dataset_path = Path(evaluation_dataset_directory) / 'processed_data.pkl'
+    if not evaluation_dataset_path.exists():
+        raise FileNotFoundError(f"{evaluation_dataset_path} not found")
 
+    print(f"Loading evaluation dataset: {evaluation_dataset_directory}")
+    with open(evaluation_dataset_path, 'rb') as f:
+        evaluation_data_dict = pickle.load(f)
+
+    # Combine Training Datasets:
     dataset = jax.tree_util.tree_map(
         lambda *arrays: jnp.concatenate(arrays, axis=0),
         *datasets
@@ -238,7 +252,7 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
         mjx_model_static,
         initial_params,
         current_params,
-        data_dict,
+        evaluation_data_dict,
         config,
         wand_run,
     )

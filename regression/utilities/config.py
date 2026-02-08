@@ -6,7 +6,8 @@ def get_default_config():
 
     # File Paths
     config.scene_file = 'mjcf/scene_mjx_transparent.xml'
-    config.dataset_directories = ('data/trajectories',)
+    config.datasets = ('data/trajectories',)
+    config.evaluation_dataset = 'data/trajectories'
 
     # Physics Settings
     config.physics = ConfigDict()
@@ -49,7 +50,7 @@ def get_default_config():
     # Format: {param_name: {field: mjx_attr, column: optional_int, bounds: (min, max)}}
     config.regression = ConfigDict()
 
-    config.regression.dof_friction = ConfigDict({
+    config.regression.dof_frictionloss = ConfigDict({
         'field': 'dof_frictionloss', 'bounds': (1e-4, 1e2)
     })
     config.regression.dof_damping = ConfigDict({

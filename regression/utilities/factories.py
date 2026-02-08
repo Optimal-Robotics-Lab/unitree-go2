@@ -1,7 +1,8 @@
 import optax
 import jax.numpy as jnp
 from ml_collections import ConfigDict
-from utilities.typedefs import ObjectiveFunction
+
+from regression.utilities.typedefs import ObjectiveFunction
 
 
 def create_optimizer(cfg: ConfigDict, total_steps: int) -> optax.GradientTransformation:

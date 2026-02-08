@@ -13,9 +13,9 @@ from plotly.subplots import make_subplots
 
 import wandb
 
-from utilities.constants import JOINT_NAMES
-from utilities.factories import get_objective_fn
-from utilities.mjx_utilities import init_function, step_function
+from regression.utilities.constants import JOINT_NAMES
+from regression.utilities.factories import get_objective_fn
+from regression.utilities.mjx_utilities import init_function, step_function
 
 
 def _group_joints_by_leg(joint_names: List[str]) -> Dict[str, List[int]]:

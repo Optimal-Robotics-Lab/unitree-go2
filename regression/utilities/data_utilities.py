@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 
-from utilities.typedefs import Dataset
+from regression.utilities.typedefs import Dataset
 
 
 def chunk_and_flatten_dataset(

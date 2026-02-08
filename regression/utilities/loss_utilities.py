@@ -4,8 +4,8 @@ import jax
 
 from mujoco import mjx
 
-from utilities.typedefs import Dataset, ObjectiveFunction
-from utilities.decorators import force_static_args
+from regression.utilities.typedefs import Dataset, ObjectiveFunction
+from regression.utilities.decorators import force_static_args
 
 
 @force_static_args(
