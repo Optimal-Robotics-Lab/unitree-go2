@@ -46,11 +46,28 @@ flags.DEFINE_integer(
     'checkpoint_iteration', None, 'Desired checkpoint iteration.', short_name='i',
 )
 flags.DEFINE_string(
+    'parameter_checkpoint', None, 'Parameter checkpoint path to load.', short_name='p',
+)
+flags.DEFINE_string(
     'tag', '', 'Tag for wandb run.', short_name='t',
 )
 
 
 def main(argv=None):
+    # Rehydrate Model from Parameter Checkpoint:
+    model_params = None
+    if FLAGS.parameter_checkpoint is not None:
+        parameter_checkpoint_path = Path(FLAGS.parameter_checkpoint) / 'regressed_params.pkl'
+        with open(parameter_checkpoint_path, 'rb') as f:
+            params = pickle.load(f)
+
+        # Clean up params:
+        model_params = {
+            k: v 
+            for k, v in params.items() 
+            if not k.startswith('initial_')
+        }
+
     # Get FLAG.tag prefix:
     prefix, suffix = FLAGS.tag.split('-')
 

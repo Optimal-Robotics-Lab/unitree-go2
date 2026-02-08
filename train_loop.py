@@ -42,6 +42,9 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string(
     'tag', '', 'Tag for wandb run.', short_name='t',
 )
+flags.DEFINE_string(
+    'parameter_checkpoint', None, 'Parameter checkpoint path to load.', short_name='p', required=True,
+)
 
 
 def main(argv=None):
@@ -52,6 +55,21 @@ def main(argv=None):
     if suffix not in ['position', 'velocity']:
         raise ValueError(f'Unknown FLAG.tag suffix: {suffix}')
 
+    # Rehydrate Model from Parameter Checkpoint:
+    model_params = None
+    if FLAGS.parameter_checkpoint is not None:
+        parameter_checkpoint_path = Path(FLAGS.parameter_checkpoint) / 'regressed_params.pkl'
+        with open(parameter_checkpoint_path, 'rb') as f:
+            params = pickle.load(f)
+
+        # Get Regressed Parameters:
+        model_params = {
+            k: v 
+            for k, v in params.items() 
+            if not k.startswith('initial_')
+        }
+
+    # Training Types:
     training_types = ['baseline', 'finetune']
 
     previous_run = None
@@ -159,6 +177,7 @@ def main(argv=None):
             noise_config=noise_config,
             disturbance_config=disturbance_config,
             command_config=command_config,
+            model_params=model_params,
         )
         eval_env = unitree_go2_joystick.UnitreeGo2Env(
             environment_config=environment_config,
@@ -166,6 +185,7 @@ def main(argv=None):
             noise_config=noise_config,
             disturbance_config=disturbance_config,
             command_config=command_config,
+            model_params=model_params,
         )
 
         observation_size = env.observation_size

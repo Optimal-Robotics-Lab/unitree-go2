@@ -57,14 +57,8 @@ def main(argv=None):
         params = pickle.load(f)
 
     # Clean up params:
-    rename_map = {
-        'armature': 'dof_armature',
-        'friction': 'dof_frictionloss',
-        'damping': 'dof_damping',
-    }
-    
     model_params = {
-        rename_map.get(k, k): v 
+        k: v 
         for k, v in params.items() 
         if not k.startswith('initial_')
     }

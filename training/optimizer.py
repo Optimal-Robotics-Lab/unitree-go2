@@ -9,12 +9,11 @@ import optax
 
 @dataclasses.dataclass
 class OptimizerConfig:
-    learning_rate: float = 3e-4
+    optimizer_type: str = "adam"
+    scheduler_type: str = "constant_schedule"
+    optimizer_params: dict[str, Any] = dataclasses.field(default_factory=dict)
+    scheduler_params: dict[str, Any] = dataclasses.field(default_factory=dict)
     grad_clip_norm: float = 1.0
-    desired_kl: float | None = None
-    min_learning_rate: float = 1e-5
-    max_learning_rate: float = 1e-2
-    kl_adjustment_factor: float = 1.5
 
 
 def create_optimizer(
@@ -28,28 +27,53 @@ def create_optimizer(
     Returns:
         An optax.GradientTransformation.
     """
-    if optimizer_config.desired_kl is None:
-        optimizer = optax.chain(
-            optax.clip_by_global_norm(optimizer_config.grad_clip_norm),
-            optax.adam(learning_rate=optimizer_config.learning_rate),
-        )
-        return optimizer
-    elif optimizer_config.desired_kl is not None:
-        optimizer = optax.chain(
-            optax.clip_by_global_norm(optimizer_config.grad_clip_norm),
-            optax.scale_by_adam(eps=1e-5),
-            adaptive_kl_scheduler(
-                init_lr=optimizer_config.learning_rate,
-                desired_kl=optimizer_config.desired_kl,
-                min_lr=optimizer_config.min_learning_rate,
-                max_lr=optimizer_config.max_learning_rate,
-                adjustment_factor=optimizer_config.kl_adjustment_factor,
-            ),
-            optax.scale(-1),
-        )
-        return optimizer
+
+    components = []
+    if optimizer_config.grad_clip_norm > 0:
+        components.append(optax.clip_by_global_norm(optimizer_config.grad_clip_norm))
+        
+    # Check for KL-based scheduler:
+    if optimizer_config.scheduler_type == "adaptive_kl_schedule":
+        try:
+            scale_by_cls = getattr(optax, optimizer_config.optimizer_type)
+        except AttributeError:
+            raise ValueError(
+                f"Unsupported optimizer type: '{optimizer_config.optimizer_type}'. "
+                "Using the adaptive KL scheduler requires a scale_by_* transformation. "
+                "Please check the optax documentation for valid names."
+            )
+
+        components.append(scale_by_cls(**optimizer_config.optimizer_params))
+        components.append(adaptive_kl_schedule(**optimizer_config.scheduler_params))
+        components.append(optax.scale(-1))
     else:
-        raise ValueError("Invalid OptimizerConfig.")
+        try:
+            scheduler_cls = getattr(optax, optimizer_config.scheduler_type)
+        except AttributeError:
+            raise ValueError(
+                f"Unsupported scheduler type: '{optimizer_config.scheduler_type}'. "
+                "Please check the optax documentation for valid names."
+            )
+
+        scheduler = scheduler_cls(**optimizer_config.scheduler_params)
+
+        try:
+            optimizer_cls = getattr(optax, optimizer_config.optimizer_type)
+        except AttributeError:
+            raise ValueError(
+                f"Unsupported optimizer type: '{optimizer_config.optimizer_type}'. "
+                "Please check the optax documentation for valid names."
+            )
+
+        # Check and remove learning rate in optimizer params:
+        opt_params = optimizer_config.optimizer_params.copy()
+        if "learning_rate" in opt_params:
+            opt_params.pop("learning_rate")
+            print("Warning: 'learning_rate' should not be specified in optimizer_params when using a scheduler. ")
+
+        components.append(optimizer_cls(learning_rate=scheduler, **opt_params))
+
+    return optax.chain(*components)
 
 
 class AdaptiveKLState(NamedTuple):
@@ -57,7 +81,7 @@ class AdaptiveKLState(NamedTuple):
     learning_rate: jax.Array
 
 
-def adaptive_kl_scheduler(
+def adaptive_kl_schedule(
     init_lr: float,
     desired_kl: float,
     min_lr: float = 1e-5,
