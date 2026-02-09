@@ -26,6 +26,7 @@ jax.config.update('jax_enable_x64', True)
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string('parameter_checkpoint', None, 'Path to the directory containing the regressed parameters and config.pkl', required=True)
+flags.DEFINE_boolean('load_analysis', False, 'Whether to load existing analysis results')
 
 
 def analyze_parameter_coupling(
@@ -116,133 +117,161 @@ def main(argv=None):
         if not k.startswith('initial_')
     }
 
-    # Load and Hydrate MuJoCo Model:
-    mj_model_filepath = (package_root / "mjcf/scene_mjx_vendor.xml").resolve()
-    mj_model = mujoco.MjModel.from_xml_path(str(mj_model_filepath))
-    mj_model = hydrate_model(params, mj_model, config['regression'])
+    if not FLAGS.load_analysis:
+        # Load and Hydrate MuJoCo Model:
+        mj_model_filepath = (package_root / "mjcf/scene_mjx_vendor.xml").resolve()
+        mj_model = mujoco.MjModel.from_xml_path(str(mj_model_filepath))
+        mj_model = hydrate_model(params, mj_model, config['regression'])
 
-    # Create Static MJX Model:
-    mjx_model_static = mjx.put_model(mj_model, impl="jax")
-    n_substeps = int(config['physics']['control_rate'] / mj_model.opt.timestep)
+        # Create Static MJX Model:
+        mjx_model_static = mjx.put_model(mj_model, impl="jax")
+        n_substeps = int(config['physics']['control_rate'] / mj_model.opt.timestep)
 
-    # Wrap Step Function:
-    init_fn = evaluation.init_function
-    step_fn = functools.partial(
-        evaluation.step_function,
-        n_substeps=n_substeps,
-    )
-
-    # Load Data:
-    datasets = []
-    dataset_directories = config['datasets'] if isinstance(config['datasets'], tuple) else (config['datasets'],)
-    for directory_name in dataset_directories:
-        data_path = Path(directory_name) / 'processed_data.pkl'
-        if not data_path.exists():
-            raise FileNotFoundError(f"{data_path} not found")
-
-        print(f"Loading dataset: {directory_name}")
-        with open(data_path, 'rb') as f:
-            data_dict = pickle.load(f)
-
-        effective_window = config['training']['window_length'] + 1
-        ds_chunked = chunk_and_flatten_dataset(
-            jnp.array(data_dict['qpos']),
-            jnp.array(data_dict['qvel']),
-            jnp.array(data_dict['actuator_force']),
-            jnp.array(data_dict['ctrl']),
-            effective_window,
+        # Wrap Step Function:
+        init_fn = evaluation.init_function
+        step_fn = functools.partial(
+            evaluation.step_function,
+            n_substeps=n_substeps,
         )
-        datasets.append(ds_chunked)
 
-    dataset = jax.tree_util.tree_map(
-        lambda *arrays: jnp.concatenate(arrays, axis=0),
-        *datasets
-    )
+        # Load Data:
+        datasets = []
+        dataset_directories = config['datasets'] if isinstance(config['datasets'], tuple) else (config['datasets'],)
+        for directory_name in dataset_directories:
+            data_path = Path(directory_name) / 'processed_data.pkl'
+            if not data_path.exists():
+                raise FileNotFoundError(f"{data_path} not found")
 
-    # Loss Function: (MSE for Correlation Analysis)
-    loss_fn = functools.partial(
-        loss_function,
-        model_static=mjx_model_static,
-        init_function=init_fn,
-        step_function=step_fn,
-        objective_function=evaluation.get_objective_fn('mse'),
-        objective_weights=config['loss']['weights'],
-        regression_spec=config['regression'],
-    )
+            print(f"Loading dataset: {directory_name}")
+            with open(data_path, 'rb') as f:
+                data_dict = pickle.load(f)
 
-    # Compute Correlation Matrix:
-    batch_size = 32
-    correlation_matrix, hessian_matrix = analyze_parameter_coupling(
-        loss_fn,
-        params,
-        dataset,
-        batch_size,
-    )
+            effective_window = config['training']['window_length'] + 1
+            ds_chunked = chunk_and_flatten_dataset(
+                jnp.array(data_dict['qpos']),
+                jnp.array(data_dict['qvel']),
+                jnp.array(data_dict['actuator_force']),
+                jnp.array(data_dict['ctrl']),
+                effective_window,
+            )
+            datasets.append(ds_chunked)
 
-    correlation_matrix = np.asarray(correlation_matrix)
+        dataset = jax.tree_util.tree_map(
+            lambda *arrays: jnp.concatenate(arrays, axis=0),
+            *datasets
+        )
 
-    # Correlation Matrix Analysis:
-    eigenvalues, eigenvectors = np.linalg.eig(correlation_matrix)
-    condition_number = np.linalg.cond(correlation_matrix)
+        # Loss Function: (MSE for Correlation Analysis)
+        loss_fn = functools.partial(
+            loss_function,
+            model_static=mjx_model_static,
+            init_function=init_fn,
+            step_function=step_fn,
+            objective_function=evaluation.get_objective_fn('mse'),
+            objective_weights=config['loss']['weights'],
+            regression_spec=config['regression'],
+        )
 
-    print("Correlation Matrix Analysis:")
-    print(f"Correlation Matrix Eigenvalues: {eigenvalues}")
-    print(f"Correlation Matrix Condition Number: {condition_number}")
+        # Compute Correlation Matrix:
+        batch_size = 32
+        correlation_matrix, hessian_matrix = analyze_parameter_coupling(
+            loss_fn,
+            params,
+            dataset,
+            batch_size,
+        )
 
-    # Hessian Analysis:
-    hessian_eigenvalues, hessian_eigenvectors = np.linalg.eig(hessian_matrix)
-    hessian_condition_number = np.linalg.cond(hessian_matrix)
+        correlation_matrix = np.asarray(correlation_matrix)
 
-    print("Hessian Matrix Analysis:")
-    print(f"Hessian Matrix Eigenvalues: {hessian_eigenvalues}")
-    print(f"Hessian Matrix Condition Number: {hessian_condition_number}")
+        # Correlation Matrix Analysis:
+        eigenvalues, eigenvectors = np.linalg.eig(correlation_matrix)
+        condition_number = np.linalg.cond(correlation_matrix)
 
-    # Save Analysis Results:
-    analysis_results = {
-        "correlation_matrix": correlation_matrix,
-        "correlation_matrix_eigenvalues": eigenvalues,
-        "correlation_matrix_eigenvectors": eigenvectors,
-        "correlation_matrix_condition_number": condition_number,
-        "hessian_matrix": hessian_matrix,
-        "hessian_matrix_eigenvalues": hessian_eigenvalues,
-        "hessian_matrix_eigenvectors": hessian_eigenvectors,
-        "hessian_matrix_condition_number": hessian_condition_number,
-    }
-    pickle_path = Path(FLAGS.parameter_checkpoint) / "coupling_analysis.pkl"
-    with open(pickle_path, 'wb') as f:
-        pickle.dump(analysis_results, f)
+        print("Correlation Matrix Analysis:")
+        print(f"Correlation Matrix Eigenvalues: {eigenvalues}")
+        print(f"Correlation Matrix Condition Number: {condition_number}")
 
-    # Plot Correlation Matrix:
-    labels = []
-    for key, value in sorted(params.items()):
-        size = value.size
-        if size == 1:
-            labels.append(key)
-        else:
-            labels.extend([f"{key}_{i}" for i in range(size)])
+        # Hessian Analysis:
+        hessian_eigenvalues, hessian_eigenvectors = np.linalg.eig(hessian_matrix)
+        hessian_condition_number = np.linalg.cond(hessian_matrix)
 
-    fig = px.imshow(
-        correlation_matrix,
-        x=labels,
-        y=labels,
-        zmin=-1, 
-        zmax=1,
-        color_continuous_scale='RdBu_r', 
-        text_auto='.2f',
-        aspect='equal',
-        title="Parameter Correlation Matrix (Fisher Information)"
-    )
+        print("Hessian Matrix Analysis:")
+        print(f"Hessian Matrix Eigenvalues: {hessian_eigenvalues}")
+        print(f"Hessian Matrix Condition Number: {hessian_condition_number}")
 
-    fig.update_layout(
-        width=700,
-        height=700,
-        title_x=0.5,
-        xaxis_title="Parameters",
-        yaxis_title="Parameters",
-    )
-    
-    html_path = Path(FLAGS.parameter_checkpoint) / "correlation_matrix.html"
-    fig.write_html(str(html_path))
+        # Save Analysis Results:
+        analysis_results = {
+            "correlation_matrix": correlation_matrix,
+            "correlation_matrix_eigenvalues": eigenvalues,
+            "correlation_matrix_eigenvectors": eigenvectors,
+            "correlation_matrix_condition_number": condition_number,
+            "hessian_matrix": hessian_matrix,
+            "hessian_matrix_eigenvalues": hessian_eigenvalues,
+            "hessian_matrix_eigenvectors": hessian_eigenvectors,
+            "hessian_matrix_condition_number": hessian_condition_number,
+        }
+        pickle_path = Path(FLAGS.parameter_checkpoint) / "coupling_analysis.pkl"
+        with open(pickle_path, 'wb') as f:
+            pickle.dump(analysis_results, f)
+
+        # Plot Correlation Matrix:
+        labels = []
+        for key, value in sorted(params.items()):
+            size = value.size
+            if size == 1:
+                labels.append(key)
+            else:
+                labels.extend([f"{key}_{i}" for i in range(size)])
+
+        fig = px.imshow(
+            correlation_matrix,
+            x=labels,
+            y=labels,
+            zmin=-1, 
+            zmax=1,
+            color_continuous_scale='RdBu_r', 
+            text_auto='.2f',
+            aspect='equal',
+            title="Parameter Correlation Matrix (Fisher Information)"
+        )
+
+        fig.update_layout(
+            width=700,
+            height=700,
+            title_x=0.5,
+            xaxis_title="Parameters",
+            yaxis_title="Parameters",
+        )
+        
+        html_path = Path(FLAGS.parameter_checkpoint) / "correlation_matrix.html"
+        fig.write_html(str(html_path))
+    else:
+        # Load Existing Analysis Results:
+        pickle_path = Path(FLAGS.parameter_checkpoint) / "coupling_analysis.pkl"
+        if not pickle_path.exists():
+            raise FileNotFoundError(f"{pickle_path} not found. Please run the analysis first without --load_analysis.")
+        
+        with open(pickle_path, 'rb') as f:
+            analysis_results = pickle.load(f)
+
+        correlation_matrix = analysis_results["correlation_matrix"]
+        eigenvalues = analysis_results["correlation_matrix_eigenvalues"]
+        condition_number = analysis_results["correlation_matrix_condition_number"]
+
+        hessian_matrix = analysis_results["hessian_matrix"]
+        hessian_eigenvalues = analysis_results["hessian_matrix_eigenvalues"]
+        hessian_condition_number = analysis_results["hessian_matrix_condition_number"]
+
+        with np.printoptions(precision=3, suppress=True, linewidth=100):
+            print("Loaded Correlation Matrix Analysis:")
+            print(f"Correlation Matrix Eigenvalues: {eigenvalues}")
+            print(f"Correlation Matrix Minimum and Max Eigen Values: {np.min(eigenvalues)}, {np.max(eigenvalues)}")
+            print(f"Correlation Matrix Condition Number: {condition_number}")
+
+            print("Hessian Matrix Analysis:")
+            print(f"Hessian Matrix Eigenvalues: {hessian_eigenvalues}")
+            print(f"Hessian Matrix Minimum and Max Eigen Values: {np.min(hessian_eigenvalues)}, {np.max(hessian_eigenvalues)}")
+            print(f"Hessian Matrix Condition Number: {hessian_condition_number}")
 
 
 if __name__ == '__main__':
