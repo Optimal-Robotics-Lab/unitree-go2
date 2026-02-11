@@ -57,15 +57,15 @@ def analyze_parameter_coupling(
         # we assume sigma^2 (noise variance) is approximated by the loss value itself:
         epsilon = 1e-6
         hessian_inv = jnp.linalg.inv(hessian + jnp.eye(hessian.shape[0]) * epsilon)
-        
+
         # Covariance: (Approximation for Least Squares)
         sigma = 2.0 * mse_value * hessian_inv
 
         # Normalize (Correlation)
         diag = jnp.diag(sigma)
-        std_devs = jnp.sqrt(jnp.maximum(diag, 1e-16)) 
+        std_devs = jnp.sqrt(jnp.maximum(diag, 1e-16))
         outer_std = jnp.outer(std_devs, std_devs)
-        
+
         correlation = sigma / outer_std
         return correlation, hessian
 

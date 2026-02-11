@@ -5,9 +5,9 @@ def get_default_config():
     config = ConfigDict()
 
     # File Paths
-    config.scene_file = 'mjcf/scene_mjx_transparent.xml'
-    config.datasets = ('data/trajectories',)
-    config.evaluation_dataset = 'data/trajectories'
+    config.scene_file = 'regression/mjcf/scene_mjx_transparent.xml'
+    config.datasets = ('regression/data/chirp-trajectories',)
+    config.evaluation_dataset = 'regression/data/chirp-trajectories'
 
     # Physics Settings
     config.physics = ConfigDict()
@@ -59,13 +59,12 @@ def get_default_config():
     config.regression.dof_armature = ConfigDict({
         'field': 'dof_armature', 'bounds': (1e-4, 1e2)
     })
-
+    config.regression.actuator_dynprm = ConfigDict({
+        'field': 'actuator_dynprm', 'column': 0, 'bounds': (1e-4, 1e2)
+    })
     # Example of possible additional parameters to regress:
     # config.regression.qpos0 = ConfigDict({
     #     'field': 'qpos0', 'bounds': None
-    # })
-    # config.regression.actuator_dynprm = ConfigDict({
-    #     'field': 'actuator_dynprm', 'column': 0, 'bounds': (1e-4, 1e2)
     # })
 
     # WandB

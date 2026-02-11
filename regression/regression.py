@@ -54,6 +54,12 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
     mj_model.opt.ls_iterations = config.physics.ls_iterations
     mj_model.opt.timestep = config.physics.timestep
 
+    import pdb; pdb.set_trace()
+
+    # Turn on Actuator Filter if there exists a config.regression.actuator_dynprm:
+    if 'actuator_dynprm' in config.regression:
+        mj_model.actuator_dyntype[:] = mujoco.mjtDyn.mjDYN_FILTEREXACT
+
     # Create Static MJX Model:
     mjx_model_static = mjx.put_model(mj_model, impl="jax")
     n_substeps = int(config.physics.control_rate / mj_model.opt.timestep)
@@ -62,7 +68,7 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
     datasets = []
     training_dataset_directories = config.datasets if isinstance(config.datasets, tuple) else (config.datasets,)
     evaluation_dataset_directory = config.evaluation_dataset
-    
+
     # Load Training Datasets:
     datasets = []
     for directory_name in training_dataset_directories:
@@ -83,7 +89,7 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
             effective_window,
         )
         datasets.append(ds_chunked)
-    
+
     # Load Evaluation Data:
     evaluation_dataset_path = Path(evaluation_dataset_directory) / 'processed_data.pkl'
     if not evaluation_dataset_path.exists():
