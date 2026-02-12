@@ -52,22 +52,28 @@ def analyze_parameter_coupling(
         return (hessian_sum, loss_sum), None
 
     @jax.jit
-    def _compute_kernel(hessian: jnp.ndarray, mse_value: float) -> Tuple[jnp.ndarray, jnp.ndarray]:        
+    def _correlation_compute_kernel(hessian: jnp.ndarray, mse_value: float) -> jnp.ndarray:
         # For MSE loss, Covariance approx = 2 * sigma^2 * H^-1
         # we assume sigma^2 (noise variance) is approximated by the loss value itself:
-        epsilon = 1e-6
-        hessian_inv = jnp.linalg.inv(hessian + jnp.eye(hessian.shape[0]) * epsilon)
+        hessian_inv = jnp.linalg.inv(hessian)
 
         # Covariance: (Approximation for Least Squares)
         sigma = 2.0 * mse_value * hessian_inv
 
         # Normalize (Correlation)
         diag = jnp.diag(sigma)
-        std_devs = jnp.sqrt(jnp.maximum(diag, 1e-16))
+        std_devs = jnp.sqrt(diag)
         outer_std = jnp.outer(std_devs, std_devs)
 
         correlation = sigma / outer_std
-        return correlation, hessian
+        return correlation
+
+    @jax.jit
+    def _relative_compute_kernel(hessian: jnp.ndarray, flat_params: jnp.ndarray) -> jnp.ndarray:
+        # Compute the Relative Hessian by scaling via the optimal parameters:
+        D = jnp.diag(jnp.abs(theta))
+        relative_hessian = D.T @ hessian @ D
+        return relative_hessian
 
     # Reshape (num_trials, time, joints) -> (num_batches, batch_size, time, joints)
     def reshape_to_batches(x):
@@ -89,12 +95,17 @@ def analyze_parameter_coupling(
     hessian = hessian_sum / num_batches
     loss = loss_sum / num_batches
     
-    correlation_matrix, hessian_matrix = _compute_kernel(
+    correlation_matrix = _correlation_compute_kernel(
         hessian,
         loss,
     )
 
-    return correlation_matrix, hessian_matrix
+    relative_hessian_matrix = _relative_compute_kernel(
+        hessian,
+        flat_params,
+    )
+
+    return correlation_matrix, relative_hessian_matrix, hessian
 
 
 def main(argv=None):
@@ -261,6 +272,22 @@ def main(argv=None):
         hessian_matrix = analysis_results["hessian_matrix"]
         hessian_eigenvalues = analysis_results["hessian_matrix_eigenvalues"]
         hessian_condition_number = analysis_results["hessian_matrix_condition_number"]
+
+        theta = []
+        for k, v in sorted(params.items()):
+            theta.append(v)
+
+        theta = np.array(theta).flatten()
+        D = np.diag(np.abs(theta))
+        H_rel = D.T @ hessian_matrix @ D
+
+        eigenvalues = np.linalg.eigvalsh(H_rel)
+        lambda_max = np.max(eigenvalues)
+        lambda_min = np.min(eigenvalues)
+
+        kappa_rel = lambda_max / lambda_min
+
+        import pdb; pdb.set_trace()
 
         with np.printoptions(precision=3, suppress=True, linewidth=100):
             print("Loaded Correlation Matrix Analysis:")

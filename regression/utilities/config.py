@@ -44,7 +44,7 @@ def get_default_config():
     })
 
     # Loss Function Type: rmse, mse, mae, huber
-    config.loss.type = 'rmse'
+    config.loss.type = 'mse'
 
     # Parameters to Regress:
     # Format: {param_name: {field: mjx_attr, column: optional_int, bounds: (min, max)}}
@@ -59,12 +59,12 @@ def get_default_config():
     config.regression.dof_armature = ConfigDict({
         'field': 'dof_armature', 'bounds': (1e-4, 1e2)
     })
-    config.regression.actuator_dynprm = ConfigDict({
-        'field': 'actuator_dynprm', 'column': 0, 'bounds': (1e-4, 1e2)
-    })
     # Example of possible additional parameters to regress:
     # config.regression.qpos0 = ConfigDict({
     #     'field': 'qpos0', 'bounds': None
+    # })
+    # config.regression.actuator_dynprm = ConfigDict({
+    #     'field': 'actuator_dynprm', 'column': 0, 'bounds': (1e-15, 1e2)
     # })
 
     # WandB

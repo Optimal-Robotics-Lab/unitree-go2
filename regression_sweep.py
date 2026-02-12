@@ -38,7 +38,7 @@ def generate_experiments(keys, min_size=2, max_size=None):
 
 def main(argv):
     # Create all combinations of the keys:
-    keys = ["dof_frictionloss", "dof_damping", "dof_armature", "actuator_dynprm"]
+    keys = ["dof_frictionloss", "dof_damping", "dof_armature"]
     experiments = generate_experiments(keys, min_size=1, max_size=len(keys))
 
 

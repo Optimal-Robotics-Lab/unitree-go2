@@ -1,0 +1,116 @@
+!!python/object:ml_collections.config_dict.config_dict.ConfigDict
+_allow_dotted_keys: false
+_convert_dict: true
+_fields:
+  datasets: !!python/tuple
+  - regression/data/chirp-trajectories
+  - regression/data/step-trajectories
+  evaluation_dataset: regression/data/chirp-trajectories
+  loss: !!python/object:ml_collections.config_dict.config_dict.ConfigDict
+    _allow_dotted_keys: false
+    _convert_dict: true
+    _fields:
+      type: mse
+      weights: !!python/object:ml_collections.config_dict.config_dict.ConfigDict
+        _allow_dotted_keys: false
+        _convert_dict: true
+        _fields:
+          actuator_force: 1.0
+          position: 1.0
+          velocity: 1.0
+        _locked: false
+        _sort_keys: true
+        _type_safe: true
+    _locked: false
+    _sort_keys: true
+    _type_safe: true
+  optimizer: !!python/object:ml_collections.config_dict.config_dict.ConfigDict
+    _allow_dotted_keys: false
+    _convert_dict: true
+    _fields:
+      clip_norm: 1.0
+      lr_end: 1.0e-06
+      lr_init: 1.0e-05
+      lr_peak: 0.01
+      warmup_pct: 0.1
+      weight_decay: 0.0001
+    _locked: false
+    _sort_keys: true
+    _type_safe: true
+  physics: !!python/object:ml_collections.config_dict.config_dict.ConfigDict
+    _allow_dotted_keys: false
+    _convert_dict: true
+    _fields:
+      control_rate: 0.02
+      iterations: 5
+      ls_iterations: 5
+      solver: newton
+      timestep: 0.004
+      use_reverse_mode: false
+    _locked: false
+    _sort_keys: true
+    _type_safe: true
+  regression: !!python/object:ml_collections.config_dict.config_dict.ConfigDict
+    _allow_dotted_keys: false
+    _convert_dict: true
+    _fields:
+      actuator_dynprm: !!python/object:ml_collections.config_dict.config_dict.ConfigDict
+        _allow_dotted_keys: false
+        _convert_dict: true
+        _fields:
+          bounds: !!python/tuple
+          - 1.0e-15
+          - 100.0
+          column: 0
+          field: actuator_dynprm
+        _locked: false
+        _sort_keys: true
+        _type_safe: true
+      dof_damping: !!python/object:ml_collections.config_dict.config_dict.ConfigDict
+        _allow_dotted_keys: false
+        _convert_dict: true
+        _fields:
+          bounds: &id001 !!python/tuple
+          - 0.0001
+          - 100.0
+          field: dof_damping
+        _locked: false
+        _sort_keys: true
+        _type_safe: true
+      dof_frictionloss: !!python/object:ml_collections.config_dict.config_dict.ConfigDict
+        _allow_dotted_keys: false
+        _convert_dict: true
+        _fields:
+          bounds: *id001
+          field: dof_frictionloss
+        _locked: false
+        _sort_keys: true
+        _type_safe: true
+    _locked: false
+    _sort_keys: true
+    _type_safe: true
+  scene_file: regression/mjcf/scene_mjx_vendor.xml
+  training: !!python/object:ml_collections.config_dict.config_dict.ConfigDict
+    _allow_dotted_keys: false
+    _convert_dict: true
+    _fields:
+      batches_per_epoch: 256
+      minibatch_size: 25
+      num_epochs: 20
+      seed: 42
+      window_length: 25
+    _locked: false
+    _sort_keys: true
+    _type_safe: true
+  wandb: !!python/object:ml_collections.config_dict.config_dict.ConfigDict
+    _allow_dotted_keys: false
+    _convert_dict: true
+    _fields:
+      group: ablation-sweep
+      project: Parameter-Regression-Sweep-Unitree-Go2
+    _locked: false
+    _sort_keys: true
+    _type_safe: true
+_locked: false
+_sort_keys: true
+_type_safe: true
