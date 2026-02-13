@@ -70,7 +70,7 @@ def analyze_parameter_coupling(
 
     @jax.jit
     def _relative_compute_kernel(hessian: jnp.ndarray, flat_params: jnp.ndarray) -> jnp.ndarray:
-        # Compute the Relative Hessian by scaling via the optimal parameters:
+        # Compute the Relative Hessian by scaling via the optimal parameters to make the hessian unitless:
         D = jnp.diag(jnp.abs(theta))
         relative_hessian = D.T @ hessian @ D
         return relative_hessian
@@ -185,7 +185,7 @@ def main(argv=None):
 
         # Compute Correlation Matrix:
         batch_size = 32
-        correlation_matrix, hessian_matrix = analyze_parameter_coupling(
+        correlation_matrix, relative_hessian_matrix, hessian_matrix = analyze_parameter_coupling(
             loss_fn,
             params,
             dataset,
@@ -193,6 +193,7 @@ def main(argv=None):
         )
 
         correlation_matrix = np.asarray(correlation_matrix)
+        relative_hessian_matrix = np.asarray(relative_hessian_matrix)
 
         # Correlation Matrix Analysis:
         eigenvalues, eigenvectors = np.linalg.eig(correlation_matrix)
