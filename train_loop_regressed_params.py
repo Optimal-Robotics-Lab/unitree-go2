@@ -58,8 +58,8 @@ def main(argv=None):
 
     # Clean up params:
     model_params = {
-        k: v 
-        for k, v in params.items() 
+        k: v
+        for k, v in params.items()
         if not k.startswith('initial_')
     }
 
@@ -156,9 +156,9 @@ def main(argv=None):
         disturbance_config = config.DisturbanceConfig()
 
         if training_type == 'rough':
-            scene = f'scene_mjx_standard_{FLAGS.tag}_rough.xml'
+            scene = f'scene_mjx_vendor_{FLAGS.tag}_rough.xml'
         else:
-            scene = f'scene_mjx_standard_{FLAGS.tag}.xml'
+            scene = f'scene_mjx_vendor_{FLAGS.tag}.xml'
 
         # Setup Environments:
         environment_config = config.EnvironmentConfig(

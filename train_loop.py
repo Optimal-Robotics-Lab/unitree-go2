@@ -67,8 +67,8 @@ def main(argv=None):
 
         # Get Regressed Parameters:
         model_params = {
-            k: v 
-            for k, v in params.items() 
+            k: v
+            for k, v in params.items()
             if not k.startswith('initial_')
         }
 
