@@ -8,20 +8,6 @@ from train_from_config import train_from_config as train
 def main(argv=None):
     # Train Config:
     train_config = {
-        'vendor': {
-            'tag': 'vendor-position',
-            'curriculum': ['baseline', 'finetune'],
-            'parameter_checkpoint': None,
-            'domain_randomization': 'domain_randomize',
-            'wandb_tags': ['vendor-position'],
-        },
-        'transparent': {
-            'tag': 'transparent-position',
-            'curriculum': ['baseline', 'finetune'],
-            'parameter_checkpoint': None,
-            'domain_randomization': 'domain_randomize',
-            'wandb_tags': ['transparent-position'],
-        },
         'regressed': {
             'tag': 'regressed-position',
             'curriculum': ['baseline', 'finetune'],

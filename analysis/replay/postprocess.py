@@ -28,6 +28,7 @@ def main(argv=None):
     imu_history = data_directory / f"processed/{FLAGS.directory_name}/preprocessed_imu_history.csv"
     vicon_history = data_directory / f"processed/{FLAGS.directory_name}/preprocessed_vicon_history.csv"
     filtered_vicon_history = data_directory / f"processed/{FLAGS.directory_name}/preprocessed_filtered_history.csv"
+    contact_history = data_directory / f"processed/{FLAGS.directory_name}/preprocessed_contact_history.csv"
     files_exist = all([
         command_history.exists(),
         policy_command_history.exists(),
@@ -35,18 +36,12 @@ def main(argv=None):
         imu_history.exists(),
         vicon_history.exists(),
         filtered_vicon_history.exists(),
+        contact_history.exists(),
     ])
 
     if not files_exist:
         print("Error: Files not found.", file=sys.stderr)
         return
-
-    time_window = FLAGS.time_window
-    if len(time_window) != 2:
-        print("Error: Invalid time window.", file=sys.stderr)
-        return
-
-    start_time, end_time = time_window
 
     # Load Data:
     command_history = np.loadtxt(
@@ -67,6 +62,19 @@ def main(argv=None):
     filtered_vicon_history = np.loadtxt(
         filtered_vicon_history, delimiter=',',
     )
+    contact_history = np.loadtxt(
+        contact_history, delimiter=',',
+    )
+
+    time_window = FLAGS.time_window
+    if time_window is not None:
+        if len(time_window) != 2:
+            print("Error: Invalid time window.", file=sys.stderr)
+            return
+
+        start_time, end_time = time_window
+    else:
+        start_time, end_time = state_history[:, 0][0], state_history[:, 0][-1]
 
     nearest_start_idx = np.argmin(np.abs(state_history[:, 0] - start_time))
     nearest_end_idx = np.argmin(np.abs(state_history[:, 0] - end_time)) + 1
@@ -77,6 +85,7 @@ def main(argv=None):
     vicon_history = vicon_history[nearest_start_idx:nearest_end_idx, :]
     filtered_vicon_history = filtered_vicon_history[nearest_start_idx:nearest_end_idx, :]
     policy_command_history = policy_command_history[nearest_start_idx:nearest_end_idx, :]
+    contact_history = contact_history[nearest_start_idx:nearest_end_idx, :]
 
     # Subtract treadmill speed from forward velocity:
     if FLAGS.treadmill_rpm is not None:
@@ -112,6 +121,11 @@ def main(argv=None):
     np.savetxt(
         output_directory / "postprocessed_policy_command_history.csv",
         policy_command_history,
+        delimiter=',',
+    )
+    np.savetxt(
+        output_directory / "postprocessed_contact_history.csv",
+        contact_history,
         delimiter=',',
     )
 

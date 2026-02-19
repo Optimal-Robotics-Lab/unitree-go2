@@ -23,6 +23,7 @@ def main(argv=None):
     imu_history = data_directory / f"bags/{FLAGS.directory_name}/imu_history.csv"
     policy_command_history = data_directory / f"bags/{FLAGS.directory_name}/policy_command_history.csv"
     vicon_history = data_directory / f"bags/{FLAGS.directory_name}/vicon_history.csv"
+    contact_history = data_directory / f"bags/{FLAGS.directory_name}/contact_history.csv"
 
     files_exist = all([
         command_history.exists(),
@@ -30,6 +31,7 @@ def main(argv=None):
         imu_history.exists(),
         policy_command_history.exists(),
         vicon_history.exists(),
+        contact_history.exists(),
     ])
 
     if not files_exist:
@@ -62,12 +64,18 @@ def main(argv=None):
         vicon_history, delimiter=',',
     ).reshape(-1, vicon_data_columns)
 
+    contact_history_data_columns = 9
+    contact_history = np.loadtxt(
+        contact_history, delimiter=',',
+    ).reshape(-1, contact_history_data_columns)
+
     data_dictionary = process_data(
         command_history,
         state_history,
         imu_history,
         policy_command_history,
         vicon_history,
+        contact_history,
         sample_frequency=50.0,
     )
 
@@ -77,6 +85,7 @@ def main(argv=None):
     policy_command_history = data_dictionary["policy_command_history"]
     vicon_history = data_dictionary["vicon_history"]
     filtered_history = data_dictionary["filtered_history"]
+    contact_history = data_dictionary["contact_history"]
 
     # Save Processed Data:
     output_directory_name = FLAGS.directory_name.replace('_', '-')
@@ -111,6 +120,11 @@ def main(argv=None):
     np.savetxt(
         output_directory / "preprocessed_filtered_history.csv",
         filtered_history,
+        delimiter=',',
+    )
+    np.savetxt(
+        output_directory / "preprocessed_contact_history.csv",
+        contact_history,
         delimiter=',',
     )
 

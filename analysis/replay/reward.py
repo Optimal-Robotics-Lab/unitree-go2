@@ -1,8 +1,11 @@
 import sys
 import pathlib
 import yaml
+import copy
 
 from absl import app, flags
+
+import mujoco
 
 import numpy as np
 import scipy
@@ -27,6 +30,11 @@ reward_config = {
     'action_rate': -0.1,
     # Auxilary Terms:
     'stand_still': -1.0,
+    # Gait Terms:
+    'foot_slip': -0.5,
+    'air_time': 0.75,
+    'foot_clearance': 0.5,
+    'gait_variance': -1.0,
 }
 
 
@@ -46,6 +54,9 @@ def main(argv=None):
     vicon_history = data_directory / f"processed/{FLAGS.directory_name}/postprocessed_vicon_history.csv"
     filtered_history = data_directory / f"processed/{FLAGS.directory_name}/postprocessed_filtered_vicon_history.csv"
 
+    # Contact Data:
+    contact_history = data_directory / f"processed/{FLAGS.directory_name}/postprocessed_contact_history.csv"
+
     files_exist = all([
         command_history.exists(),
         state_history.exists(),
@@ -53,6 +64,7 @@ def main(argv=None):
         vicon_history.exists(),
         filtered_history.exists(),
         policy_command_history.exists(),
+        contact_history.exists(),
     ])
 
     if not files_exist:
@@ -66,9 +78,6 @@ def main(argv=None):
     state_history = np.loadtxt(
         state_history, delimiter=',',
     )
-    # contact_history = np.loadtxt(
-    #     contact_history, delimiter=',',
-    # )
     imu_history = np.loadtxt(
         imu_history, delimiter=',',
     )
@@ -86,11 +95,16 @@ def main(argv=None):
         filtered_history, delimiter=',',
     )
 
+    # Load Contact Data:
+    contact_history = np.loadtxt(
+        contact_history, delimiter=',',
+    )
+
     # Assert all time columns are the same
     time_stamps = [
         command_history[:, 0],
         state_history[:, 0],
-        # contact_history[:, 0],
+        contact_history[:, 0],
         imu_history[:, 0],
         policy_command_history[:, 0],
         vicon_history[:, 0],
@@ -145,8 +159,11 @@ def main(argv=None):
     # Unpack Policy Command Data:
     command = policy_command_history[:, 1:4]
 
+    # Unpack Contact Data:
+    contact_forces = contact_history[:, 1:]
+
     # Calculate Local Frame Data:
-    body_orientation = vicon_orientation
+    body_orientation = imu_orientation
     rotations = scipy.spatial.transform.Rotation.from_quat(body_orientation, scalar_first=True)
     local_linear_velocity = rotations.inv().apply(global_velocity)
     local_angular_velocity = imu_angular_velocity
@@ -159,6 +176,50 @@ def main(argv=None):
         np.zeros((1, actions.shape[1])),
         actions[:-1, :],
     ))
+
+    # Setup MuJoCo Model and Data for Reward Calculation:
+    mj_model_path = data_directory / "replay/mjcf/scene_mjx_vendor_position.xml"
+    mj_model = mujoco.MjModel.from_xml_path(
+        str(mj_model_path)
+    )
+    feet_site = [
+        'front_right_foot',
+        'front_left_foot',
+        'hind_right_foot',
+        'hind_left_foot',
+    ]
+    feet_site_idx = [
+        mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_SITE.value, f)
+        for f in feet_site
+    ]
+    assert not any(id_ == -1 for id_ in feet_site_idx), 'Site not found.'
+    feet_site_idx = np.array(feet_site_idx)
+    
+    # Calculate MuJoCo Data for all States:
+    base_positions = np.concatenate([vicon_positions, body_orientation], axis=1)
+    base_velocities = np.concatenate([global_velocity, global_anglular_velocity], axis=1)
+    joint_positions = state_positions
+    joint_velocities = state_velocities
+    mj_datas = []
+    for base_position, base_velocity, joint_position, joint_velocity in zip(
+        base_positions, base_velocities, joint_positions, joint_velocities
+    ):
+        mj_data = mujoco.MjData(mj_model)
+        mj_data.qpos = np.concatenate([base_position, joint_position])
+        mj_data.qvel = np.concatenate([base_velocity, joint_velocity])
+        mujoco.mj_forward(mj_model, mj_data)
+        mj_datas.append(copy.deepcopy(mj_data))
+
+    # Calculate Gait Timings:
+    previous_air_times = np.zeros(contact_forces.shape)
+    previous_contact_times = np.zeros(contact_forces.shape)
+    for i, contact in enumerate(contact_forces):
+        previous_air_times[i] = np.where(
+            contact == True, 0.0, previous_air_times[i-1] + dt,
+        )
+        previous_contact_times[i] = np.where(
+            contact == False, 0.0, previous_contact_times[i-1] + dt,
+        )
 
     def calculate_reward(
         reward_data: dict[str, np.ndarray]
@@ -184,6 +245,33 @@ def main(argv=None):
             'stand_still': _cost_stand_still(
                 reward_data['command'], reward_data['joint_positions'], reward_data['default_pose'],
             ),
+            'foot_slip': _cost_foot_slip(
+                reward_data['mj_model'],
+                reward_data['mj_data'],
+                reward_data['contact'],
+                reward_data['command'],
+            ),
+            'air_time': _reward_air_time(
+                reward_data['previous_air_time'],
+                reward_data['previous_contact_time'],
+                reward_data['command'],
+                reward_data['global_velocity'],
+                mode_time=0.2,
+                command_threshold=0.0,
+                velocity_threshold=0.5,
+            ),
+            'gait_variance': _cost_gait_variance(
+                reward_data['previous_air_time'],
+                reward_data['previous_contact_time'],
+            ),
+            'foot_clearance': _reward_foot_clearance(
+                reward_data['mj_model'],
+                reward_data['mj_data'],
+                reward_data['feet_site_idx'],
+                target_foot_height=0.125,
+                velocity_scale=2.0,
+                sigma=0.05,
+            ),
         }
         rewards = {
             k: v * reward_config[k] for k, v in rewards.items()
@@ -206,6 +294,12 @@ def main(argv=None):
             'previous_action': previous_actions[i],
             'joint_positions': state_positions[i],
             'default_pose': default_pose,
+            'mj_data': mj_datas[i],
+            'mj_model': mj_model,
+            'feet_site_idx': feet_site_idx,
+            'contact': contact_forces[i],
+            'previous_air_time': previous_air_times[i],
+            'previous_contact_time': previous_contact_times[i],
         }
         reward, reward_dict = calculate_reward(reward_data)
         rewards.append(reward)
@@ -276,7 +370,7 @@ def _cost_action_rate(
     return np.sqrt(np.sum(np.square(action - previous_action)))
 
 
-# Check to see if we have joint acceleration data
+# We do not have acceleration data:
 def _cost_acceleration(
     joint_accelerations: np.ndarray,
 ) -> np.ndarray:
@@ -303,8 +397,8 @@ def _reward_air_time(
 ) -> np.ndarray:
     # Calculate Mode Timing Reward
     t_max = np.maximum(air_time, contact_time)
-    t_min = np.clip(t_max, a_max=mode_time)
-    stance_reward = np.clip(contact_time - air_time, a_min=-mode_time, a_max=mode_time)
+    t_min = np.clip(t_max, max=mode_time)
+    stance_reward = np.clip(contact_time - air_time, min=-mode_time, max=mode_time)
     # Command and Body Velocity:
     command_norm = np.linalg.norm(commands)
     velocity_norm = np.linalg.norm(body_velocity)
@@ -323,36 +417,44 @@ def _cost_gait_variance(
 ) -> np.ndarray:
     # Penalize variance in gait timing
     air_time_variance = np.var(
-        np.clip(previous_air_time, a_max=0.5),
+        np.clip(previous_air_time, max=0.5),
     )
     contact_time_variance = np.var(
-        np.clip(previous_contact_time, a_max=0.5),
+        np.clip(previous_contact_time, max=0.5),
     )
     return air_time_variance + contact_time_variance
 
 
-# Reward depends on information we dont have.
-def _cost_foot_slip(
-    pipeline_state: any,
+def _reward_foot_clearance(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    feet_site_idx: np.ndarray,
     target_foot_height: float = 0.1,
-    decay_rate: float = 0.95,
+    velocity_scale: float = 2.0,
+    sigma: float = 0.05,
 ) -> np.ndarray:
-    # Penalizes foot slip velocity at contact to encourage ground speed matching.
-    if not (0.0 < decay_rate <= 1.0):
-        raise ValueError("Decay rate must be between 0 and 1.")
-
-    # Foot velocities and foot heights
-    foot_velocity = self.get_feet_velocity(pipeline_state)
-    foot_velocity_xy = foot_velocity[..., :2]
-    foot_position = pipeline_state.site_xpos[self.feet_site_idx]
+    foot_position = data.site_xpos[feet_site_idx]
     foot_height = foot_position[..., -1]
+    foot_error = np.square(foot_height - target_foot_height)
+    foot_velocity = get_feet_velocity(model, data)[..., :2]
+    foot_velocity_norm = np.linalg.norm(foot_velocity)
+    foot_velocity_tanh = np.tanh(velocity_scale * foot_velocity_norm)
+    error = np.sum(foot_error * foot_velocity_tanh)
+    return np.exp(-error / sigma)
 
+
+def _cost_foot_slip(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    contact: np.ndarray,
+    commands: np.ndarray,
+) -> np.ndarray:
+    # Penalize foot slip
+    command_norm = np.linalg.norm(commands)
+    foot_velocity = get_feet_velocity(model, data)
+    foot_velocity_xy = foot_velocity[..., :2]
     velocity_xy_sq = np.sum(np.square(foot_velocity_xy), axis=-1)
-
-    scale_factor = -target_foot_height / np.log(1.0 - decay_rate)
-    height_gate = np.exp(-foot_height / scale_factor)
-
-    return np.sum(velocity_xy_sq * height_gate)
+    return np.sum(velocity_xy_sq * contact) * (command_norm > 0.1)
 
 
 # Reward depends on information we dont have.
@@ -366,6 +468,39 @@ def _cost_unwanted_contact(
 # Training only reward. Do not need.
 def _cost_termination(done: np.ndarray) -> np.ndarray:
     return done
+
+def get_sensor_data(
+    model: mujoco.MjModel, data: mujoco.MjData, sensor_name: str
+) -> np.ndarray:
+    """Gets sensor data given sensor name."""
+    sensor_id = model.sensor(sensor_name).id
+    sensor_adr = model.sensor_adr[sensor_id]
+    sensor_dim = model.sensor_dim[sensor_id]
+    return data.sensordata[sensor_adr: sensor_adr + sensor_dim]
+
+def get_feet_position(model: mujoco.MjModel, data: mujoco.MjData) -> np.ndarray:
+    feet_position_sensor = [
+        "front_right_position",
+        "front_left_position",
+        "hind_right_position",
+        "hind_left_position",
+    ]
+    return np.vstack([
+        get_sensor_data(model, data, sensor_name)
+        for sensor_name in feet_position_sensor
+    ])
+
+def get_feet_velocity(model: mujoco.MjModel, data: mujoco.MjData) -> np.ndarray:
+    feet_linear_velocity_sensor = [
+        "front_right_global_linear_velocity",
+        "front_left_global_linear_velocity",
+        "hind_right_global_linear_velocity",
+        "hind_left_global_linear_velocity",
+    ]
+    return np.vstack([
+        get_sensor_data(model, data, sensor_name)
+        for sensor_name in feet_linear_velocity_sensor
+    ])
 
 
 if __name__ == "__main__":

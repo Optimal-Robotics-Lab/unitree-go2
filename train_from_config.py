@@ -51,6 +51,8 @@ def train_from_config(train_config: dict[str, any]) -> None:
     # Rehydrate Model from Parameter Checkpoint:
     model_params = None
     if prefix == 'regressed':
+        # Rehydrate Regressed Parameters from Vendor MJCF
+        prefix = 'vendor'
         parameter_checkpoint_path = Path(train_config['parameter_checkpoint']) / 'regressed_params.pkl'
 
         if not parameter_checkpoint_path.is_file():

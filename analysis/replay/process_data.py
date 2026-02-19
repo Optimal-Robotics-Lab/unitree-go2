@@ -74,6 +74,7 @@ def process_data(
     imu_history: np.ndarray,
     policy_command_history: np.ndarray,
     vicon_history: np.ndarray,
+    contact_history: np.ndarray,
     sample_frequency: float = 100.0,
 ) -> dict[str, np.ndarray]:
     """ Process data from CSV files """
@@ -98,11 +99,16 @@ def process_data(
     vicon_idx = np.where(vicon_history[:, 0] >= start_time)[0][0]
     vicon_start_time = vicon_history[vicon_idx, 0]
 
+    # Find the corresponding Contact Timestamp:
+    contact_idx = np.where(contact_history[:, 0] >= start_time)[0][0]
+    contact_start_time = contact_history[contact_idx, 0]
+
     # Align time:
     command_history = command_history[command_idx:, :]
     state_history = state_history[state_idx:, :]
     imu_history = imu_history[imu_idx:, :]
     vicon_history = vicon_history[vicon_idx:, :]
+    contact_history = contact_history[contact_idx:, :]
 
     # Adjust time to start at zero
     policy_command_history[:, 0] -= start_time
@@ -110,6 +116,7 @@ def process_data(
     state_history[:, 0] -= state_start_time
     imu_history[:, 0] -= imu_start_time
     vicon_history[:, 0] -= vicon_start_time
+    contact_history[:, 0] -= contact_start_time
 
     # Set Timescale to Seconds:
     command_history[:, 0] *= 1e-9
@@ -117,6 +124,7 @@ def process_data(
     imu_history[:, 0] *= 1e-9
     policy_command_history[:, 0] *= 1e-9
     vicon_history[:, 0] *= 1e-9
+    contact_history[:, 0] *= 1e-9
 
     # Calculate Velocity from Vicon Data:
     positions = vicon_history[:, 1:4] * 1e-3    # Convert mm to m
@@ -126,6 +134,11 @@ def process_data(
         time=vicon_history[:, 0],
         frequency=sample_frequency,
     )
+
+    # Remove Trailing Zeros and Filter Contacts to just be booleans:
+    contact_history = contact_history[:, :5]
+    contact_filter = 20     # Force Measurement Threshold
+    contact_history[:, 1:] = contact_history[:, 1:] > contact_filter
 
     # Find when robot shuts off (no more commands):
     policy_command_norm = np.linalg.norm(policy_command_history[:, 1:], axis=1)
@@ -167,6 +180,13 @@ def process_data(
     vicon_interpolation_function = scipy.interpolate.interp1d(
         x=vicon_history[:, 0],
         y=vicon_history[:, 1:],
+        axis=0,
+        kind='nearest',
+    )
+
+    contact_interpolation_function = scipy.interpolate.interp1d(
+        x=contact_history[:, 0],
+        y=contact_history[:, 1:],
         axis=0,
         kind='nearest',
     )
@@ -225,6 +245,14 @@ def process_data(
         vicon_history_sampled
     ))
 
+    contact_history_sampled = contact_interpolation_function(
+        time_points
+    )
+    contact_history = np.hstack((
+        time_points[:, np.newaxis],
+        contact_history_sampled
+    ))
+
     positions_sampled = filtered_positions_function(
         time_points
     )
@@ -244,6 +272,7 @@ def process_data(
         "policy_command_history": policy_command_history,
         "vicon_history": vicon_history,
         "filtered_history": filtered_history,
+        "contact_history": contact_history,
     }
 
     return processed_data
