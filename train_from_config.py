@@ -1,4 +1,4 @@
-from absl import app, flags, logging
+from absl import app, logging
 
 import os
 import functools
@@ -41,27 +41,21 @@ os.environ['XLA_FLAGS'] = (
 logging.set_verbosity(logging.FATAL)
 
 
-FLAGS = flags.FLAGS
-flags.DEFINE_string(
-    'tag', '', 'Tag for wandb run.', short_name='t',
-)
-flags.DEFINE_string(
-    'parameter_checkpoint', None, 'Parameter checkpoint path to load.', short_name='p', required=True,
-)
-
-
-def main(argv=None):
-    # Get FLAG.tag prefix:
-    prefix, suffix = FLAGS.tag.split('-')
-    if prefix not in ['standard', 'transparent', 'vendor']:
+def train_from_config(train_config: dict[str, any]) -> None:
+    prefix, suffix = train_config['tag'].split('-')
+    if prefix not in ['regressed', 'transparent', 'vendor']:
         raise ValueError(f'Unknown FLAG.tag prefix: {prefix}')
     if suffix not in ['position', 'velocity']:
         raise ValueError(f'Unknown FLAG.tag suffix: {suffix}')
 
     # Rehydrate Model from Parameter Checkpoint:
     model_params = None
-    if FLAGS.parameter_checkpoint is not None:
-        parameter_checkpoint_path = Path(FLAGS.parameter_checkpoint) / 'regressed_params.pkl'
+    if prefix == 'regressed':
+        parameter_checkpoint_path = Path(train_config['parameter_checkpoint']) / 'regressed_params.pkl'
+
+        if not parameter_checkpoint_path.is_file():
+            raise ValueError(f'Parameter checkpoint not found at: {parameter_checkpoint_path}')
+
         with open(parameter_checkpoint_path, 'rb') as f:
             params = pickle.load(f)
 
@@ -72,11 +66,8 @@ def main(argv=None):
             if not k.startswith('initial_')
         }
 
-    # Training Types:
-    training_types = ['baseline', 'finetune']
-
     previous_run = None
-    for training_type in training_types:
+    for training_type in train_config['curriculum']:
         # Baseline Reward Config:
         if training_type == 'baseline':
             reward_config = config.RewardConfig(
@@ -288,11 +279,10 @@ def main(argv=None):
         # Sanitize Optimizer Config for Logging and Checkpointing:
         sanitized_optimizer_config = checkpoint_utilities.sanitize_config(optimizer_config)
 
-
         # Start Wandb and save metadata:
         run = wandb.init(
-            project='UnitreeGo2-Tests',
-            tags=[FLAGS.tag],
+            project='UnitreeGo2-Parameterized-Models',
+            tags=train_config['wandb_tags'],
             config={
                 'reward_config': reward_config,
                 'agent_metadata': agent_metadata,
@@ -314,7 +304,16 @@ def main(argv=None):
         )
 
         # Initialize Functions with Params:
-        randomization_fn = randomize.domain_randomize
+        if train_config['domain_randomization'] == 'domain_randomize':
+            randomization_fn = randomize.domain_randomize
+        elif train_config['domain_randomization'] == 'task_randomize':
+            randomization_fn = randomize.task_randomize
+        elif train_config['domain_randomization'] == 'uniform_domain_randomize':
+            randomization_fn = randomize.uniform_domain_randomize
+        elif train_config['domain_randomization'] == 'no_randomize':
+            randomization_fn = None
+        else:
+            raise ValueError(f'Unknown domain randomization type: {train_config["domain_randomization"]}')
         loss_fn = functools.partial(
             loss_function,
             policy_clip_coef=loss_metadata.policy_clip_coef,

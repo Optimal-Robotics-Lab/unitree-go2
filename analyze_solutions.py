@@ -9,18 +9,8 @@ from regression.tools.analyze_regression import analyze_regression
 def main(argv=None):
 
     run_names = [
-        "kind-pond-70",
-        "wild-capybara-68",
-        "swept-river-69",
-        "distinctive-planet-71",
-        "volcanic-yogurt-77",
-        "dandy-leaf-75",
-        "classic-water-76",
-        "robust-energy-78",
-        "toasty-universe-72",
-        "different-river-73",
-        "lively-water-79",
-        "curious-wind-80",
+        "hardy-sound-81",
+        "polar-moon-74",
     ]
 
     checkpoint_path = Path("regression/checkpoints")

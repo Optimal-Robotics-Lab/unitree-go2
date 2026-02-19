@@ -221,15 +221,16 @@ def main(argv=None):
 
         # Setup Optimizer:
         optimizer_config = OptimizerConfig(
-            learning_rate=3e-4,
+            optimizer_type="adam",
+            scheduler_type="constant_schedule",
+            optimizer_params={ },
+            scheduler_params={
+                "value": 3e-4
+            },
             grad_clip_norm=1.0,
-            desired_kl=None,
-            min_learning_rate=1e-5,
-            max_learning_rate=1e-2,
-            kl_adjustment_factor=1.5,
         )
         optimizer = create_optimizer(optimizer_config)
-        has_adaptive_kl_scheduler = True if optimizer_config.desired_kl is not None else False
+        has_adaptive_kl_scheduler = (optimizer_config.scheduler_type == "adaptive_kl_schedule")
 
         # Aggregate Metadata:
         agent_metadata = checkpoint_utilities.AgentMetadata(

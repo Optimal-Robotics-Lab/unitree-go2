@@ -53,19 +53,20 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         # Model Override:
         if 'model_params' in kwargs:
             params = kwargs['model_params']
-            for k, v in params.items():
-                if 'actuator_dynprm' in k:
-                    value = getattr(mj_model, k)
-                    value[:, 0] = v
-                    setattr(mj_model, k, value)
-                if 'dof_frictionloss' in k or 'dof_damping' in k or 'dof_armature' in k:
-                    value = getattr(mj_model, k)
-                    value[6:] = v
-                    setattr(mj_model, k, value)
-                if 'qpos0' in k:
-                    value = getattr(mj_model, k)
-                    value[7:] = v
-                    setattr(mj_model, k, value)
+            if params is not None:
+                for k, v in params.items():
+                    if 'actuator_dynprm' in k:
+                        value = getattr(mj_model, k)
+                        value[:, 0] = v
+                        setattr(mj_model, k, value)
+                    if 'dof_frictionloss' in k or 'dof_damping' in k or 'dof_armature' in k:
+                        value = getattr(mj_model, k)
+                        value[6:] = v
+                        setattr(mj_model, k, value)
+                    if 'qpos0' in k:
+                        value = getattr(mj_model, k)
+                        value[7:] = v
+                        setattr(mj_model, k, value)
 
         mj_model.opt.timestep = environment_config.optimizer_timestep
         self._mj_model = mj_model
