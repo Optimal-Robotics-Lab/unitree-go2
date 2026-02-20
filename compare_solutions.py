@@ -139,6 +139,13 @@ def main(argv=None):
     # Create DataFrame
     df = pd.DataFrame(data_list)
 
+    for value in df.relative_hessian_matrix_eigenvalues:
+        print("value:", value)
+        if value.any() < 0:
+            print("Negative eigenvalue found in relative_hessian_matrix_eigenvalues!")
+
+    import pdb; pdb.set_trace()
+    
     # Remove Matrix and Eigenvector columns:
     cols_to_drop = [
         "correlation_matrix", "correlation_matrix_eigenvectors",

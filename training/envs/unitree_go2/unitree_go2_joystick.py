@@ -552,13 +552,6 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         # Penalize non flat base orientation
         return jnp.sum(jnp.square(base_z_axis[:2]))
 
-    def _cost_pose_regularization(
-        self, qpos: jax.Array,
-    ) -> jax.Array:
-        weight = jnp.array([1.0, 1.0, 0.1] * 4) / 12.0
-        error = jnp.sum(jnp.square(qpos - self.default_pose) * weight)
-        return jnp.exp(-error)
-
     def _cost_torques(self, torques: jax.Array) -> jax.Array:
         # Penalize torques
         return jnp.sqrt(jnp.sum(jnp.square(torques))) + jnp.sum(jnp.abs(torques))
@@ -568,12 +561,6 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
     ) -> jax.Array:
         # Penalize changes in actions
         return jnp.sum(jnp.square(action - previous_action))
-
-    def _cost_mechanical_power(
-        self, qd: jax.Array, torques: jax.Array
-    ) -> jax.Array:
-        # Penalize mechanical power
-        return jnp.sum(jnp.abs(torques) * jnp.abs(qd))
 
     def _cost_acceleration(
         self, qacc: jax.Array,
@@ -589,20 +576,6 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         # Penalize motion at zero commands
         command_norm = jnp.linalg.norm(commands)
         return jnp.sum(jnp.abs(joint_angles - self.default_pose)) * (command_norm < 0.1)
-
-    # def _reward_air_time(
-    #     self,
-    #     air_time: jax.Array,
-    #     first_contact: jax.Array,
-    #     commands: jax.Array,
-    # ) -> jax.Array:
-    #     # Flight Phase Reward:
-    #     command_norm = jnp.linalg.norm(commands)
-    #     reward_air_time = jnp.sum((air_time - self.target_air_time) * first_contact)
-    #     reward_air_time *= (
-    #         command_norm > 0.1
-    #     )
-    #     return reward_air_time
 
     def _reward_air_time(
         self,
@@ -672,31 +645,6 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         velocity_xy_sq = jnp.sum(jnp.square(foot_velocity_xy), axis=-1)
         return jnp.sum(velocity_xy_sq * contact) * (command_norm > 0.1)
 
-    # def _cost_foot_slip(
-    #     self,
-    #     data: base.State,
-    #     target_foot_height: float = 0.1,
-    #     decay_rate: float = 0.95,
-    # ) -> jax.Array:
-    #     # Penalizes foot slip velocity at contact to encourage ground speed matching.
-    #     if not (0.0 < decay_rate <= 1.0):
-    #         raise ValueError("Decay rate must be between 0 and 1.")
-
-    #     # Foot velocities and foot heights
-    #     foot_velocity = self.get_feet_velocity(data)
-    #     foot_velocity_xy = foot_velocity[..., :2]
-    #     foot_position = data.site_xpos[self.feet_site_idx]
-    #     foot_height = foot_position[..., -1]
-
-    #     # Calculate velocity of each foot relative to the base
-    #     velocity_xy_sq = jnp.sum(jnp.square(foot_velocity_xy), axis=-1)
-
-    #     # Calculate scale factor to smoothly increase penalty as foot approaches target height
-    #     scale_factor = -target_foot_height / jnp.log(1.0 - decay_rate)
-    #     height_gate = jnp.exp(-foot_height / scale_factor)
-
-    #     return jnp.sum(velocity_xy_sq * height_gate)
-
     def _cost_unwanted_contact(
         self,
         unwanted_contacts: jax.Array,
@@ -706,14 +654,6 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
 
     def _cost_termination(self, done: jax.Array) -> jax.Array:
         return done
-
-    def _cost_position_rate(
-        self,
-        joint_angles: jax.Array,
-        previous_joint_angles: jax.Array,
-    ) -> jax.Array:
-        # Penalize large fast joint position changes
-        return jnp.sum(jnp.square(joint_angles - previous_joint_angles))
 
     # Adapted from mujoco_playground:
     def maybe_apply_perturbation(self, state: mjx_env.State) -> mjx_env.State:
