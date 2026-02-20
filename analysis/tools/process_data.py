@@ -137,7 +137,7 @@ def process_data(
 
     # Remove Trailing Zeros and Filter Contacts to just be booleans:
     contact_history = contact_history[:, :5]
-    contact_filter = 26     # Force Measurement Threshold
+    contact_filter = 18     # Force Measurement Threshold
     contact_history[:, 1:] = contact_history[:, 1:] > contact_filter
 
     # Find when robot shuts off (no more commands):

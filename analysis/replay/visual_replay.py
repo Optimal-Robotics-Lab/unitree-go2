@@ -90,7 +90,7 @@ def main(argv=None):
         viewer.cam.trackbodyid = 1
         viewer.cam.distance = 5
 
-        time.sleep(10.0)
+        time.sleep(2.0)
 
         while viewer.is_running() and not termination_flag:
             for command, state, imu, vicon in replay_data:
@@ -115,8 +115,8 @@ def main(argv=None):
                 angular_velocity = imu[5:8]
                 linear_acceleration = imu[8:]
 
-                # body_orientation = imu_orientation
-                body_orientation = vicon_orientation
+                body_orientation = imu_orientation
+                # body_orientation = vicon_orientation
 
                 # Set Body Position States:
                 data.qpos[:3] = body_position

@@ -1,0 +1,123 @@
+global_metrics:
+  average: 1.9197099436920568
+  std_deviation: 0.2724704132090528
+runs:
+  regressed-position-domain-randomization-forward:
+    original_config:
+      action_rate: -0.0815317960384308
+      air_time: 0.24936000000000003
+      angular_xy_velocity: -0.03146092359024884
+      foot_clearance: 0.4660756201776056
+      foot_slip: -0.3542738273324516
+      gait_variance: -0.0050182000000000004
+      linear_z_velocity: -0.011478648098462944
+      orientation_regularization: -0.0031447402390723024
+      stand_still: 0.0
+      sum: 2.304631949684745
+      torque: -0.01953807635209354
+      tracking_angular_velocity: 0.6947554557694914
+      tracking_linear_velocity: 1.4008870853884081
+    reward: 2.304631949684745
+    z_score: 1.4127112058121227
+  regressed-position-forward:
+    original_config:
+      action_rate: -0.08468403357057566
+      air_time: 0.25151999999999997
+      angular_xy_velocity: -0.03412068431563424
+      foot_clearance: 0.47474215411298776
+      foot_slip: -0.47363926485390834
+      gait_variance: -0.0052232
+      linear_z_velocity: -0.010542518760309772
+      orientation_regularization: -0.005360419227981065
+      stand_still: 0.0
+      sum: 2.17999840489231
+      torque: -0.019395746346172384
+      tracking_angular_velocity: 0.698253448603462
+      tracking_linear_velocity: 1.3884486692504416
+    reward: 2.17999840489231
+    z_score: 0.9552907346330728
+  transparent-position-domain-randomization-forward:
+    original_config:
+      action_rate: -0.06620718043259875
+      air_time: 0.24060000000000004
+      angular_xy_velocity: -0.06547065514098169
+      foot_clearance: 0.46490026376881305
+      foot_slip: -0.9810996984557083
+      gait_variance: -0.0074712
+      linear_z_velocity: -0.17484930432626408
+      orientation_regularization: -0.019816146224029628
+      stand_still: 0.0
+      sum: 1.3912709844638884
+      torque: -0.019085347724639126
+      tracking_angular_velocity: 0.7046521001424301
+      tracking_linear_velocity: 1.315118152856867
+    reward: 1.3912709844638884
+    z_score: -1.9394361134642677
+  transparent-position-forward:
+    original_config:
+      action_rate: -0.06279281036793638
+      air_time: 0.25356
+      angular_xy_velocity: -0.07251897361537471
+      foot_clearance: 0.47309277619358
+      foot_slip: -0.6633797789723898
+      gait_variance: -0.0057028999999999995
+      linear_z_velocity: -0.0027212631836674795
+      orientation_regularization: -0.015399496216752823
+      stand_still: 0.0
+      sum: 1.8625407300741057
+      torque: -0.01789658251803172
+      tracking_angular_velocity: 0.723954584528182
+      tracking_linear_velocity: 1.2523451742264966
+    reward: 1.8625407300741057
+    z_score: -0.2098180604074912
+  uniform-position-domain-randomization-forward:
+    original_config:
+      action_rate: -0.07736588721184953
+      air_time: 0.23544000000000004
+      angular_xy_velocity: -0.02497533693206782
+      foot_clearance: 0.4729645873810955
+      foot_slip: -0.6251532121904714
+      gait_variance: -0.0048634
+      linear_z_velocity: -0.008794640924107177
+      orientation_regularization: -0.005050374596593708
+      stand_still: 0.0
+      sum: 1.9823583356525138
+      torque: -0.018389725431447623
+      tracking_angular_velocity: 0.7148737975311366
+      tracking_linear_velocity: 1.3236725280268191
+    reward: 1.9823583356525138
+    z_score: 0.22992732026427423
+  vendor-position-domain-randomization-forward:
+    original_config:
+      action_rate: -0.08581929896394035
+      air_time: 0.23724
+      angular_xy_velocity: -0.04165184214535029
+      foot_clearance: 0.47251591367403417
+      foot_slip: -0.9019702100584537
+      gait_variance: -0.0068055
+      linear_z_velocity: -0.0003004685694345106
+      orientation_regularization: -0.013314063699558582
+      stand_still: 0.0
+      sum: 1.7883978496292294
+      torque: -0.018558710838645274
+      tracking_angular_velocity: 0.7179747853562849
+      tracking_linear_velocity: 1.429087244874293
+    reward: 1.7883978496292294
+    z_score: -0.48193157017043997
+  vendor-position-forward:
+    original_config:
+      action_rate: -0.0967386632478487
+      air_time: 0.22901999999999997
+      angular_xy_velocity: -0.060352805690632595
+      foot_clearance: 0.4624473289034994
+      foot_slip: -0.6176423598689016
+      gait_variance: -0.0042135
+      linear_z_velocity: -0.0010228811956831227
+      orientation_regularization: -0.01423550092967981
+      stand_still: 0.0
+      sum: 1.9287713514476057
+      torque: -0.018969217365502843
+      tracking_angular_velocity: 0.7113390330861198
+      tracking_linear_velocity: 1.3391399177562353
+    reward: 1.9287713514476057
+    z_score: 0.033256483332729805
