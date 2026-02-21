@@ -144,7 +144,7 @@ def train(
     if restored_checkpoint is not None:
         nnx.update(agent, restored_checkpoint.agent)
         opt_state = restored_checkpoint.opt_state
-    
+
     agent = jax.device_put(agent, s_replicated)
     opt_state = jax.device_put(opt_state, s_replicated)
 

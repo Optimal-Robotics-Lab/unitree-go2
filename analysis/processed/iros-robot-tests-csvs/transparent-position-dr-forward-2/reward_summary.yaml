@@ -1,0 +1,13 @@
+tracking_linear_velocity: 1.35956280036627
+tracking_angular_velocity: 0.709219786258662
+orientation_regularization: -0.016959003250372952
+linear_z_velocity: -0.18487068475201568
+angular_xy_velocity: -0.0548475658131936
+torque: -0.018231813399487123
+action_rate: -0.06532352768880682
+stand_still: 0.0
+foot_slip: -2.0235410749333846
+air_time: 0.23262
+foot_clearance: 0.4577024336248099
+gait_variance: -0.0079569
+sum: 0.38737445041248114

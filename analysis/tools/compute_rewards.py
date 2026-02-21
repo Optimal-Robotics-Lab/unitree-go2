@@ -34,7 +34,7 @@ def compute_rewards(directory_name: str) -> None:
     """ Load Data """
     filepath = pathlib.Path(__file__).resolve()
     base_directory = filepath.parent.parent
-    
+
     directory_path = pathlib.Path(directory_name)
     # Robot Command, State, Contact, IMU Data:
     command_history = directory_path / "postprocessed_command_history.csv"
@@ -184,7 +184,7 @@ def compute_rewards(directory_name: str) -> None:
     ]
     assert not any(id_ == -1 for id_ in feet_site_idx), 'Site not found.'
     feet_site_idx = np.array(feet_site_idx)
-    
+
     # Calculate MuJoCo Data for all States:
     base_positions = np.concatenate([vicon_positions, body_orientation], axis=1)
     base_velocities = np.concatenate([global_velocity, global_anglular_velocity], axis=1)
@@ -204,12 +204,20 @@ def compute_rewards(directory_name: str) -> None:
     previous_air_times = np.zeros(contact_forces.shape)
     previous_contact_times = np.zeros(contact_forces.shape)
     for i, contact in enumerate(contact_forces):
-        previous_air_times[i] = np.where(
-            contact == True, 0.0, previous_air_times[i-1] + dt,
-        )
-        previous_contact_times[i] = np.where(
-            contact == False, 0.0, previous_contact_times[i-1] + dt,
-        )
+        if i == 0:
+            previous_air_times[i] = np.where(
+                contact == True, 0.0, dt,
+            )
+            previous_contact_times[i] = np.where(
+                contact == False, 0.0, dt,
+            )
+        else:
+            previous_air_times[i] = np.where(
+                contact == True, 0.0, previous_air_times[i-1] + dt,
+            )
+            previous_contact_times[i] = np.where(
+                contact == False, 0.0, previous_contact_times[i-1] + dt,
+            )
 
     def calculate_reward(
         reward_data: dict[str, np.ndarray]
