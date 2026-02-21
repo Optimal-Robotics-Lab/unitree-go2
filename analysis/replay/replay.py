@@ -17,7 +17,7 @@ import mujoco.viewer
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
-    'directory_name', None, 'Desired checkpoint folder name to load.', short_name='d', required=True,
+    'directory_path', None, 'Desired checkpoint folder name to load.', short_name='d', required=True,
 )
 flags.DEFINE_string(
     'parameter_checkpoint', None, 'Desired parameter checkpoint folder name to load.', short_name='p', required=False,
@@ -26,8 +26,11 @@ flags.DEFINE_string(
 
 def main(argv=None):
     # Load Data:
-    prefix = FLAGS.directory_name.split('-')[0]
-    suffix = FLAGS.directory_name.split('-')[1]
+    path = Path(FLAGS.directory_path).resolve()
+    subfolder_name = path.name
+
+    prefix = subfolder_name.split('-')[0]
+    suffix = subfolder_name.split('-')[1]
     if prefix not in ['standard', 'transparent', 'regressed', 'vendor']:
         print("Error: Invalid directory name prefix.", file=sys.stderr)
         return
@@ -36,13 +39,11 @@ def main(argv=None):
         print("Error: Parameter checkpoint must be provided for regressed prefix.", file=sys.stderr)
         return
 
-    data_directory = Path(__file__).parent.parent
-
-    command_history = data_directory / f"processed/{FLAGS.directory_name}/postprocessed_command_history.csv"
-    state_history = data_directory / f"processed/{FLAGS.directory_name}/postprocessed_state_history.csv"
-    imu_history = data_directory / f"processed/{FLAGS.directory_name}/postprocessed_imu_history.csv"
-    vicon_history = data_directory / f"processed/{FLAGS.directory_name}/postprocessed_vicon_history.csv"
-    filtered_vicon_history = data_directory / f"processed/{FLAGS.directory_name}/postprocessed_filtered_vicon_history.csv"
+    command_history = path / "postprocessed_command_history.csv"
+    state_history = path / "postprocessed_state_history.csv"
+    imu_history = path / "postprocessed_imu_history.csv"
+    vicon_history = path / "postprocessed_vicon_history.csv"
+    filtered_vicon_history = path / "postprocessed_filtered_vicon_history.csv"
 
     print(command_history)
 
@@ -85,13 +86,13 @@ def main(argv=None):
     replay_data_list = list(replay_data)
 
     # Create Simulation:
-    path = Path(__file__).parent.parent.parent
+    base = Path(__file__).parent.parent.parent
     model_params = None
     if prefix in ['standard', 'transparent', 'vendor']:
-        model_path = path / f"training/envs/unitree_go2/mjcf/scene_mjx_{prefix}_{suffix}.xml"
+        model_path = base / f"training/envs/unitree_go2/mjcf/scene_mjx_{prefix}_{suffix}.xml"
     elif prefix == 'regressed':
-        model_path = path / f"training/envs/unitree_go2/mjcf/scene_mjx_standard_{suffix}.xml"
-        parameter_path = path / f"regression/checkpoints/{FLAGS.parameter_checkpoint}/regressed_params.pkl"
+        model_path = base / f"training/envs/unitree_go2/mjcf/scene_mjx_standard_{suffix}.xml"
+        parameter_path = base / f"regression/checkpoints/{FLAGS.parameter_checkpoint}/regressed_params.pkl"
 
         with open(parameter_path, 'rb') as f:
             params = pickle.load(f)
@@ -154,7 +155,7 @@ def main(argv=None):
 
     base_position = data.xpos[base_id]
     marker_position = data.site_xpos[marker_id]
-    vicon_offset = marker_position - base_position
+    vicon_offset = marker_position - base_position + np.array([0, 0, 0.05])
 
     # Precalculate Hardware Outputs:
     outputs_hardware = []
@@ -205,7 +206,7 @@ def main(argv=None):
         viewer.cam.trackbodyid = 1
         viewer.cam.distance = 5
 
-        time.sleep(5.0)
+        time.sleep(2.0)
 
         while viewer.is_running() and not termination_flag:
             for command, state, imu, vicon, filtered_vicon in replay_data_list[:-1]:
@@ -285,7 +286,7 @@ def main(argv=None):
             termination_flag = True
 
     # Save Data to YAML:
-    save_directory = data_directory / f"processed/{FLAGS.directory_name}"
+    save_directory = path / "replay"
     save_directory.mkdir(parents=True, exist_ok=True)
 
     input_history = defaultdict(list)
