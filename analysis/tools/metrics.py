@@ -2,10 +2,15 @@ from absl import app, flags
 
 import sys
 from pathlib import Path
+import matplotlib
 import yaml
 
 import numpy as np
 import pandas as pd
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+from matplotlib.patches import Patch, PathPatch, Rectangle
 
 import plotly.express as px
 import plotly.graph_objects as go
@@ -27,17 +32,25 @@ def load_and_format_data(yaml_path):
     with path.open('r') as f:
         data = yaml.safe_load(f)
 
-    # --- NEW: Dictionary mapping raw directory names to publication names ---
+    # policy_name_map = {
+    #     "regressed-position-forward": "Regressed Parameter",
+    #     "regressed-position-dr-forward": "Regressed Parameter w/ Domain Randomization",
+    #     "transparent-position-forward": "Transparent Parameter",
+    #     "transparent-position-dr-forward": "Transparent Parameter w/ Domain Randomization",
+    #     "uniform-position-dr-forward": "Uniform Parameter Domain Randomization",
+    #     "vendor-position-forward": "Vendor",
+    #     "vendor-position-dr-forward": "Vendor w/ Domain Randomization",
+    # }
+
     policy_name_map = {
-        "regressed-position-forward": "Regressed Parameter",
-        "regressed-position-dr-forward": "Regressed Parameter w/ Domain Randomization",
-        "transparent-position-forward": "Transparent Parameter",
-        "transparent-position-dr-forward": "Transparent Parameter w/ Domain Randomization",
-        "uniform-position-dr-forward": "Uniform Parameter Domain Randomization",
-        "vendor-position-forward": "Vendor Baseline",
-        "vendor-position-dr-forward": "Vendor Baseline w/ Domain Randomization",
+        "fresh-armadillo-6": "Regressed Parameter",
+        "rose-fog-12": "Regressed Parameter w/ Domain Randomization",
+        "treasured-sky-23": "Transparent Parameter",
+        "resilient-oath-10": "Transparent Parameter w/ Domain Randomization",
+        "major-bush-14": "Uniform Parameter Domain Randomization",
+        "astral-bee-25": "Vendor",
+        "lilac-resonance-8": "Vendor w/ Domain Randomization",
     }
-    # ------------------------------------------------------------------------
 
     records = []
     for run_name, run_data in data['runs'].items():
@@ -49,6 +62,7 @@ def load_and_format_data(yaml_path):
             "System": clean_system_name,
             "Run": run_name,
             "Total_Reward": run_data['reward'],
+            "Episodic_Reward": run_data.get('episodic_reward', np.nan),
         }
 
         config = run_data.get('original_config', {})
@@ -61,35 +75,547 @@ def load_and_format_data(yaml_path):
     return pd.DataFrame(records)
 
 
+# def plot_aggregate_performance(df, output_dir):
+#     """Generates the Box + Swarm plot for total reward distributions."""
+#     colors = px.colors.qualitative.Plotly
+#     color_map = {
+#         "Regressed Parameter": colors[0],
+#         "Regressed Parameter w/ Domain Randomization": colors[0],    
+#         "Transparent Parameter": colors[1],
+#         "Transparent Parameter w/ Domain Randomization": colors[1],
+#         "Vendor": colors[2],
+#         "Vendor w/ Domain Randomization": colors[2],
+#         "Uniform Parameter Domain Randomization": colors[3],
+#     }
+
+#     order = df.groupby('System')['Total_Reward'].mean().sort_values(ascending=False).index
+
+#     fig = px.box(
+#         df,
+#         x='Total_Reward',
+#         y='System',
+#         color='System',
+#         points='all',
+#         category_orders={"System": order.tolist()},
+#         color_discrete_map=color_map,
+#     )
+
+#     for trace in fig.data:
+#         if "Domain Randomization" in trace.name:
+#             # Hatches: '\\', 'x', '-', '|', '+', or '.'
+#             import pdb; pdb.set_trace()
+#             trace.fillpattern = dict(shape="/", fillmode="overlay")
+
+#     fig.update_layout(
+#         title=dict(text="Policy Performance Distribution Across Hardware Deployments", font=dict(size=18)),
+#         xaxis_title="Total Reward Sum",
+#         yaxis_title="Policy Configuration",
+#         showlegend=False,
+#         template="simple_white",
+#         width=1000,
+#         height=600
+#     )
+
+#     fig.write_html(output_dir / "aggregate_performance.html")
+#     fig.write_image(output_dir / "aggregate_performance.pdf")
+#     print("Saved: aggregate_performance (HTML/PDF)")
+
 def plot_aggregate_performance(df, output_dir):
-    """Generates the Box + Swarm plot for total reward distributions."""
+    """Generates a Seaborn Box + Strip plot with hatches, offset matched scatter points, and full whiskers."""
+    df = df.copy()
+    rename_map = {
+        "Regressed Parameter": "Regressed",
+        "Regressed Parameter w/ Domain Randomization": "Regressed (DR)",
+        "Transparent Parameter": "Transparent",
+        "Transparent Parameter w/ Domain Randomization": "Transparent (DR)",
+        "Vendor": "Vendor",
+        "Vendor w/ Domain Randomization": "Vendor (DR)",
+        "Uniform Parameter Domain Randomization": "Uniform (DR)",
+    }
+    df['System'] = df['System'].replace(rename_map)
+
     order = df.groupby('System')['Total_Reward'].mean().sort_values(ascending=False).index
 
-    fig = px.box(
-        df,
+    base_palette = sns.color_palette()
+    color_map = {
+        "Regressed": base_palette[0],
+        "Regressed (DR)": base_palette[0],
+        "Transparent": base_palette[1],
+        "Transparent (DR)": base_palette[1],
+        "Vendor": base_palette[2],
+        "Vendor (DR)": base_palette[2],
+        "Uniform (DR)": base_palette[3],
+    }
+
+    fig, ax = plt.subplots(figsize=(3.5, 4.0))
+    # plt.figure(figsize=(10, 6))
+
+    ax = sns.boxplot(
+        data=df,
         x='Total_Reward',
         y='System',
-        color='System',
-        points='all',
-        category_orders={"System": order.tolist()}
+        order=order,
+        palette=color_map,
+        showfliers=False,
+        width=0.4,
+        zorder=3,
+        whis=(0, 100),
     )
 
-    fig.update_layout(
-        title=dict(text="Policy Performance Distribution Across Hardware Deployments", font=dict(size=18)),
-        xaxis_title="Total Reward Sum",
-        yaxis_title="Policy Configuration",
-        showlegend=False,
-        template="simple_white",
-        width=1000,
-        height=600
+    for patch in ax.patches:
+        patch.set_zorder(3)
+
+    lines_per_box = len(ax.lines) // len(ax.patches)
+
+    for i, box in enumerate(ax.patches):
+        system_name = order[i]
+
+        base_color = box.get_facecolor()
+        rgb = base_color[:3]
+
+        edge_color = (*rgb, 1.0)
+        face_color = (*rgb, 0.3)
+
+        box.set_facecolor(face_color)
+        box.set_edgecolor(edge_color)
+        box.set_linewidth(1.0)
+
+        if "(DR)" in system_name:
+            hatch_overlay = PathPatch(
+                box.get_path(),
+                transform=box.get_transform(),
+                facecolor='none',
+                edgecolor=edge_color,
+                hatch='///',
+                hatch_linewidth=1.0,
+                linewidth=1.0,
+                zorder=box.get_zorder() + 0.1
+            )
+            ax.add_patch(hatch_overlay)
+
+        # 3. Whisker, Caps, and Median Lines
+        start_idx = i * lines_per_box
+        end_idx = start_idx + lines_per_box
+
+        for line in ax.lines[start_idx:end_idx]:
+            line.set_color(edge_color)
+            line.set_linewidth(1.0)
+
+    n_collections = len(ax.collections)
+
+    sns.stripplot(
+        data=df,
+        x='Total_Reward',
+        y='System',
+        order=order,
+        hue='System',
+        palette=color_map,
+        alpha=0.6,
+        size=4,
+        jitter=0.05,
+        zorder=1,
+        legend=False,
     )
 
-    fig.write_html(output_dir / "aggregate_performance.html")
-    fig.write_image(output_dir / "aggregate_performance.pdf")
-    print("Saved: aggregate_performance (HTML/PDF)")
+    for col in ax.collections[n_collections:]:
+        offsets = col.get_offsets()
+        if len(offsets) > 0:
+            offsets[:, 1] += 0.4
+            col.set_offsets(offsets)
+
+    # plt.xlabel("Total Reward Sum", fontsize=12, fontweight='bold')
+    # plt.ylabel("", fontsize=12)
+
+    # plt.xticks(fontsize=12)
+    # plt.yticks(fontsize=12)
+
+    # sns.despine()
+
+    # 6. Formatting (Scaled down for 3.5 inch width)
+    ax.set_xlabel("Total Reward Sum", fontsize=9, fontweight="bold")
+    ax.set_ylabel("")
+    ax.tick_params(axis='both', labelsize=8)
+    sns.despine(ax=ax)
+
+    legend_elements = [
+        Patch(facecolor='gray', alpha=0.3, edgecolor='black', label='Baseline Policy'),
+        Patch(facecolor='gray', alpha=0.3, edgecolor='black', hatch='///', label='Domain Randomization (DR)')
+    ]
+
+    plt.legend(handles=legend_elements, loc='best', frameon=True, fontsize=6)
+
+    plt.tight_layout()
+    output_pdf = output_dir / "aggregate_performance.pdf"
+    plt.savefig(output_pdf, format='pdf', bbox_inches='tight')
+    print(f"Saved: {output_pdf}")
+    plt.close()
+
+
+def plot_grouped_performance(df, output_dir):
+    """Generates a grouped Box + Strip plot with matching colors, hatches, and offset scatter points."""
+    df = df.copy()
+    output_dir = Path(output_dir)
+
+    rename_map = {
+        "Regressed Parameter": "Regressed",
+        "Regressed Parameter w/ Domain Randomization": "Regressed (DR)",
+        "Transparent Parameter": "Transparent",
+        "Transparent Parameter w/ Domain Randomization": "Transparent (DR)",
+        "Vendor": "Vendor",
+        "Vendor w/ Domain Randomization": "Vendor (DR)",
+        "Uniform Parameter Domain Randomization": "Uniform (DR)",
+    }
+    df['System'] = df['System'].replace(rename_map)
+
+    # Extract Base and Variant using fast, vectorized operations
+    df['Base_Policy'] = df['System'].str.replace(r' \(DR\)', '', regex=True)
+    df['Variant'] = np.where(df['System'].str.contains('(DR)', regex=False), 'DR', 'Baseline')
+
+    # Determine the y-axis order dynamically based on mean Total_Reward
+    order = (
+        df.groupby('Base_Policy')['Total_Reward']
+        .mean()
+        .sort_values(ascending=False)
+        .index.tolist()
+    )
+
+    # Inject dummy rows safely (Bulk creation is 100x faster than looping pd.concat)
+    existing_pairs = set(zip(df['Base_Policy'], df['Variant']))
+    missing_rows = [
+        {'System': f"{base} ({variant})", 'Base_Policy': base, 'Variant': variant, 'Total_Reward': np.nan}
+        for base in order for variant in ['Baseline', 'DR']
+        if (base, variant) not in existing_pairs
+    ]
+    if missing_rows:
+        df = pd.concat([df, pd.DataFrame(missing_rows)], ignore_index=True)
+
+    # 2. Assign strictly matching colors safely
+    base_palette = sns.color_palette()
+    color_map = {
+        "Regressed": base_palette[0],
+        "Transparent": base_palette[1],
+        "Vendor": base_palette[2],
+        "Uniform": base_palette[3],
+    }
+
+    matplotlib.rcParams['hatch.linewidth'] = 1.0
+    fig, ax = plt.subplots(figsize=(3.5, 4.0))
+
+    # 3. Create Grouped Boxplot
+    sns.boxplot(
+        data=df,
+        x='Total_Reward',
+        y='Base_Policy',
+        hue='Variant',
+        hue_order=['Baseline', 'DR'],
+        order=order,
+        showfliers=False,
+        width=0.5,
+        zorder=3,
+        whis=(0, 100),
+        legend=False,
+        ax=ax
+    )
+
+    # Box Labels:
+    labels = [
+        (variant, base)
+        for variant in ['Baseline', 'DR']
+        for base in order
+    ]
+
+    # Remove the Uniform Baseline
+    labels.remove(('Baseline', 'Uniform'))
+
+    # 4. Clean Coordinate Mapping for Colors, Hatches, and Gaps
+    dodge_offset = 0.1
+    scale = 0.75
+    grouped_lines = np.split(np.asarray(ax.lines), len(ax.patches))
+    boxes = [p for p in ax.patches if isinstance(p, (PathPatch, Rectangle))]
+
+    for box, lines, (variant, base) in zip(boxes, grouped_lines, labels):
+        if not box.get_visible():
+            continue
+
+        # Set Colors:
+        rgb = color_map.get(base, base_palette[0])[:3]
+        face_color = (*rgb, 0.3)
+        edge_color = (*rgb, 1.0)
+        box.set_facecolor(face_color)
+        box.set_edgecolor(edge_color)
+        box.set_linewidth(1.0)
+
+        # Set Hatch:
+        if variant == 'DR':
+            hatch_overlay = PathPatch(
+                box.get_path(),
+                transform=box.get_transform(),
+                facecolor='none',
+                edgecolor=edge_color,
+                hatch='///',
+                hatch_linewidth=1.0,
+                linewidth=1.0,
+                zorder=box.get_zorder() + 0.1
+            )
+            ax.add_patch(hatch_overlay)
+
+        # Box Spacing:
+        y_idx = order.index(base)
+        if base == 'Uniform':
+            target_y_center = y_idx
+        else:
+            target_y_center = y_idx + (dodge_offset if variant == 'DR' else -dodge_offset)
+
+        # Scale Box Height:
+        path = box.get_path()
+        vertices = path.vertices
+        y_center = (vertices[:, 1].max() + vertices[:, 1].min()) / 2.0
+        shift = target_y_center - y_center
+        vertices[:, 1] = target_y_center + (vertices[:, 1] - y_center) * scale
+
+        for line in lines:
+            line.set_ydata(line.get_ydata() + shift)
+            line.set_color(edge_color)
+            line.set_linewidth(1.0)
+
+    # 5. Scatter Points
+    sns.stripplot(
+        data=df,
+        x='Total_Reward',
+        y='Base_Policy',
+        hue='Variant',
+        hue_order=['Baseline', 'DR'],
+        order=order,
+        dodge=True,
+        alpha=0.6,
+        size=3,
+        jitter=0.05,
+        zorder=1,
+        legend=False,
+        ax=ax
+    )
+
+    scatter_labels = [
+        (variant, base)
+        for base in order
+        for variant in ['Baseline', 'DR']
+    ]
+
+    for (variant, base), collection in zip(scatter_labels, ax.collections):
+        offsets = collection.get_offsets()
+        if base != 'Uniform':
+            if variant != 'DR':
+                offsets[:, 1] -= dodge_offset
+            else:
+                offsets[:, 1] += dodge_offset
+
+        rgb = color_map.get(base, base_palette[0])[:3]
+        color = (*rgb, 1.0)
+        collection.set_facecolors(color)
+        collection.set_edgecolors(color)
+        collection.set_offsets(offsets)
+
+    # 7. Column Formatting
+    ax.set_xlabel("Total Reward Sum", fontsize=8, fontweight="bold")
+    ax.set_ylabel("")
+    ax.tick_params(axis='both', labelsize=8)
+    sns.despine(ax=ax)
+
+    # Custom legend representing the variants
+    legend_elements = [
+        Patch(facecolor='gray', alpha=0.3, edgecolor='black', label='Baseline Policy'),
+        Patch(facecolor='gray', alpha=0.3, edgecolor='black', hatch='////', label='Domain Randomization (DR)')
+    ]
+    ax.legend(handles=legend_elements, loc='best', frameon=True, fontsize=6)
+
+    plt.tight_layout()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_pdf = output_dir / "reward_comparison.pdf"
+
+    plt.savefig(output_pdf, format='pdf', bbox_inches='tight')
+    print(f"Saved: {output_pdf}")
+    plt.close(fig)
+
+
+def plot_episodic_grouped_performance(df, output_dir):
+    """Generates a grouped Box + Strip plot for the Episodic Reward."""
+    df = df.copy()
+    output_dir = Path(output_dir)
+
+    rename_map = {
+        "Regressed Parameter": "Regressed",
+        "Regressed Parameter w/ Domain Randomization": "Regressed (DR)",
+        "Transparent Parameter": "Transparent",
+        "Transparent Parameter w/ Domain Randomization": "Transparent (DR)",
+        "Vendor": "Vendor",
+        "Vendor w/ Domain Randomization": "Vendor (DR)",
+        "Uniform Parameter Domain Randomization": "Uniform (DR)",
+    }
+    df['System'] = df['System'].replace(rename_map)
+
+    # Extract Base and Variant using fast, vectorized operations
+    df['Base_Policy'] = df['System'].str.replace(r' \(DR\)', '', regex=True)
+    df['Variant'] = np.where(df['System'].str.contains('(DR)', regex=False), 'DR', 'Baseline')
+
+    # Determine the y-axis order dynamically based on mean Episodic_Reward
+    order = (
+        df.groupby('Base_Policy')['Episodic_Reward']
+        .mean()
+        .sort_values(ascending=False)
+        .index.tolist()
+    )
+
+    # Inject dummy rows safely 
+    existing_pairs = set(zip(df['Base_Policy'], df['Variant']))
+    missing_rows = [
+        {'System': f"{base} ({variant})", 'Base_Policy': base, 'Variant': variant, 'Total_Reward': np.nan, 'Episodic_Reward': np.nan}
+        for base in order for variant in ['Baseline', 'DR']
+        if (base, variant) not in existing_pairs
+    ]
+    if missing_rows:
+        df = pd.concat([df, pd.DataFrame(missing_rows)], ignore_index=True)
+
+    # Assign strictly matching colors safely
+    base_palette = sns.color_palette()
+    color_map = {
+        "Regressed": base_palette[0],
+        "Transparent": base_palette[1],
+        "Vendor": base_palette[2],
+        "Uniform": base_palette[3],
+    }
+
+    matplotlib.rcParams['hatch.linewidth'] = 1.0
+    fig, ax = plt.subplots(figsize=(3.5, 4.0))
+
+    # Create Grouped Boxplot
+    sns.boxplot(
+        data=df,
+        x='Episodic_Reward',  # <-- UPDATED
+        y='Base_Policy',
+        hue='Variant',
+        hue_order=['Baseline', 'DR'],
+        order=order,
+        showfliers=False,
+        width=0.5,
+        zorder=3,
+        whis=(0, 100),
+        legend=False,
+        ax=ax
+    )
+
+    # Box Labels
+    labels = [
+        (variant, base)
+        for variant in ['Baseline', 'DR']
+        for base in order
+    ]
+    if ('Baseline', 'Uniform') in labels:
+        labels.remove(('Baseline', 'Uniform'))
+
+    # Clean Coordinate Mapping for Colors, Hatches, and Gaps
+    dodge_offset = 0.1
+    scale = 0.75
+    grouped_lines = np.split(np.asarray(ax.lines), len(ax.patches))
+    boxes = [p for p in ax.patches if isinstance(p, (PathPatch, Rectangle))]
+
+    for box, lines, (variant, base) in zip(boxes, grouped_lines, labels):
+        if not box.get_visible():
+            continue
+
+        rgb = color_map.get(base, base_palette[0])[:3]
+        face_color = (*rgb, 0.3)
+        edge_color = (*rgb, 1.0)
+        box.set_facecolor(face_color)
+        box.set_edgecolor(edge_color)
+        box.set_linewidth(1.0)
+
+        if variant == 'DR':
+            hatch_overlay = PathPatch(
+                box.get_path(),
+                transform=box.get_transform(),
+                facecolor='none',
+                edgecolor=edge_color,
+                hatch='///',
+                hatch_linewidth=1.0,
+                linewidth=1.0,
+                zorder=box.get_zorder() + 0.1
+            )
+            ax.add_patch(hatch_overlay)
+
+        y_idx = order.index(base)
+        target_y_center = y_idx if base == 'Uniform' else y_idx + (dodge_offset if variant == 'DR' else -dodge_offset)
+
+        path = box.get_path()
+        vertices = path.vertices
+        y_center = (vertices[:, 1].max() + vertices[:, 1].min()) / 2.0
+        shift = target_y_center - y_center
+        vertices[:, 1] = target_y_center + (vertices[:, 1] - y_center) * scale
+
+        for line in lines:
+            line.set_ydata(line.get_ydata() + shift)
+            line.set_color(edge_color)
+            line.set_linewidth(1.0)
+
+    # Scatter Points
+    sns.stripplot(
+        data=df,
+        x='Episodic_Reward',  # <-- UPDATED
+        y='Base_Policy',
+        hue='Variant',
+        hue_order=['Baseline', 'DR'],
+        order=order,
+        dodge=True,
+        alpha=0.6,
+        size=3,
+        jitter=0.05,
+        zorder=1,
+        legend=False,
+        ax=ax
+    )
+
+    scatter_labels = [
+        (variant, base)
+        for base in order
+        for variant in ['Baseline', 'DR']
+    ]
+
+    for (variant, base), collection in zip(scatter_labels, ax.collections):
+        offsets = collection.get_offsets()
+        if len(offsets) > 0:
+            if base != 'Uniform':
+                offsets[:, 1] += dodge_offset if variant == 'DR' else -dodge_offset
+
+            rgb = color_map.get(base, base_palette[0])[:3]
+            color = (*rgb, 1.0)
+            collection.set_facecolors(color)
+            collection.set_edgecolors(color)
+            collection.set_offsets(offsets)
+
+    # Column Formatting
+    ax.set_xlabel("Episodic Reward", fontsize=8, fontweight="bold")
+    ax.set_ylabel("")
+    ax.tick_params(axis='both', labelsize=8)
+    sns.despine(ax=ax)
+
+    # Custom legend
+    legend_elements = [
+        Patch(facecolor='gray', alpha=0.3, edgecolor='black', label='Baseline Policy'),
+        Patch(facecolor='gray', alpha=0.3, edgecolor='black', hatch='////', label='Domain Randomization (DR)')
+    ]
+    ax.legend(handles=legend_elements, loc='best', frameon=True, fontsize=6)
+
+    plt.tight_layout()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    output_pdf = output_dir / "episodic_reward_comparison.pdf" 
+
+    plt.savefig(output_pdf, format='pdf', bbox_inches='tight')
+    print(f"Saved: {output_pdf}")
+    plt.close(fig)
 
 
 def plot_radar_chart(df, output_dir):
+    df = df.copy()
     """Generates a Radar Chart comparing the mean normalized sub-metrics."""
     metrics_to_plot = [
         # Rewards:
@@ -102,6 +628,7 @@ def plot_radar_chart(df, output_dir):
         # Energy Regularization:
         'torque',
         'action_rate',
+        'acceleration',
         # Gait Shaping:
         'foot_slip',
         'air_time',
@@ -204,7 +731,9 @@ def main(argv=None):
 
     print("Generating figures...")
     plot_aggregate_performance(df, output_dir)
-    plot_radar_chart(df, output_dir)
+    plot_grouped_performance(df, output_dir)
+    plot_episodic_grouped_performance(df, output_dir)
+    # plot_radar_chart(df, output_dir)
     plot_stacked_bar(df, output_dir)
 
     print(f"\nAll plots saved successfully to: {output_dir}")

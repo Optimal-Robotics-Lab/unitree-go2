@@ -126,6 +126,14 @@ def process_data(
     vicon_history[:, 0] *= 1e-9
     contact_history[:, 0] *= 1e-9
 
+    # Calculate Joint Acceleration from State History:
+    joint_velocities = state_history[:, 13:25]
+    joint_accelerations, joint_velocities_sample_time = filter_data(
+        data=joint_velocities,
+        time=state_history[:, 0],
+        frequency=sample_frequency,
+    )
+
     # Calculate Velocity from Vicon Data:
     positions = vicon_history[:, 1:4] * 1e-3    # Convert mm to m
     positions = preprocess_outliers(positions)
@@ -192,6 +200,13 @@ def process_data(
     )
 
     # Align Filtered Data to Resampled Timepoints:
+    joint_accelerations_function = scipy.interpolate.interp1d(
+        x=joint_velocities_sample_time,
+        y=joint_accelerations,
+        axis=0,
+        kind='nearest',
+    )
+
     filtered_positions_function = scipy.interpolate.interp1d(
         x=vicon_history[:, 0],
         y=positions,
@@ -212,6 +227,11 @@ def process_data(
         time_points[:, np.newaxis],
         state_history_sampled
     ))
+
+    joint_accelerations_sampled = joint_accelerations_function(
+        time_points
+    )
+    state_history[:, -12:] = joint_accelerations_sampled
 
     command_history_sampled = command_interpolation_function(
         time_points
@@ -252,7 +272,7 @@ def process_data(
         time_points[:, np.newaxis],
         contact_history_sampled
     ))
-
+    
     positions_sampled = filtered_positions_function(
         time_points
     )

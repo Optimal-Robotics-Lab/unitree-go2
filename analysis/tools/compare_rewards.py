@@ -21,6 +21,7 @@ def main(argv=None):
 
     raw_configs = {}
     extracted_rewards = {}
+    episodic_rewards = {}
 
     for yaml_path in data_directory.rglob("*.yaml"):
         if yaml_path.name == "reward_comparison.yaml":
@@ -37,6 +38,11 @@ def main(argv=None):
                 else:
                     print(f"Warning: '{run_name}' has no 'sum' key. Skipping reward calc.")
 
+                if 'episodic_reward' in data:
+                    episodic_rewards[run_name] = float(data['episodic_reward'])
+                else:
+                    episodic_rewards[run_name] = 0.0
+
             except yaml.YAMLError as exc:
                 print(f"Error parsing {yaml_path.name}: {exc}")
 
@@ -48,32 +54,46 @@ def main(argv=None):
     global_mean = np.mean(reward_array).item()
     global_std = np.std(reward_array).item()
 
+    ep_array = np.array(list(episodic_rewards.values()), dtype=np.float64)
+    global_episodic_mean = np.mean(ep_array).item()
+    global_episodic_std = np.std(ep_array).item()
+
     # Grouped Runs:
     system_grouped_rewards = {}
-    for run_name, reward in extracted_rewards.items():
+    system_grouped_episodic = {}
+    for run_name in extracted_rewards.keys():
         # Split on the last hyphen to drop the run number and get the system prefix
         system_name = run_name.rsplit('-', 1)[0]
 
         if system_name not in system_grouped_rewards:
             system_grouped_rewards[system_name] = []
-        system_grouped_rewards[system_name].append(reward)
+            system_grouped_episodic[system_name] = []
+
+        system_grouped_rewards[system_name].append(extracted_rewards[run_name])
+        system_grouped_episodic[system_name].append(episodic_rewards[run_name])
 
     # Grouped Run Metrics:
     system_metrics = {}
-    for system_name, rewards in system_grouped_rewards.items():
-        sys_array = np.array(rewards, dtype=np.float64)
-        system_average = np.mean(sys_array).item()
+    for system_name in system_grouped_rewards.keys():
+        sys_sum_array = np.array(system_grouped_rewards[system_name], dtype=np.float64)
+        sys_sum_avg = np.mean(sys_sum_array).item()
+        sys_sum_std = np.std(sys_sum_array).item()
 
-        if global_std > 0.0:
-            system_z_score = (system_average - global_mean) / global_std
-        else:
-            system_z_score = 0.0
+        sys_ep_array = np.array(system_grouped_episodic[system_name], dtype=np.float64)
+        sys_ep_avg = np.mean(sys_ep_array).item()
+        sys_ep_std = np.std(sys_ep_array).item()
+
+        sys_sum_z = (sys_sum_avg - global_mean) / global_std if global_std > 0.0 else 0.0
+        sys_ep_z = (sys_ep_avg - global_episodic_mean) / global_episodic_std if global_episodic_std > 0.0 else 0.0
 
         system_metrics[system_name] = {
-            "average": system_average,
-            "std_deviation": np.std(sys_array).item(),
-            "runs_counted": len(rewards),
-            "z_score": float(system_z_score)
+            "average": sys_sum_avg,
+            "std_deviation": sys_sum_std,
+            "z_score": float(sys_sum_z),
+            "episodic_average": sys_ep_avg,
+            "episodic_std_deviation": sys_ep_std,
+            "episodic_z_score": float(sys_ep_z),
+            "runs_counted": len(sys_sum_array)
         }
 
     # Output structure for YAML:
@@ -81,6 +101,8 @@ def main(argv=None):
         "global_metrics": {
             "average": global_mean,
             "std_deviation": global_std,
+            "episodic_average": global_episodic_mean,
+            "episodic_std_deviation": global_episodic_std,
         },
         "grouped_metrics": system_metrics,
         "runs": {}
@@ -88,16 +110,17 @@ def main(argv=None):
 
     # Individual run metrics:
     for run_name, reward in extracted_rewards.items():
-        if global_std > 0.0:
-            run_z_score = (reward - global_mean) / global_std
-        else:
-            run_z_score = 0.0
+        ep_val = episodic_rewards[run_name]
+        run_sum_z = (reward - global_mean) / global_std if global_std > 0.0 else 0.0
+        run_ep_z = (ep_val - global_episodic_mean) / global_episodic_std if global_episodic_std > 0.0 else 0.0
 
-        print(f"{run_name} | Reward: {reward:.2f} | Z-Score: {run_z_score:.2f}")
+        print(f"{run_name} | Reward: {reward:.2f} | Z-Score: {run_sum_z:.2f}")
 
         output_data["runs"][run_name] = {
             "reward": reward,
-            "z_score": float(run_z_score),
+            "z_score": float(run_sum_z),
+            "episodic_reward": ep_val,
+            "episodic_z_score": float(run_ep_z),
             "original_config": raw_configs[run_name]
         }
 
