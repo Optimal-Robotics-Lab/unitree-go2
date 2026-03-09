@@ -8,7 +8,6 @@ import jax.flatten_util
 def forward_mode_value_and_grad(loss_fn: Callable):
     """
         Returns a function that computes (value, grad) using forward-mode AD.
-        Uses jax.linearize to run the primal simulation ONCE, caching linearization points.
     """
     def value_and_grad_fwd(params, *args):
         # Linearize:

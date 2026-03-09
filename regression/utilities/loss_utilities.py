@@ -1,4 +1,4 @@
-from typing import Dict, Callable
+from typing import Dict, Callable, Any
 
 import jax
 
@@ -25,7 +25,7 @@ def loss_function(
     step_function: Callable,
     objective_function: ObjectiveFunction,
     objective_weights: Dict[str, float],
-    regression_spec: Dict[str, Dict[str, any]],
+    regression_spec: Dict[str, Dict[str, Any]],
 ) -> jax.Array:
     # Rehydrate the model with new parameters:
     replace_kwargs = {}

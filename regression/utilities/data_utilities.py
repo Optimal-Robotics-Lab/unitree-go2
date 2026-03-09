@@ -87,5 +87,5 @@ def sample_random_windows(
             lambda x: x.reshape(num_batches_per_epoch, batch_size, *x.shape[1:]),
             windowed_data
         )
-        
+
         return batched_data

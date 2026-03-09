@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Any, Dict
 
 import mujoco
 from mujoco import mjx
@@ -7,7 +7,7 @@ from mujoco import mjx
 def _check_base_type(model: mujoco.MjModel | mjx.Model) -> tuple[int, int]:
     joint_start = model.body_jntadr[1]
     joint_type = model.jnt_type[joint_start]
-    
+
     if joint_type == mujoco.mjtJoint.mjJNT_FREE:
         return (6, 7)
     else:
@@ -17,7 +17,7 @@ def _check_base_type(model: mujoco.MjModel | mjx.Model) -> tuple[int, int]:
 def hydrate_model(
     params: dict,
     mj_model: mujoco.MjModel | mjx.Model,
-    regression_spec: Dict[str, Dict[str, any]],
+    regression_spec: Dict[str, Dict[str, Any]],
 ) -> mujoco.MjModel | mjx.Model:
     nq_offset, nv_offset = _check_base_type(mj_model)
 
@@ -34,7 +34,7 @@ def hydrate_model(
             value[:, col_idx] = v
         else:
             value = v
-        
+
         match k:
             case 'actuator_dynprm':
                 if 'column' in spec:

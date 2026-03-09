@@ -1,9 +1,0 @@
-tracking_linear_velocity: 0.9909215419453815
-tracking_angular_velocity: 0.7219897070726067
-orientation_regularization: -0.08620996710959197
-linear_z_velocity: -0.0002231549868832977
-angular_xy_velocity: -0.05951083448830658
-torque: -0.017475876204739026
-action_rate: -0.0645199436367546
-stand_still: -0.005482915079365083
-sum: 1.4794885575123475

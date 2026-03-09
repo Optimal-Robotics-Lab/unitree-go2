@@ -85,11 +85,10 @@ def main(argv=None):
         ax5.set_xlabel('Thigh (rad)')
         ax5.set_ylabel('Calf (rad)')
 
-        # Frequency Analysis (Spectrogram)
+        # Frequency Analysis:
         ax7 = fig.add_subplot(3, 1, 3)
 
-        # Analyze the Thigh joint (usually most active)
-        # Concatenate first 5 trajectories to see the pattern over time
+        # Analyze the Thigh joint:
         sample_signal = data_pos[:, :, leg_ids[1]].flatten()
 
         f, t, Sxx = signal.spectrogram(sample_signal, fs=1.0/dt, nperseg=256)

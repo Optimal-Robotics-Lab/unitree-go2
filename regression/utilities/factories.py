@@ -9,7 +9,7 @@ def create_optimizer(cfg: ConfigDict, total_steps: int) -> optax.GradientTransfo
     """Creates the optimizer chain based on config."""
     warmup_steps = int(cfg.optimizer.warmup_pct * total_steps)
     decay_steps = total_steps - warmup_steps
-    
+
     schedule = optax.warmup_cosine_decay_schedule(
         init_value=cfg.optimizer.lr_init,
         peak_value=cfg.optimizer.lr_peak,
@@ -17,7 +17,7 @@ def create_optimizer(cfg: ConfigDict, total_steps: int) -> optax.GradientTransfo
         decay_steps=decay_steps,
         end_value=cfg.optimizer.lr_end,
     )
-    
+
     return optax.chain(
         optax.clip_by_global_norm(cfg.optimizer.clip_norm),
         optax.adamw(learning_rate=schedule, weight_decay=cfg.optimizer.weight_decay)

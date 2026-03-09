@@ -22,6 +22,7 @@ flags.DEFINE_string(
     short_name='f',
 )
 
+
 def main(argv=None):
     # Load Data
     package_directory = Path(__file__).resolve().parent.parent

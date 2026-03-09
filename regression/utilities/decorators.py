@@ -21,13 +21,13 @@ def force_static_args(*arg_names: str):
             except TypeError as e:
                 # Add context to the error
                 raise TypeError(f"Error binding arguments in {func.__name__}: {e}")
-            
+
             bound_args.apply_defaults()
-            
+
             for name in arg_names:
                 if name in bound_args.arguments:
                     val = bound_args.arguments[name]
-                    
+
                     # Efficiently check leaves for Tracers
                     leaves = jax.tree_util.tree_leaves(val)
                     if any(isinstance(leaf, core.Tracer) for leaf in leaves):
@@ -37,7 +37,7 @@ def force_static_args(*arg_names: str):
                             f"functools.partial(func, {name}=...) before JIT compilation.\n"
                             f"Passing it dynamically forces JAX to re-trace or fails on non-array types."
                         )
-            
+
             return func(*args, **kwargs)
         return wrapper
     return decorator

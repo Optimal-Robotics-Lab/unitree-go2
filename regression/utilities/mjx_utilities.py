@@ -13,6 +13,7 @@ def init_function(
     data = mjx.forward(model, data)
     return data
 
+
 def step_function(
     model: mjx.Model,
     data: mjx.Data,

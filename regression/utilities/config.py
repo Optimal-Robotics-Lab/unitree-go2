@@ -59,6 +59,7 @@ def get_default_config():
     config.regression.dof_armature = ConfigDict({
         'field': 'dof_armature', 'bounds': (1e-4, 1e2)
     })
+
     # Example of possible additional parameters to regress:
     # config.regression.qpos0 = ConfigDict({
     #     'field': 'qpos0', 'bounds': None
