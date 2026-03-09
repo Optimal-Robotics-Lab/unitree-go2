@@ -12,8 +12,8 @@ class RewardConfig:
     # Rewards:
     tracking_linear_velocity: float = 1.5
     tracking_angular_velocity: float = 0.75
+    cost_of_transport: float = 0.5
     # Energy Regularization Terms:
-    cost_of_transport: float = -0.1
     action_rate: float = -0.01
     acceleration: float = -2.5e-7
     # Auxilary Terms:

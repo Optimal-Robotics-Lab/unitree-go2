@@ -83,8 +83,8 @@ def main(argv=None):
                 # Rewards:
                 tracking_linear_velocity=1.5,
                 tracking_angular_velocity=0.75,
+                cost_of_transport=0.5,
                 # Energy Regularization Terms:
-                cost_of_transport=-0.2,
                 action_rate=-0.01,
                 acceleration=-2.5e-5,
                 # Auxilary Terms:
@@ -102,8 +102,8 @@ def main(argv=None):
                 # Rewards:
                 tracking_linear_velocity=1.5,
                 tracking_angular_velocity=0.75,
+                cost_of_transport=0.5,
                 # Energy Regularization Terms:
-                cost_of_transport=-0.2,
                 action_rate=-0.1,
                 acceleration=-2.5e-4,
                 # Auxilary Terms:

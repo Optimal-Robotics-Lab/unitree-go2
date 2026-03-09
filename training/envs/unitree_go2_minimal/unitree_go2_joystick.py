@@ -546,11 +546,9 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         power_ema: jax.Array,
     ) -> jax.Array:
         # Cost of Transport:
-        cot = power_ema / (
-            self.total_mass * 9.81 * jnp.max(velocity_ema, 1e-3)
-        )
-
-        return jnp.exp(cot / self.kernel_sigma)
+        denominator = self.total_mass * 9.81 * jnp.maximum(velocity_ema, 1e-3)
+        cot = power_ema / denominator
+        return jnp.exp(-cot / self.kernel_sigma)
 
     def _cost_action_rate(
         self, action: jax.Array, previous_action: jax.Array
@@ -613,7 +611,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
 
         # Calculate Command Direction:
         command_xy = commands[:2]
-        command_norm = jnp.max(jnp.linalg.norm(commands), 1e-6)
+        command_norm = jnp.maximum(jnp.linalg.norm(commands), 1e-6)
         command_direction = command_xy / command_norm
 
         # Project velocity onto command direction:
@@ -624,7 +622,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         base_to_foot_radius = 0.24
         command_yaw = commands[2]
         yaw = yaw * jnp.sign(command_yaw)
-        yaw_projected = base_to_foot_radius * jnp.max(yaw, 0.0)
+        yaw_projected = base_to_foot_radius * jnp.maximum(yaw, 0.0)
 
         # Velocity for Cost of Transport:
         velocity = velocity_xy_projected + yaw_projected
