@@ -1,0 +1,17 @@
+acceleration: -0.20963248852467872
+action_rate: -0.06382338491552031
+air_time: 0.22488
+angular_xy_velocity: -0.05171797918498966
+episodic_reward: 9.986950693084328
+foot_clearance: 0.26722494724613816
+foot_slip: -0.1543240017077427
+gait_variance: -0.0016518000000000001
+linear_z_velocity: -0.09036065908953445
+orientation_regularization: -0.006507771454522382
+stand_still: -0.0
+sum: 1.9379287778899088
+termination: 0.0
+torque: -0.013515333401921242
+tracking_angular_velocity: 0.7056975020361905
+tracking_linear_velocity: 1.3316597468864895
+unwanted_contact: -0.0

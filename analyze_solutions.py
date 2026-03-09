@@ -9,11 +9,10 @@ from regression.tools.analyze_regression import analyze_regression
 def main(argv=None):
 
     run_names = [
-        "hardy-sound-81",
-        "polar-moon-74",
+        "dandy-leaf-75",
     ]
 
-    checkpoint_path = Path("regression/checkpoints")
+    checkpoint_path = Path("optimization-analysis")
     for i, run_name in enumerate(run_names):
         run_path = checkpoint_path / run_name
 
@@ -26,8 +25,7 @@ def main(argv=None):
 
         # Run analysis:
         print(f"Analyzing run {i}: {run_name}")
-        analyze_regression(run_path)
-
+        analyze_regression(run_path, load_analysis=True)
 
 
 if __name__ == '__main__':

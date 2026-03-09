@@ -107,7 +107,7 @@ def analyze_optimal_solution(
 def analyze_regression(parameter_checkpoints: str | list[str], load_analysis: bool = False):
     # Set up paths:
     package_root = Path(__file__).resolve().parent.parent
-    
+
     for parameter_checkpoint in parameter_checkpoints if isinstance(parameter_checkpoints, list) else [parameter_checkpoints]:
         checkpoint_path = Path(parameter_checkpoint)
         if not checkpoint_path.exists():

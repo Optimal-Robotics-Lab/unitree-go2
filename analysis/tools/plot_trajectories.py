@@ -15,14 +15,24 @@ flags.DEFINE_string(
 )
 
 
+# POLICY_NAME_MAP = {
+#     "regressed-position-forward": "Regressed Parameter",
+#     "regressed-position-dr-forward": "Regressed Parameter (DR)",
+#     "transparent-position-forward": "Transparent Parameter",
+#     "transparent-position-dr-forward": "Transparent Parameter (DR)",
+#     "uniform-position-dr-forward": "Uniform Parameter (DR)",
+#     "vendor-position-forward": "Vendor Baseline",
+#     "vendor-position-dr-forward": "Vendor Baseline (DR)",
+# }
+
 POLICY_NAME_MAP = {
-    "regressed-position-forward": "Regressed Parameter",
-    "regressed-position-dr-forward": "Regressed Parameter (DR)",
-    "transparent-position-forward": "Transparent Parameter",
-    "transparent-position-dr-forward": "Transparent Parameter (DR)",
-    "uniform-position-dr-forward": "Uniform Parameter (DR)",
-    "vendor-position-forward": "Vendor Baseline",
-    "vendor-position-dr-forward": "Vendor Baseline (DR)",
+    "fresh-armadillo-6": "Regressed Parameter",
+    "rose-fog-12": "Regressed Parameter w/ Domain Randomization",
+    "treasured-sky-23": "Transparent Parameter",
+    "resilient-oath-10": "Transparent Parameter w/ Domain Randomization",
+    "major-bush-14": "Uniform Parameter Domain Randomization",
+    "astral-bee-25": "Vendor",
+    "lilac-resonance-8": "Vendor w/ Domain Randomization",
 }
 
 
@@ -30,7 +40,10 @@ def load_trajectory_data(base_dir: Path):
     """Loads and stacks Vicon trajectory data by system."""
     system_data = {}
 
-    for csv_path in base_dir.rglob("postprocessed_filtered_vicon_history.csv"):
+    # trajectory_file = "postprocessed_filtered_vicon_history.csv"
+    trajectory_file = "trajectory.csv"
+
+    for csv_path in base_dir.rglob(trajectory_file):
         run_name = csv_path.parent.name
         system_name = run_name.rsplit('-', 1)[0]
 

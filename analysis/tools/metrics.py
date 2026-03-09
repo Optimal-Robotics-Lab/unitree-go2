@@ -415,6 +415,9 @@ def plot_grouped_performance(df, output_dir):
         collection.set_edgecolors(color)
         collection.set_offsets(offsets)
 
+    # Set x lim:
+    ax.set_xlim(6, 12)
+
     # 7. Column Formatting
     ax.set_xlabel("Total Reward Sum", fontsize=8, fontweight="bold")
     ax.set_ylabel("")
@@ -490,7 +493,7 @@ def plot_episodic_grouped_performance(df, output_dir):
     # Create Grouped Boxplot
     sns.boxplot(
         data=df,
-        x='Episodic_Reward',  # <-- UPDATED
+        x='Episodic_Reward',
         y='Base_Policy',
         hue='Variant',
         hue_order=['Baseline', 'DR'],
@@ -591,6 +594,9 @@ def plot_episodic_grouped_performance(df, output_dir):
             collection.set_edgecolors(color)
             collection.set_offsets(offsets)
 
+    # Set x lim:
+    ax.set_xlim(6, 12)
+
     # Column Formatting
     ax.set_xlabel("Episodic Reward", fontsize=8, fontweight="bold")
     ax.set_ylabel("")
@@ -606,9 +612,124 @@ def plot_episodic_grouped_performance(df, output_dir):
 
     plt.tight_layout()
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     output_pdf = output_dir / "episodic_reward_comparison.pdf" 
 
+    plt.savefig(output_pdf, format='pdf', bbox_inches='tight')
+    print(f"Saved: {output_pdf}")
+    plt.close(fig)
+
+
+def plot_average_episodic_reward_bar(df, output_dir):
+    """Generates a simple bar plot of the average episodic reward across policies."""
+    df = df.copy()
+    output_dir = Path(output_dir)
+
+    # Drop NaNs just in case some runs lack episodic reward data
+    df = df.dropna(subset=['Episodic_Reward'])
+
+    # Sort the y-axis dynamically based on the average episodic reward
+    order = (
+        df.groupby('System')['Episodic_Reward']
+        .mean()
+        .sort_values(ascending=False)
+        .index.tolist()
+    )
+
+    # Use the same color palette mappings
+    base_palette = sns.color_palette()
+    color_map = {
+        "Regressed Parameter": base_palette[0],
+        "Regressed Parameter w/ Domain Randomization": base_palette[0],
+        "Transparent Parameter": base_palette[1],
+        "Transparent Parameter w/ Domain Randomization": base_palette[1],
+        "Vendor": base_palette[2],
+        "Vendor w/ Domain Randomization": base_palette[2],
+        "Uniform Parameter Domain Randomization": base_palette[3],
+    }
+
+    matplotlib.rcParams['hatch.linewidth'] = 1.0 
+    fig, ax = plt.subplots(figsize=(5.5, 4.0))
+
+    # Seaborn's barplot automatically averages the values and plots error bars
+    sns.barplot(
+        data=df,
+        x='Episodic_Reward',
+        y='System',
+        order=order,
+        palette=color_map,
+        errorbar='sd',       # Show standard deviation as error bars
+        capsize=0.15,        # Add caps to error bars
+        edgecolor='black',
+        linewidth=1.0,
+        ax=ax
+    )
+
+    # Apply hatching to the Domain Randomization variants
+    for i, bar in enumerate(ax.patches):
+        if i < len(order):
+            system_name = order[i]
+            # Make bars slightly transparent
+            bar.set_alpha(0.8)
+            # Add hatching if it's a DR variant
+            if "Domain Randomization" in system_name:
+                bar.set_hatch('////')
+
+    # Formatting
+    ax.set_xlabel("Average Episodic Reward", fontsize=10, fontweight="bold")
+    ax.set_ylabel("") 
+    ax.tick_params(axis='both', labelsize=8)
+    sns.despine(ax=ax)
+
+    plt.tight_layout()
+    output_pdf = output_dir / "episodic_reward_bar.pdf"
+    plt.savefig(output_pdf, format='pdf', bbox_inches='tight')
+    print(f"Saved: {output_pdf}")
+    plt.close(fig)
+
+
+def plot_simple_bar(output_dir):
+    """Generates a simple bar plot for three specific metrics."""
+    output_dir = Path(output_dir)
+
+    data = np.array([0.22, 0.31, 0.35, 0.59, 1.01, 0.68, 0.71, 1.55])
+
+    fig, ax = plt.subplots(figsize=(4.0, 4.0))
+
+    # Create the bar plot
+    sns.barplot(
+        data,
+        ax=ax,
+        palette="Blues_d",
+        edgecolor="black",
+        linewidth=1.0
+    )
+
+    # Apply hatching to the Domain Randomization variants
+    # for i, bar in enumerate(ax.patches):
+    #     if i < len(labels):
+    #         system_name = labels[i]
+    #         # Make bars slightly transparent
+    #         bar.set_alpha(0.8)
+    #         # Add hatching if it's a DR variant
+    #         if "(DR)" in system_name:
+    #             bar.set_hatch('////')
+
+    # Optional: Add the exact value above each bar
+    # for i, val in enumerate(data):
+    #     ax.text(i, val + 0.02, f'{val:.2f}', ha='center', va='bottom', fontsize=9)
+
+    # Formatting
+    ax.set_ylabel("Value", fontsize=10, fontweight="bold")
+    ax.tick_params(axis='both', labelsize=9)
+
+    # Make the y-axis range slightly taller than the max value so the text fits
+    ax.set_ylim(0, max(data) * 1.15)
+
+    sns.despine(ax=ax)
+
+    plt.tight_layout()
+    output_pdf = output_dir / "simple_metrics_bar.pdf"
     plt.savefig(output_pdf, format='pdf', bbox_inches='tight')
     print(f"Saved: {output_pdf}")
     plt.close(fig)
@@ -683,9 +804,31 @@ def plot_radar_chart(df, output_dir):
 
 def plot_stacked_bar(df, output_dir):
     """Generates a Stacked Bar Chart showing positive rewards vs negative penalties."""
-    metric_cols = [c for c in df.columns if c not in ['System', 'Run', 'Total_Reward', 'action_rate', 'stand_still']]
+    
+    metrics_to_plot = [
+        # Rewards:
+        'tracking_linear_velocity',
+        'tracking_angular_velocity',
+        # Orientation Regularization:
+        'orientation_regularization',
+        'linear_z_velocity',
+        'angular_xy_velocity',
+        # Energy Regularization:
+        'torque',
+        'action_rate',
+        'acceleration',
+        # Gait Shaping:
+        'foot_slip',
+        'air_time',
+        'foot_clearance'
+    ]
+    
+    # Filter the list to only include columns actually present in the dataframe
+    metric_cols = [c for c in metrics_to_plot if c in df.columns]
+    
     mean_df = df.groupby('System')[metric_cols].mean().reset_index()
 
+    # Determine order based on total reward
     order = df.groupby('System')['Total_Reward'].mean().sort_values(ascending=False).index
 
     # Melt dataframe so Plotly Express can color by metric
@@ -727,14 +870,16 @@ def main(argv=None):
     output_dir = yaml_path.parent
 
     print(f"Loading data from: {yaml_path.name}")
-    df = load_and_format_data(yaml_path)
+    # df = load_and_format_data(yaml_path)
 
     print("Generating figures...")
-    plot_aggregate_performance(df, output_dir)
-    plot_grouped_performance(df, output_dir)
-    plot_episodic_grouped_performance(df, output_dir)
+    # plot_aggregate_performance(df, output_dir)
+    # plot_grouped_performance(df, output_dir)
+    # plot_episodic_grouped_performance(df, output_dir)
     # plot_radar_chart(df, output_dir)
-    plot_stacked_bar(df, output_dir)
+    # plot_stacked_bar(df, output_dir)
+    # plot_average_episodic_reward_bar(df, output_dir)
+    plot_simple_bar(output_dir)
 
     print(f"\nAll plots saved successfully to: {output_dir}")
 
