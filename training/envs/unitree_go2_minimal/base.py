@@ -1,3 +1,4 @@
+import functools
 import os
 
 import jax
@@ -20,6 +21,7 @@ from training.envs.unitree_go2.config import (
     DisturbanceConfig,
     CommandConfig,
     EnvironmentConfig,
+    MotorConfig,
 )
 
 
@@ -33,6 +35,7 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         noise_config: NoiseConfig = NoiseConfig(),
         disturbance_config: DisturbanceConfig = DisturbanceConfig(),
         command_config: CommandConfig = CommandConfig(),
+        motor_config: MotorConfig = None,
         **kwargs,
     ) -> None:
         config = config_dict.ConfigDict()
@@ -81,6 +84,9 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         self._n_substeps = int(self.step_dt / self.time_step)
         self._mj_model.opt.ccd_iterations = 20
 
+        # Wrap Step Function:
+        self._step = functools.partial(self._simulation_step, n_substeps=self._n_substeps)
+
         # Parse Configs:
         self.kernel_sigma = reward_config.kernel_sigma
         reward_config_dict = flax.serialization.to_state_dict(reward_config)
@@ -91,6 +97,7 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         self.noise_config = noise_config
         self.disturbance_config = disturbance_config
         self.command_config = command_config
+        self.motor_config = motor_config
 
         # Constants Setup:
         self.floor_geom_idx = self._mj_model.geom('floor').id
@@ -220,6 +227,46 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         # Observation Size:
         self.num_observations = 40 + self.nu
         self.num_privileged_observations = self.num_observations + 79 + self.nu
+
+    # Custom Step Method to Capture Acutator Pipeline:
+    def _simulation_step(self, data: mjx.Data, action: jax.Array, n_substeps: int) -> mjx.Data:
+
+        # Compute Target Joint Positions from Action:
+        target_qpos = self.default_pose + action * self.action_scale
+        target_qpos = jnp.clip(target_qpos, self.joint_lb, self.joint_ub)
+
+        if self.motor_config is not None:
+            def motor_model(mj_data: mjx.Data, target_qpos: jax.Array) -> jax.Array:
+                # Extract Joint States:
+                joint_positions = mj_data.qpos[7:]
+                joint_velocities = mj_data.qvel[6:]
+
+                # PD Control Law
+                desired_torque = self.motor_config.kp * (target_qpos - joint_positions) \
+                    - self.motor_config.kv * joint_velocities
+
+                # Torque Speed Curve:
+                available_torque = self.motor_config.tau_max - (self.motor_config.damping_slope * jnp.abs(joint_velocities))
+                available_torque = jnp.maximum(available_torque, 0.0)
+
+                # Apply Torque Limits:
+                torque = jnp.clip(desired_torque, -available_torque, available_torque)
+
+                return torque
+        else:
+            def motor_model(mj_data: mjx.Data, target_qpos: jax.Array) -> jax.Array:
+                return target_qpos
+
+        # Run Physics Substeps:
+        def _substep(carry: mjx.Data, unused_t) -> tuple[mjx.Data, None]:
+            ctrl = motor_model(carry, target_qpos)
+            data = carry.replace(ctrl=ctrl)
+            return mjx.step(self._mjx_model, data), None
+
+        # Scan over substeps:
+        data, _ = jax.lax.scan(_substep, data, None, length=n_substeps)
+
+        return data
 
     # Sensor readings.
     @staticmethod

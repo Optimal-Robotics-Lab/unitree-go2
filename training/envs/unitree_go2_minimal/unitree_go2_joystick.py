@@ -224,11 +224,12 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
             metrics[k] = state_info['rewards'][k]
         metrics['total_distance'] = 0.0
         metrics['swing_peak'] = jnp.zeros(())
-        
+
         # Power Metrics:
         metrics['power_ema'] = 0.0
         metrics['power'] = 0.0
-        metrics['mechanical_power'] = 0.0
+        metrics['positive_mechanical_power'] = 0.0
+        metrics['negative_mechanical_power'] = 0.0
         metrics['thermal_power'] = 0.0
         metrics['static_power'] = 0.0
         metrics['gravitational_power'] = 0.0
@@ -252,10 +253,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
             state = self.maybe_apply_perturbation(state)
 
         # Physics step:
-        motor_targets = self.default_ctrl + action * self.action_scale
-        data = mjx_env.step(
-            self._mjx_model, state.data, motor_targets, self._n_substeps,
-        )
+        data = self._step(state.data, action)
 
         imu_height = data.site_xpos[self.imu_site_idx][2]
         joint_angles = data.qpos[7:]
@@ -302,6 +300,15 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         local_body_velocity = self.get_local_linear_velocity(data)
         local_angular_velocity = self.get_gyro(data)
 
+        # Power Calculations:
+        power_metrics = self._compute_power_components(
+            global_body_velocity,
+            data.actuator_force,
+            joint_velocities,
+            feet_velocity,
+            feet_contacts,
+        )
+
         # Update EMAs:
         body_velocity = jnp.concatenate([local_body_velocity, local_angular_velocity])
         state.info['velocity_ema'] = self._update_velocity_ema(
@@ -309,13 +316,9 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
             state.info['command'],
             body_velocity,
         )
-        state.info['power_ema'], power_info = self._update_power_ema(
+        state.info['power_ema'] = self._update_power_ema(
             state.info['power_ema'],
-            global_body_velocity,
-            data.actuator_force,
-            joint_velocities,
-            feet_velocity,
-            feet_contacts,
+            power_metrics['total_power'],
         )
 
         # Observation data:
@@ -330,27 +333,31 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
 
         # Rewards:
         rewards = {
+            # Tracking Rewards:
             'tracking_linear_velocity': (
                 self._reward_tracking_velocity(state.info['command'], local_body_velocity)
             ),
             'tracking_angular_velocity': (
                 self._reward_tracking_yaw_rate(state.info['command'], self.get_gyro(data))
             ),
-            'cost_of_transport_reward': self._reward_cost_of_transport(
-                state.info['velocity_ema'],
-                state.info['power_ema'],
+            # Power Costs:
+            'electrical_power': self._cost_electrical_power(
+                power_metrics['positive_mechanical_power'],
+                power_metrics['negative_mechanical_power'],
+                power_metrics['thermal_power'],
             ),
-            'cost_of_transport_penalty': self._penalty_cost_of_transport(
-                state.info['velocity_ema'],
-                state.info['power_ema'],
+            'gravitational_power': self._cost_gravitational_power(
+                power_metrics['gravitational_power'],
             ),
-            'exhaustion': self._cost_exhaustion(
+            # Energy and Power Costs:
+            'energy': self._cost_energy(
                 state.info['power_ema'],
             ),
             'action_rate': self._cost_action_rate(action, state.info['previous_action']),
             'acceleration': self._cost_acceleration(
                 data.qacc,
             ),
+            # Gait Costs:
             'impact': self._cost_impact(
                 feet_contacts,
                 state.info['previous_contact'],
@@ -358,7 +365,9 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
             ),
             'foot_slip': self._cost_foot_slip(
                 data,
+                target_foot_height=0.05,
             ),
+            # Miscellaneous Costs:
             'unwanted_contact': self._cost_unwanted_contact(
                 unwanted_contacts,
             ),
@@ -415,12 +424,13 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
 
         # Power Metrics:
         state.metrics['power_ema'] = state.info['power_ema']
-        state.metrics['power'] = power_info['power']
-        state.metrics['mechanical_power'] = power_info['mechanical_power']
-        state.metrics['thermal_power'] = power_info['thermal_power']
-        state.metrics['static_power'] = power_info['static_power']
-        state.metrics['gravitational_power'] = power_info['gravitational_power']
-        state.metrics['swing_power'] = power_info['swing_power']
+        state.metrics['power'] = power_metrics['power']
+        state.metrics['positive_mechanical_power'] = power_metrics['positive_mechanical_power']
+        state.metrics['negative_mechanical_power'] = power_metrics['negative_mechanical_power']
+        state.metrics['thermal_power'] = power_metrics['thermal_power']
+        state.metrics['static_power'] = power_metrics['static_power']
+        state.metrics['gravitational_power'] = power_metrics['gravitational_power']
+        state.metrics['swing_power'] = power_metrics['swing_power']
 
         state.metrics.update(state.info['rewards'])
 
@@ -612,7 +622,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         denominator = self.total_mass * 9.81 * jnp.maximum(velocity_ema, 1e-3)
         return power_ema / denominator
 
-    def _cost_exhaustion(
+    def _cost_energy(
         self,
         power_ema: jax.Array,
     ) -> jax.Array:
@@ -620,6 +630,35 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         limit = 300.0
         overdraw = jnp.maximum(power_ema - limit, 0.0)
         return jnp.square(overdraw)
+
+    def _cost_electrical_power(
+        self,
+        positive_mechanical_power: jax.Array | float,
+        negative_mechanical_power: jax.Array | float,
+        thermal_power: jax.Array | float,
+    ) -> jax.Array | float:
+        electrical_power = positive_mechanical_power + (negative_mechanical_power * self.motor_config.regen_efficiency) + thermal_power
+        return electrical_power
+
+    def _cost_mechanical_power(
+        self,
+        positive_mechanical_power: jax.Array | float,
+        negative_mechanical_power: jax.Array | float,
+    ) -> jax.Array | float:
+        mechanical_power = positive_mechanical_power + (negative_mechanical_power * self.motor_config.regen_efficiency)
+        return mechanical_power
+
+    def _cost_thermal_power(
+        self,
+        thermal_power: jax.Array | float,
+    ) -> jax.Array | float:
+        return thermal_power
+
+    def _cost_gravitational_power(
+        self,
+        gravitational_power: jax.Array | float,
+    ) -> jax.Array | float:
+        return gravitational_power
 
     def _cost_action_rate(
         self, action: jax.Array, previous_action: jax.Array
@@ -678,6 +717,54 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
     def _cost_termination(self, done: jax.Array) -> jax.Array:
         return done
 
+    def _compute_power_components(
+        self,
+        global_body_velocity: jax.Array,
+        torques: jax.Array,
+        joint_velocities: jax.Array,
+        foot_velocities: jax.Array,
+        feet_contacts: jax.Array,
+    ) -> dict[str, jax.Array | float]:
+        # Electical and Mechanical Power Calculations:
+        motor_torques = torques / self.motor_config.reduction_ratio
+        current = jnp.abs(motor_torques) / self.motor_config.kt
+
+        # Thermal Power
+        thermal_power = jnp.sum(jnp.square(current) * self.motor_config.resistance)
+
+        # Mechanical Power
+        mechanical_power = torques * joint_velocities
+        positive_mechanical_power = jnp.sum(jnp.maximum(mechanical_power, 0.0))
+        negative_mechanical_power = jnp.sum(jnp.minimum(mechanical_power, 0.0))
+
+        # Total Electrical Power:
+        electrical_power = positive_mechanical_power + (negative_mechanical_power * self.motor_config.regen_efficiency) + thermal_power
+
+        # Metabolic Power:
+        static_power = 80.0
+
+        # Gravitational Power:
+        gravitational_power = self.total_mass * 9.81 * jnp.abs(global_body_velocity[2])
+
+        # Biomechanical Swing Power (Kinetic penalty for leg swinging)
+        is_swing = ~feet_contacts
+        relative_foot_velocities = foot_velocities - global_body_velocity
+        velocity_xy_sq = jnp.sum(jnp.square(relative_foot_velocities[..., :2]), axis=-1)
+        swing_power = self.leg_mass * jnp.sum(velocity_xy_sq * is_swing)
+
+        total_power = electrical_power + static_power + gravitational_power + swing_power
+
+        return {
+            'electrical_power': electrical_power,
+            'thermal_power': thermal_power,
+            'positive_mechanical_power': positive_mechanical_power,
+            'negative_mechanical_power': negative_mechanical_power,
+            'static_power': static_power,
+            'gravitational_power': gravitational_power,
+            'swing_power': swing_power,
+            'total_power': total_power,
+        }
+
     # EMA Calculations for Cost of Transport:
     def _update_velocity_ema(
         self,
@@ -715,44 +802,13 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
 
     def _update_power_ema(
         self,
-        power_ema: jax.Array,
-        global_base_qvel: jax.Array,
-        torques: jax.Array,
-        joint_qvel: jax.Array,
-        foot_velocities: jax.Array,
-        feet_contacts: jax.Array,
+        power_ema: jax.Array | float,
+        power: jax.Array | float,
         alpha: float = 0.1,
-    ) -> tuple[jax.Array, dict[str, jax.Array]]:
-        # Mechanical and Electrical Power Calculation:
-        mechanical_power = jnp.sum(jnp.abs(joint_qvel * torques))
-        thermal_power = 0.15 * jnp.sum(jnp.square(torques))
-        static_power = 80.0
-
-        # Gravitational Potential Power Calculation:
-        gravitational_power = self.total_mass * 9.81 * jnp.abs(global_base_qvel[2])
-
-        # Biomechanical Power Calculation (Swing Leg Kinetics):
-        is_swing = ~feet_contacts
-        relative_foot_velocities = foot_velocities - global_base_qvel[:3]
-        velocity_xy_sq = jnp.sum(jnp.square(relative_foot_velocities), axis=-1)
-        swing_power = self.leg_mass * jnp.sum(velocity_xy_sq * is_swing)
-
-        # Power for Cost of Transport:
-        power = mechanical_power + thermal_power + static_power + gravitational_power + swing_power
-
+    ) -> jax.Array | float:
         # Exponential Moving Average for Power:
         power_ema = alpha * power + (1 - alpha) * power_ema
-
-        info = {
-            'power': power,
-            'mechanical_power': mechanical_power,
-            'thermal_power': thermal_power,
-            'static_power': static_power,
-            'gravitational_power': gravitational_power,
-            'swing_power': swing_power,
-        }
-
-        return power_ema, info
+        return power_ema
 
     # Adapted from mujoco_playground:
     def maybe_apply_perturbation(self, state: mjx_env.State) -> mjx_env.State:

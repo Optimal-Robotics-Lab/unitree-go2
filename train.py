@@ -53,9 +53,9 @@ flags.DEFINE_string(
 def main(argv=None):
     # Get FLAG.tag prefix:
     prefix, suffix = FLAGS.tag.split('-')
-    if prefix not in ['standard', 'transparent', 'vendor']:
+    if prefix not in ['vendor']:
         raise ValueError(f'Unknown FLAG.tag prefix: {prefix}')
-    if suffix not in ['position', 'velocity']:
+    if suffix not in ['position', 'velocity', 'torque']:
         raise ValueError(f'Unknown FLAG.tag suffix: {suffix}')
 
     # Rehydrate Model from Parameter Checkpoint:
@@ -84,10 +84,13 @@ def main(argv=None):
                 tracking_linear_velocity=1.5,
                 tracking_angular_velocity=0.75,
                 # Cost of Transport Terms:
-                cost_of_transport_reward=0.5,
-                cost_of_transport_penalty=-1e-2,
+                # cost_of_transport_reward=0.5,
+                # cost_of_transport_penalty=-1e-2,
+                # Power Regularization Terms:
+                electrical_power=-1.5e-3,
+                gravitational_power=-6e-3,
                 # Energy Regularization Terms:
-                exhaustion=-1e-5,
+                energy=-1e-5,
                 action_rate=-0.01,
                 acceleration=-2.5e-5,
                 # Auxilary Terms:
@@ -107,10 +110,13 @@ def main(argv=None):
                 tracking_linear_velocity=1.5,
                 tracking_angular_velocity=0.75,
                 # Cost of Transport Terms:
-                cost_of_transport_reward=0.5,
-                cost_of_transport_penalty=-1e-2,
+                # cost_of_transport_reward=0.5,
+                # cost_of_transport_penalty=-1e-2,
+                # Power Regularization Terms:
+                electrical_power=-1.5e-3,
+                gravitational_power=-6e-3,
                 # Energy Regularization Terms:
-                exhaustion=-1e-5,
+                energy=-1e-5,
                 action_rate=-0.1,
                 acceleration=-2.5e-4,
                 # Auxilary Terms:
@@ -141,6 +147,8 @@ def main(argv=None):
             scene = f'scene_mjx_{prefix}_{suffix}.xml'
 
         # Setup Environments:
+        motor_config = unitree_go2_joystick.MotorConfig()
+
         environment_config = config.EnvironmentConfig(
             filename=scene,
             action_scale=0.5,
@@ -155,6 +163,7 @@ def main(argv=None):
             disturbance_config=disturbance_config,
             command_config=command_config,
             model_params=model_params,
+            motor_config=motor_config,
         )
         eval_env = unitree_go2_joystick.UnitreeGo2Env(
             environment_config=environment_config,
@@ -163,6 +172,7 @@ def main(argv=None):
             disturbance_config=disturbance_config,
             command_config=command_config,
             model_params=model_params,
+            motor_config=motor_config,
         )
 
         observation_size = env.observation_size

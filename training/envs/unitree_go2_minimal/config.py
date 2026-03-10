@@ -13,10 +13,13 @@ class RewardConfig:
     tracking_linear_velocity: float = 1.5
     tracking_angular_velocity: float = 0.75
     # Cost of Transport Terms:
-    cost_of_transport_reward: float = 0.5
-    cost_of_transport_penalty: float = -0.001
+    # cost_of_transport_reward: float = 0.5
+    # cost_of_transport_penalty: float = -0.001
+    # Power Regularization Terms:
+    electrical_power: float = -1.5e-3
+    gravitational_power: float = -6e-3
     # Energy Regularization Terms:
-    exhaustion: float = -1e-5
+    energy: float = -1e-5
     action_rate: float = -0.01
     acceleration: float = -2.5e-7
     # Auxilary Terms:
@@ -73,3 +76,31 @@ class EnvironmentConfig:
     optimizer_timestep: float = 0.004
     nconmax: int = 8 * 8192
     njmax: int = 12 + 48
+
+
+@flax.struct.dataclass
+class MotorConfig:
+    kp: float = 35.0
+    kv: float = 0.5
+    kt: float = 0.63895
+    tau_base: float = 23.7
+    omega_base: float = 30.0
+    reduction_ratio: jax.Array = flax.struct.field(
+        default_factory=lambda: jnp.array([1.0, 1.0, 45.43 / 23.7] * 4),
+    )
+    # Electrical Components:
+    working_voltage: float = 24.0
+    resistance: float = 0.5
+    regen_efficiency: float = 0.3
+
+    @property
+    def tau_max(self) -> jax.Array:
+        return self.tau_base * self.reduction_ratio
+
+    @property
+    def omega_max(self) -> jax.Array:
+        return self.omega_base / self.reduction_ratio
+
+    @property
+    def damping_slope(self) -> jax.Array:
+        return self.tau_max / self.omega_max
