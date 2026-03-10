@@ -18,8 +18,8 @@ from mujoco_playground._src import mjx_env
 
 from brax.io import html
 
-from training.envs.unitree_go2 import base
-from training.envs.unitree_go2.config import (
+from training.envs.unitree_go2_minimal import base
+from training.envs.unitree_go2_minimal.config import (
     RewardConfig,
     NoiseConfig,
     DisturbanceConfig,
@@ -182,12 +182,14 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
             data.sensordata[self._mj_model.sensor_adr[sensor_id]] > 0
             for sensor_id in self.feet_contact_sensor
         ])
+        feet_velocity = self.get_feet_velocity(data)
 
         state_info = {
             'rng': rng,
             'previous_action': jnp.zeros(self.nu),
             'previous_joint_positions': jnp.zeros(self.num_joints),
             'previous_velocity': jnp.zeros(self.num_joints),
+            'previous_foot_velocity': feet_velocity,
             'command': command,
             'steps_until_next_command': steps_until_next_command,
             'previous_contact': feet_contacts,
@@ -211,7 +213,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
 
         # Observation Initialization:
         observation = self.get_observation(
-            data, state_info,
+            data, feet_contacts, state_info,
         )
 
         reward, done = jnp.zeros(2)
@@ -222,6 +224,15 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
             metrics[k] = state_info['rewards'][k]
         metrics['total_distance'] = 0.0
         metrics['swing_peak'] = jnp.zeros(())
+        
+        # Power Metrics:
+        metrics['power_ema'] = 0.0
+        metrics['power'] = 0.0
+        metrics['mechanical_power'] = 0.0
+        metrics['thermal_power'] = 0.0
+        metrics['static_power'] = 0.0
+        metrics['gravitational_power'] = 0.0
+        metrics['swing_power'] = 0.0
 
         state = mjx_env.State(
             data=data,
@@ -265,6 +276,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         ])
 
         # Feet Air and Contact Time:
+        feet_velocity = self.get_feet_velocity(data)
         state.info['previous_air_time'] = jnp.where(
             feet_contacts, state.info['feet_air_time'], state.info['previous_air_time'],
         )
@@ -288,18 +300,21 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         # Body Velocity:
         global_body_velocity = self.get_global_linear_velocity(data)
         local_body_velocity = self.get_local_linear_velocity(data)
+        local_angular_velocity = self.get_gyro(data)
 
         # Update EMAs:
+        body_velocity = jnp.concatenate([local_body_velocity, local_angular_velocity])
         state.info['velocity_ema'] = self._update_velocity_ema(
             state.info['velocity_ema'],
             state.info['command'],
-            data.qvel[0:6],
+            body_velocity,
         )
-        state.info['power_ema'] = self._update_power_ema(
+        state.info['power_ema'], power_info = self._update_power_ema(
             state.info['power_ema'],
+            global_body_velocity,
             data.actuator_force,
-            data.qvel[6:],
-            self.get_feet_velocity(data),
+            joint_velocities,
+            feet_velocity,
             feet_contacts,
         )
 
@@ -311,7 +326,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         )
 
         # Termination:
-        done = self.get_termination(data)
+        done = self.get_termination(data, state.info)
 
         # Rewards:
         rewards = {
@@ -321,13 +336,25 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
             'tracking_angular_velocity': (
                 self._reward_tracking_yaw_rate(state.info['command'], self.get_gyro(data))
             ),
-            'cost_of_transport': self._cost_of_transport(
+            'cost_of_transport_reward': self._reward_cost_of_transport(
                 state.info['velocity_ema'],
+                state.info['power_ema'],
+            ),
+            'cost_of_transport_penalty': self._penalty_cost_of_transport(
+                state.info['velocity_ema'],
+                state.info['power_ema'],
+            ),
+            'exhaustion': self._cost_exhaustion(
                 state.info['power_ema'],
             ),
             'action_rate': self._cost_action_rate(action, state.info['previous_action']),
             'acceleration': self._cost_acceleration(
                 data.qacc,
+            ),
+            'impact': self._cost_impact(
+                feet_contacts,
+                state.info['previous_contact'],
+                state.info['previous_foot_velocity'],
             ),
             'foot_slip': self._cost_foot_slip(
                 data,
@@ -350,6 +377,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         state.info['previous_action'] = action
         state.info['previous_joint_positions'] = joint_angles
         state.info['previous_velocity'] = joint_velocities
+        state.info['previous_foot_velocity'] = feet_velocity
         state.info['previous_contact'] = feet_contacts
         state.info['swing_peak'] *= ~feet_contacts
         state.info['rewards'] = rewards
@@ -379,11 +407,21 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
 
         # Proxy Metrics:
         state.metrics['total_distance'] = mjx_math.norm(
-            data.xpos[self.base_idx - 1],
+            data.xpos[self.base_idx],
         )
         state.metrics['swing_peak'] = jnp.mean(
             state.info['swing_peak']
         )
+
+        # Power Metrics:
+        state.metrics['power_ema'] = state.info['power_ema']
+        state.metrics['power'] = power_info['power']
+        state.metrics['mechanical_power'] = power_info['mechanical_power']
+        state.metrics['thermal_power'] = power_info['thermal_power']
+        state.metrics['static_power'] = power_info['static_power']
+        state.metrics['gravitational_power'] = power_info['gravitational_power']
+        state.metrics['swing_power'] = power_info['swing_power']
+
         state.metrics.update(state.info['rewards'])
 
         done = jnp.float64(done) if jax.config.x64_enabled else jnp.float32(done)
@@ -396,7 +434,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         )
         return state
 
-    def get_termination(self, data: mjx.Data) -> jax.Array:
+    def get_termination(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
         joint_angles = data.qpos[7:]
 
         termination_contacts = jnp.array([
@@ -404,10 +442,14 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
             for sensor_id in self.termination_contact_sensor
         ])
 
+        max_power_budget = 800.0
+        thermal_trip = info['power_ema'] > max_power_budget
+
         done = self.get_upvector(data)[-1] < -0.25
         done |= jnp.any(joint_angles < self.joint_lb)
         done |= jnp.any(joint_angles > self.joint_ub)
         done |= jnp.any(termination_contacts)
+        done |= thermal_trip
         return done
 
     def get_observation(
@@ -429,6 +471,17 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         """
         q = data.qpos[7:]
         qd = data.qvel[6:]
+
+        # Linear Velocity:
+        linear_velocity = self.get_local_linear_velocity(data)
+        state_info['rng'], noise_key = jax.random.split(state_info['rng'])
+        linear_velocity_noise = jax.random.uniform(
+            noise_key,
+            shape=linear_velocity.shape,
+            minval=-self.noise_config.linear_velocity,
+            maxval=self.noise_config.linear_velocity,
+        )
+        noisy_linear_velocity = linear_velocity + linear_velocity_noise
 
         # Gyroscope Noise:
         gyroscope = self.get_gyro(data)
@@ -482,6 +535,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         noisy_feet_contacts = contacts * dropout_mask
 
         observation = jnp.concatenate([
+            noisy_linear_velocity,                      # 3
             noisy_angular_rate,                         # 3
             noisy_projected_gravity,                    # 3
             noisy_joint_positions - self.default_pose,  # 12
@@ -492,7 +546,6 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         ])
 
         accelerometer = self.get_accelerometer(data)
-        linear_velocity = self.get_local_linear_velocity(data)
         global_angular_velocity = self.get_global_angular_velocity(data)
         actuator_force = data.actuator_force
         feet_velocity = self.get_feet_velocity(data).ravel()
@@ -540,7 +593,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         error = jnp.square(commands[2] - x[2])
         return jnp.exp(-error / self.kernel_sigma)
 
-    def _cost_of_transport(
+    def _reward_cost_of_transport(
         self,
         velocity_ema: jax.Array,
         power_ema: jax.Array,
@@ -548,7 +601,25 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         # Cost of Transport:
         denominator = self.total_mass * 9.81 * jnp.maximum(velocity_ema, 1e-3)
         cot = power_ema / denominator
-        return jnp.exp(-cot / self.kernel_sigma)
+        return jnp.exp(-cot / 2.0)
+
+    def _penalty_cost_of_transport(
+        self,
+        velocity_ema: jax.Array,
+        power_ema: jax.Array,
+    ) -> jax.Array:
+        # Cost of Transport:
+        denominator = self.total_mass * 9.81 * jnp.maximum(velocity_ema, 1e-3)
+        return power_ema / denominator
+
+    def _cost_exhaustion(
+        self,
+        power_ema: jax.Array,
+    ) -> jax.Array:
+        # Penalize high power consumption to encourage energy efficiency.
+        limit = 300.0
+        overdraw = jnp.maximum(power_ema - limit, 0.0)
+        return jnp.square(overdraw)
 
     def _cost_action_rate(
         self, action: jax.Array, previous_action: jax.Array
@@ -561,6 +632,16 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
     ) -> jax.Array:
         # Penalize Motor/Joint Acceleration
         return jnp.sqrt(jnp.sum(jnp.square(qacc)))
+
+    def _cost_impact(
+        self,
+        contacts: jax.Array,
+        previous_contacts: jax.Array,
+        previous_foot_velocities: jax.Array,
+    ) -> jax.Array:
+        # Penalize high foot impact velocities
+        just_landed = (contacts == 1.0) & (previous_contacts == 0.0)
+        return jnp.sum(jnp.square(previous_foot_velocities[..., 2]) * just_landed)
 
     def _cost_foot_slip(
         self,
@@ -635,29 +716,43 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
     def _update_power_ema(
         self,
         power_ema: jax.Array,
+        global_base_qvel: jax.Array,
         torques: jax.Array,
-        qvel: jax.Array,
+        joint_qvel: jax.Array,
         foot_velocities: jax.Array,
         feet_contacts: jax.Array,
         alpha: float = 0.1,
-    ) -> jax.Array:
-        # Power Calculation:
-        mechanical_power = jnp.sum(jnp.abs(qvel * torques))
+    ) -> tuple[jax.Array, dict[str, jax.Array]]:
+        # Mechanical and Electrical Power Calculation:
+        mechanical_power = jnp.sum(jnp.abs(joint_qvel * torques))
         thermal_power = 0.15 * jnp.sum(jnp.square(torques))
         static_power = 80.0
 
+        # Gravitational Potential Power Calculation:
+        gravitational_power = self.total_mass * 9.81 * jnp.abs(global_base_qvel[2])
+
         # Biomechanical Power Calculation (Swing Leg Kinetics):
         is_swing = ~feet_contacts
-        velocity_xy_sq = jnp.sum(jnp.square(foot_velocities), axis=-1)
+        relative_foot_velocities = foot_velocities - global_base_qvel[:3]
+        velocity_xy_sq = jnp.sum(jnp.square(relative_foot_velocities), axis=-1)
         swing_power = self.leg_mass * jnp.sum(velocity_xy_sq * is_swing)
 
         # Power for Cost of Transport:
-        power = mechanical_power + thermal_power + static_power + swing_power
+        power = mechanical_power + thermal_power + static_power + gravitational_power + swing_power
 
         # Exponential Moving Average for Power:
         power_ema = alpha * power + (1 - alpha) * power_ema
 
-        return power_ema
+        info = {
+            'power': power,
+            'mechanical_power': mechanical_power,
+            'thermal_power': thermal_power,
+            'static_power': static_power,
+            'gravitational_power': gravitational_power,
+            'swing_power': swing_power,
+        }
+
+        return power_ema, info
 
     # Adapted from mujoco_playground:
     def maybe_apply_perturbation(self, state: mjx_env.State) -> mjx_env.State:

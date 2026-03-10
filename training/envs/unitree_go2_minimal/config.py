@@ -12,14 +12,18 @@ class RewardConfig:
     # Rewards:
     tracking_linear_velocity: float = 1.5
     tracking_angular_velocity: float = 0.75
-    cost_of_transport: float = 0.5
+    # Cost of Transport Terms:
+    cost_of_transport_reward: float = 0.5
+    cost_of_transport_penalty: float = -0.001
     # Energy Regularization Terms:
+    exhaustion: float = -1e-5
     action_rate: float = -0.01
     acceleration: float = -2.5e-7
     # Auxilary Terms:
     termination: float = -1.0
     unwanted_contact: float = -0.5
     # Gait Reward Terms:
+    impact: float = -0.5
     foot_slip: float = -0.1
     # Hyperparameter for exponential kernel:
     kernel_sigma: float = 0.25
@@ -29,6 +33,7 @@ class RewardConfig:
 class NoiseConfig:
     joint_position: float = 0.05
     joint_velocity: float = 1.5
+    linear_velocity: float = 0.1
     gyroscope: float = 0.2
     gravity_vector: float = 0.05
     contact_dropout: float = 0.95

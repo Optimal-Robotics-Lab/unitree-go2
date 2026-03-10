@@ -73,7 +73,7 @@ def main(argv=None):
         }
 
     # Training Types:
-    training_types = ['baseline', 'finetune']
+    training_types = ['baseline']
 
     previous_run = None
     for training_type in training_types:
@@ -83,33 +83,41 @@ def main(argv=None):
                 # Rewards:
                 tracking_linear_velocity=1.5,
                 tracking_angular_velocity=0.75,
-                cost_of_transport=0.5,
+                # Cost of Transport Terms:
+                cost_of_transport_reward=0.5,
+                cost_of_transport_penalty=-1e-2,
                 # Energy Regularization Terms:
+                exhaustion=-1e-5,
                 action_rate=-0.01,
                 acceleration=-2.5e-5,
                 # Auxilary Terms:
                 termination=-1.0,
                 unwanted_contact=-1.0,
                 # Gait Reward Terms:
-                foot_slip=-0.5,
+                impact=-0.5,
+                foot_slip=-1.0,
                 # Hyperparameter for exponential kernel:
                 kernel_sigma=0.25,
             )
             command_config = config.CommandConfig()
-            num_epochs = 20
+            num_epochs = 30
         elif training_type == 'finetune' or training_type == 'rough':
             reward_config = config.RewardConfig(
                 # Rewards:
                 tracking_linear_velocity=1.5,
                 tracking_angular_velocity=0.75,
-                cost_of_transport=0.5,
+                # Cost of Transport Terms:
+                cost_of_transport_reward=0.5,
+                cost_of_transport_penalty=-1e-2,
                 # Energy Regularization Terms:
+                exhaustion=-1e-5,
                 action_rate=-0.1,
                 acceleration=-2.5e-4,
                 # Auxilary Terms:
                 termination=-1.0,
                 unwanted_contact=-1.0,
                 # Gait Reward Terms:
+                impact=-0.5,
                 foot_slip=-0.5,
                 # Hyperparameter for exponential kernel:
                 kernel_sigma=0.25,
@@ -256,7 +264,7 @@ def main(argv=None):
 
         # Start Wandb and save metadata:
         run = wandb.init(
-            project='UnitreeGo2-Tests',
+            project='UnitreeGo2-Energy-Tests',
             tags=[FLAGS.tag],
             config={
                 'reward_config': reward_config,
