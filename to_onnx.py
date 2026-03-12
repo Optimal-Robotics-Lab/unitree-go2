@@ -9,8 +9,8 @@ jax.config.update("jax_enable_x64", True)
 import flax
 from flax import nnx
 
-from training.envs.unitree_go2 import unitree_go2_joystick
-from training.envs.unitree_go2 import config
+from training.envs.unitree_go2_minimal import unitree_go2_joystick
+from training.envs.unitree_go2_minimal import config
 
 import training.statistics as statistics
 from training.algorithms.ppo import agent
@@ -42,7 +42,7 @@ flags.DEFINE_integer(
 
 def main(argv=None):
     # Setup Environments:
-    scene = 'scene_mjx_vendor_position.xml'
+    scene = 'scene_mjx_vendor_torque.xml'
     # scene = 'scene_mjx_vendor_velocity.xml'
     environment_config = config.EnvironmentConfig(
         filename=scene,
