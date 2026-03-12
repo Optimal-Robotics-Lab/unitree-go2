@@ -46,8 +46,10 @@ class RewardConfig:
 class NoiseConfig:
     joint_position: float = 0.05
     joint_velocity: float = 1.5
+    linear_velocity: float = 0.1
     gyroscope: float = 0.2
     gravity_vector: float = 0.05
+    contact_dropout: float = 0.95
 
 
 @flax.struct.dataclass
@@ -84,3 +86,31 @@ class EnvironmentConfig:
     optimizer_timestep: float = 0.004
     nconmax: int = 8 * 8192
     njmax: int = 12 + 48
+
+
+@flax.struct.dataclass
+class MotorConfig:
+    kp: float = 35.0
+    kv: float = 0.5
+    kt: float = 0.63895
+    tau_base: float = 23.7
+    omega_base: float = 30.0
+    reduction_ratio: jax.Array = flax.struct.field(
+        default_factory=lambda: jnp.array([1.0, 1.0, 45.43 / 23.7] * 4),
+    )
+    # Electrical Components:
+    working_voltage: float = 24.0
+    resistance: float = 0.11
+    regen_efficiency: float = 0.3
+
+    @property
+    def tau_max(self) -> jax.Array:
+        return self.tau_base * self.reduction_ratio
+
+    @property
+    def omega_max(self) -> jax.Array:
+        return self.omega_base / self.reduction_ratio
+
+    @property
+    def damping_slope(self) -> jax.Array:
+        return self.tau_max / self.omega_max

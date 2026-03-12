@@ -17,9 +17,9 @@ import optax
 
 import wandb
 
-from training.envs.unitree_go2 import unitree_go2_joystick
-from training.envs.unitree_go2 import config
-from training.envs.unitree_go2 import randomize
+from training.envs.unitree_go2_minimal import unitree_go2_joystick
+from training.envs.unitree_go2_minimal import config
+from training.envs.unitree_go2_minimal import randomize
 
 import training.statistics as statistics
 import training.algorithms.ppo.agent as agent
@@ -29,6 +29,7 @@ from training.algorithms.ppo.loss_utilities import loss_function
 from training.algorithms.ppo.train import train
 from training import metrics_utilities
 from training import checkpoint_utilities
+from training import curriculum_utilities
 
 os.environ['XLA_FLAGS'] = (
     '--xla_gpu_enable_triton_softmax_fusion=true '
@@ -83,68 +84,54 @@ def main(argv=None):
                 # Rewards:
                 tracking_linear_velocity=1.5,
                 tracking_angular_velocity=0.75,
-                # Orientation Regularization Terms:
-                orientation_regularization=-5.0,
-                linear_z_velocity=-2.0,
-                angular_xy_velocity=-0.05,
+                # Cost of Transport Terms:
+                # cost_of_transport_reward=0.5,
+                # cost_of_transport_penalty=-1e-2,
+                # Power Regularization Terms:
+                electrical_power=-1.5e-3,
+                gravitational_power=-6.0e-3,
                 # Energy Regularization Terms:
-                torque=-2e-4,
+                energy=0.0,
                 action_rate=-0.01,
                 acceleration=-2.5e-5,
                 # Auxilary Terms:
-                stand_still=-1.0,
                 termination=-1.0,
                 unwanted_contact=-1.0,
                 # Gait Reward Terms:
-                foot_slip=-1.0,
-                air_time=0.75,
-                foot_clearance=0.5,
-                gait_variance=-1.0,
-                # Gait Hyperparameters:
-                target_air_time=0.25,
-                mode_time=0.2,
-                command_threshold=0.0,
-                velocity_threshold=0.5,
-                # Foot Clearance Reward Terms:
-                target_foot_height=0.125,
-                foot_clearance_velocity_scale=2.0,
-                foot_clearance_sigma=0.05,
+                impact=-0.5,
+                foot_slip=-0.5,
                 # Hyperparameter for exponential kernel:
                 kernel_sigma=0.25,
             )
             command_config = config.CommandConfig()
-            num_epochs = 20
+            num_epochs = 30
+            curriculum_fn = curriculum_utilities.get_exponential_schedule(
+                transition_begin=0,
+                transition_steps=12200,
+                init_value=1e-3,
+                target_value=1.0,
+            )
         elif training_type == 'finetune' or training_type == 'rough':
             reward_config = config.RewardConfig(
                 # Rewards:
                 tracking_linear_velocity=1.5,
                 tracking_angular_velocity=0.75,
-                # Orientation Regularization Terms:
-                orientation_regularization=-5.0,
-                linear_z_velocity=-2.0,
-                angular_xy_velocity=-0.05,
+                # Cost of Transport Terms:
+                # cost_of_transport_reward=0.5,
+                # cost_of_transport_penalty=-1e-2,
+                # Power Regularization Terms:
+                electrical_power=-1.0e-3,
+                gravitational_power=-1.0e-3,
                 # Energy Regularization Terms:
-                torque=-2e-4,
+                energy=-1e-4,
                 action_rate=-0.1,
                 acceleration=-2.5e-4,
                 # Auxilary Terms:
-                stand_still=-1.0,
                 termination=-1.0,
                 unwanted_contact=-1.0,
                 # Gait Reward Terms:
-                foot_slip=-1.0,
-                air_time=0.75,
-                foot_clearance=0.5,
-                gait_variance=-1.0,
-                # Gait Hyperparameters:
-                target_air_time=0.25,
-                mode_time=0.2,
-                command_threshold=0.0,
-                velocity_threshold=0.5,
-                # Foot Clearance Reward Terms:
-                target_foot_height=0.125,
-                foot_clearance_velocity_scale=2.0,
-                foot_clearance_sigma=0.05,
+                impact=-0.1,
+                foot_slip=-0.1,
                 # Hyperparameter for exponential kernel:
                 kernel_sigma=0.25,
             )
@@ -153,9 +140,10 @@ def main(argv=None):
                 command_mask_probability=0.9,
                 command_frequency=[0.5, 2.0],
             )
-            num_epochs = 10
+            num_epochs = 20
+            curriculum_fn = None
         else:
-            raise ValueError(f'Unknown FLAG.tag prefix: {prefix}')
+            raise ValueError(f'Unknown training_type: {training_type}')
 
         # Configs:
         noise_config = config.NoiseConfig()
@@ -296,7 +284,7 @@ def main(argv=None):
 
         # Start Wandb and save metadata:
         run = wandb.init(
-            project='UnitreeGo2-State-Estimator-Tests',
+            project='UnitreeGo2-Energy-Tests',
             tags=[FLAGS.tag],
             config={
                 'reward_config': reward_config,
@@ -317,9 +305,6 @@ def main(argv=None):
             render_interval=5,
             duration=10.0,
         )
-
-        # Curriculum Functions:
-        curriculum_fn = None
 
         # Initialize Functions with Params:
         randomization_fn = randomize.task_randomize

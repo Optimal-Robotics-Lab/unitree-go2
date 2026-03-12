@@ -208,7 +208,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
 
         # Observation Initialization:
         observation = self.get_observation(
-            data, state_info,
+            data, feet_contacts, state_info,
         )
 
         reward, done = jnp.zeros(2)
@@ -238,10 +238,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
             state = self.maybe_apply_perturbation(state)
 
         # Physics step:
-        motor_targets = self.default_ctrl + action * self.action_scale
-        data = mjx_env.step(
-            self._mjx_model, state.data, motor_targets, self._n_substeps,
-        )
+        data = self._step(state.data, action)
 
         imu_height = data.site_xpos[self.imu_site_idx][2]
         joint_angles = data.qpos[7:]
@@ -285,6 +282,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         # Observation data:
         observation = self.get_observation(
             data,
+            feet_contacts,
             state.info,
         )
 
@@ -317,7 +315,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
                 state.info['command'], joint_angles,
             ),
             'foot_slip': self._cost_foot_slip(
-                data, feet_contacts, state.info['command'],
+                data, target_foot_height=0.1,
             ),
             'air_time': self._reward_air_time(
                 state.info['feet_air_time'],
@@ -419,20 +417,34 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
     def get_observation(
         self,
         data: mjx.Data,
+        contacts: jax.Array,
         state_info: dict[str, Any],
     ) -> Dict[str, jax.Array]:
         """
             Observation: [
+                linear_velocity,
                 gyroscope,
                 projected_gravity,
                 relative_motor_positions,
                 motor_velocities,
+                contacts,
                 previous_action,
                 command,
             ]
         """
         q = data.qpos[7:]
         qd = data.qvel[6:]
+
+        # Linear Velocity:
+        linear_velocity = self.get_local_linear_velocity(data)
+        state_info['rng'], noise_key = jax.random.split(state_info['rng'])
+        linear_velocity_noise = jax.random.uniform(
+            noise_key,
+            shape=linear_velocity.shape,
+            minval=-self.noise_config.linear_velocity,
+            maxval=self.noise_config.linear_velocity,
+        )
+        noisy_linear_velocity = linear_velocity + linear_velocity_noise
 
         # Gyroscope Noise:
         gyroscope = self.get_gyro(data)
@@ -476,17 +488,27 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         )
         noisy_joint_velocities = qd + joint_velocity_noise
 
+        # Feet Contacts:
+        state_info['rng'], noise_key = jax.random.split(state_info['rng'])
+        dropout_mask = jax.random.bernoulli(
+            noise_key,
+            p=self.noise_config.contact_dropout,
+            shape=(4,)
+        )
+        noisy_feet_contacts = contacts * dropout_mask
+
         observation = jnp.concatenate([
+            noisy_linear_velocity,                      # 3
             noisy_angular_rate,                         # 3
             noisy_projected_gravity,                    # 3
             noisy_joint_positions - self.default_pose,  # 12
             noisy_joint_velocities,                     # 12
+            noisy_feet_contacts,                        # 4
             state_info['previous_action'],              # 12 or 24
             state_info['command'],                      # 3
         ])
 
         accelerometer = self.get_accelerometer(data)
-        linear_velocity = self.get_local_linear_velocity(data)
         global_angular_velocity = self.get_global_angular_velocity(data)
         actuator_force = data.actuator_force
         feet_velocity = self.get_feet_velocity(data).ravel()
@@ -624,10 +646,10 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         sigma: float = 0.05,
     ) -> jax.Array:
         foot_position = data.site_xpos[self.feet_site_idx]
-        foot_height = foot_position[..., -1]
+        foot_height = jnp.minimum(foot_position[..., -1], target_foot_height)
         foot_error = jnp.square(foot_height - target_foot_height)
         foot_velocity = self.get_feet_velocity(data)[..., :2]
-        foot_velocity_norm = jnp.linalg.norm(foot_velocity)
+        foot_velocity_norm = jnp.linalg.norm(foot_velocity, axis=-1)
         foot_velocity_tanh = jnp.tanh(velocity_scale * foot_velocity_norm)
         error = jnp.sum(foot_error * foot_velocity_tanh)
         return jnp.exp(-error / sigma)
@@ -635,15 +657,27 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
     def _cost_foot_slip(
         self,
         data: mjx.Data,
-        contact: jax.Array,
-        commands: jax.Array,
+        target_foot_height: float = 0.1,
+        decay_rate: float = 0.95,
     ) -> jax.Array:
-        # Penalize foot slip
-        command_norm = jnp.linalg.norm(commands)
+        # Penalizes foot slip velocity at contact to encourage ground speed matching.
+        if not (0.0 < decay_rate <= 1.0):
+            raise ValueError("Decay rate must be between 0 and 1.")
+
+        # Foot velocities and foot heights
         foot_velocity = self.get_feet_velocity(data)
         foot_velocity_xy = foot_velocity[..., :2]
+        foot_position = data.site_xpos[self.feet_site_idx]
+        foot_height = foot_position[..., -1]
+
+        # Calculate velocity of each foot relative to the base
         velocity_xy_sq = jnp.sum(jnp.square(foot_velocity_xy), axis=-1)
-        return jnp.sum(velocity_xy_sq * contact) * (command_norm > 0.1)
+
+        # Calculate scale factor to smoothly increase penalty as foot approaches target height
+        scale_factor = -target_foot_height / jnp.log(1.0 - decay_rate)
+        height_gate = jnp.exp(-foot_height / scale_factor)
+
+        return jnp.sum(velocity_xy_sq * height_gate)
 
     def _cost_unwanted_contact(
         self,
