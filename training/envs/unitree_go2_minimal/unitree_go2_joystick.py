@@ -208,7 +208,10 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
             'disturbance_direction': jnp.array([0.0, 0.0, 0.0]),
             # New Power Terms:
             'velocity_ema': 0.0,
-            'power_ema': 0.0,
+            'power_ema': 80.0,
+            # Curriculum Terms:
+            'global_step': jnp.zeros((), dtype=jnp.int32),
+            'curriculum_fn_result': jnp.zeros((), dtype=jnp.float32),
         }
 
         # Observation Initialization:
@@ -226,14 +229,14 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         metrics['swing_peak'] = jnp.zeros(())
 
         # Power Metrics:
-        metrics['power_ema'] = 0.0
-        metrics['power'] = 0.0
-        metrics['positive_mechanical_power'] = 0.0
-        metrics['negative_mechanical_power'] = 0.0
-        metrics['thermal_power'] = 0.0
-        metrics['static_power'] = 0.0
-        metrics['gravitational_power'] = 0.0
-        metrics['swing_power'] = 0.0
+        metrics['energy/power_ema'] = 0.0
+        metrics['energy/total_power'] = 0.0
+        metrics['energy/positive_mechanical_power'] = 0.0
+        metrics['energy/negative_mechanical_power'] = 0.0
+        metrics['energy/thermal_power'] = 0.0
+        metrics['energy/static_power'] = 80.0
+        metrics['energy/gravitational_power'] = 0.0
+        metrics['energy/swing_power'] = 0.0
 
         state = mjx_env.State(
             data=data,
@@ -331,6 +334,9 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         # Termination:
         done = self.get_termination(data, state.info)
 
+        # Curriculum Reward Shaping:
+        curriculum_factor = state.info['curriculum_fn_result']
+
         # Rewards:
         rewards = {
             # Tracking Rewards:
@@ -345,28 +351,28 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
                 power_metrics['positive_mechanical_power'],
                 power_metrics['negative_mechanical_power'],
                 power_metrics['thermal_power'],
-            ),
+            ) * curriculum_factor,
             'gravitational_power': self._cost_gravitational_power(
                 power_metrics['gravitational_power'],
-            ),
+            ) * curriculum_factor,
             # Energy and Power Costs:
             'energy': self._cost_energy(
                 state.info['power_ema'],
-            ),
-            'action_rate': self._cost_action_rate(action, state.info['previous_action']),
+            ) * curriculum_factor,
+            'action_rate': self._cost_action_rate(action, state.info['previous_action']) * curriculum_factor,
             'acceleration': self._cost_acceleration(
                 data.qacc,
-            ),
+            ) * curriculum_factor,
             # Gait Costs:
             'impact': self._cost_impact(
                 feet_contacts,
                 state.info['previous_contact'],
                 state.info['previous_foot_velocity'],
-            ),
+            ) * curriculum_factor,
             'foot_slip': self._cost_foot_slip(
                 data,
                 target_foot_height=0.05,
-            ),
+            ) * curriculum_factor,
             # Miscellaneous Costs:
             'unwanted_contact': self._cost_unwanted_contact(
                 unwanted_contacts,
@@ -423,14 +429,14 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         )
 
         # Power Metrics:
-        state.metrics['power_ema'] = state.info['power_ema']
-        state.metrics['power'] = power_metrics['power']
-        state.metrics['positive_mechanical_power'] = power_metrics['positive_mechanical_power']
-        state.metrics['negative_mechanical_power'] = power_metrics['negative_mechanical_power']
-        state.metrics['thermal_power'] = power_metrics['thermal_power']
-        state.metrics['static_power'] = power_metrics['static_power']
-        state.metrics['gravitational_power'] = power_metrics['gravitational_power']
-        state.metrics['swing_power'] = power_metrics['swing_power']
+        state.metrics['energy/power_ema'] = state.info['power_ema']
+        state.metrics['energy/total_power'] = power_metrics['total_power']
+        state.metrics['energy/positive_mechanical_power'] = power_metrics['positive_mechanical_power']
+        state.metrics['energy/negative_mechanical_power'] = power_metrics['negative_mechanical_power']
+        state.metrics['energy/thermal_power'] = power_metrics['thermal_power']
+        state.metrics['energy/static_power'] = power_metrics['static_power']
+        state.metrics['energy/gravitational_power'] = power_metrics['gravitational_power']
+        state.metrics['energy/swing_power'] = power_metrics['swing_power']
 
         state.metrics.update(state.info['rewards'])
 
@@ -804,7 +810,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         self,
         power_ema: jax.Array | float,
         power: jax.Array | float,
-        alpha: float = 0.1,
+        alpha: float = 0.01,
     ) -> jax.Array | float:
         # Exponential Moving Average for Power:
         power_ema = alpha * power + (1 - alpha) * power_ema

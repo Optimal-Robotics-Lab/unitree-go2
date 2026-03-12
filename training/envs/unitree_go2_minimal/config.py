@@ -90,7 +90,7 @@ class MotorConfig:
     )
     # Electrical Components:
     working_voltage: float = 24.0
-    resistance: float = 0.5
+    resistance: float = 0.11
     regen_efficiency: float = 0.3
 
     @property

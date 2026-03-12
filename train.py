@@ -29,6 +29,7 @@ from training.algorithms.ppo.loss_utilities import loss_function
 from training.algorithms.ppo.train import train
 from training import metrics_utilities
 from training import checkpoint_utilities
+from training import curriculum_utilities
 
 os.environ['XLA_FLAGS'] = (
     '--xla_gpu_enable_triton_softmax_fusion=true '
@@ -73,7 +74,7 @@ def main(argv=None):
         }
 
     # Training Types:
-    training_types = ['baseline']
+    training_types = ['baseline', 'finetune']
 
     previous_run = None
     for training_type in training_types:
@@ -88,37 +89,11 @@ def main(argv=None):
                 # cost_of_transport_penalty=-1e-2,
                 # Power Regularization Terms:
                 electrical_power=-1.5e-3,
-                gravitational_power=-6e-3,
+                gravitational_power=-6.0e-3,
                 # Energy Regularization Terms:
-                energy=-1e-5,
+                energy=0.0,
                 action_rate=-0.01,
                 acceleration=-2.5e-5,
-                # Auxilary Terms:
-                termination=-1.0,
-                unwanted_contact=-1.0,
-                # Gait Reward Terms:
-                impact=-0.5,
-                foot_slip=-1.0,
-                # Hyperparameter for exponential kernel:
-                kernel_sigma=0.25,
-            )
-            command_config = config.CommandConfig()
-            num_epochs = 30
-        elif training_type == 'finetune' or training_type == 'rough':
-            reward_config = config.RewardConfig(
-                # Rewards:
-                tracking_linear_velocity=1.5,
-                tracking_angular_velocity=0.75,
-                # Cost of Transport Terms:
-                # cost_of_transport_reward=0.5,
-                # cost_of_transport_penalty=-1e-2,
-                # Power Regularization Terms:
-                electrical_power=-1.5e-3,
-                gravitational_power=-6e-3,
-                # Energy Regularization Terms:
-                energy=-1e-5,
-                action_rate=-0.1,
-                acceleration=-2.5e-4,
                 # Auxilary Terms:
                 termination=-1.0,
                 unwanted_contact=-1.0,
@@ -128,12 +103,45 @@ def main(argv=None):
                 # Hyperparameter for exponential kernel:
                 kernel_sigma=0.25,
             )
+            command_config = config.CommandConfig()
+            num_epochs = 30
+            curriculum_fn = curriculum_utilities.get_exponential_schedule(
+                transition_begin=0,
+                transition_steps=12200,
+                init_value=1e-3,
+                target_value=1.0,
+            )
+        elif training_type == 'finetune' or training_type == 'rough':
+            reward_config = config.RewardConfig(
+                # Rewards:
+                tracking_linear_velocity=1.5,
+                tracking_angular_velocity=0.75,
+                # Cost of Transport Terms:
+                # cost_of_transport_reward=0.5,
+                # cost_of_transport_penalty=-1e-2,
+                # Power Regularization Terms:
+                electrical_power=-1.0e-3,
+                gravitational_power=-1.0e-3,
+                # Energy Regularization Terms:
+                energy=-1e-4,
+                action_rate=-0.1,
+                acceleration=-2.5e-4,
+                # Auxilary Terms:
+                termination=-1.0,
+                unwanted_contact=-1.0,
+                # Gait Reward Terms:
+                impact=-0.1,
+                foot_slip=-0.1,
+                # Hyperparameter for exponential kernel:
+                kernel_sigma=0.25,
+            )
             command_config = config.CommandConfig(
                 command_range=jax.numpy.array([1.5, 1.0, 3.14]),
                 command_mask_probability=0.9,
                 command_frequency=[0.5, 2.0],
             )
-            num_epochs = 10
+            num_epochs = 20
+            curriculum_fn = None
         else:
             raise ValueError(f'Unknown training_type: {training_type}')
 
@@ -147,7 +155,9 @@ def main(argv=None):
             scene = f'scene_mjx_{prefix}_{suffix}.xml'
 
         # Setup Environments:
-        motor_config = unitree_go2_joystick.MotorConfig()
+        motor_config = None
+        if suffix == 'torque':
+            motor_config = config.MotorConfig()
 
         environment_config = config.EnvironmentConfig(
             filename=scene,
@@ -162,8 +172,8 @@ def main(argv=None):
             noise_config=noise_config,
             disturbance_config=disturbance_config,
             command_config=command_config,
-            model_params=model_params,
             motor_config=motor_config,
+            model_params=model_params,
         )
         eval_env = unitree_go2_joystick.UnitreeGo2Env(
             environment_config=environment_config,
@@ -171,8 +181,8 @@ def main(argv=None):
             noise_config=noise_config,
             disturbance_config=disturbance_config,
             command_config=command_config,
-            model_params=model_params,
             motor_config=motor_config,
+            model_params=model_params,
         )
 
         observation_size = env.observation_size
@@ -297,7 +307,7 @@ def main(argv=None):
         )
 
         # Initialize Functions with Params:
-        randomization_fn = randomize.domain_randomize
+        randomization_fn = randomize.task_randomize
         loss_fn = functools.partial(
             loss_function,
             policy_clip_coef=loss_metadata.policy_clip_coef,
@@ -384,6 +394,7 @@ def main(argv=None):
             checkpoint_manager=manager,
             restored_checkpoint=restored_checkpoint,
             randomization_fn=randomization_fn,
+            curriculum_fn=curriculum_fn,
             wandb_run=run,
             render_options=render_options,
         )

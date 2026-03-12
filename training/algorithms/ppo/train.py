@@ -22,6 +22,7 @@ import training.algorithms.ppo.loss_utilities as loss_utilities
 import training.training_utilities as training_utilities
 import training.metrics_utilities as metrics_utilities
 import training.checkpoint_utilities as checkpoint_utilities
+import training.curriculum_utilities as curriculum_utilities
 
 import orbax.checkpoint as ocp
 
@@ -77,6 +78,7 @@ def train(
     randomization_fn: Optional[
         Callable[[mjx.Model, types.PRNGKey], Tuple[mjx.Model, mjx.Model]]
     ] = None,
+    curriculum_fn: Optional[curriculum_utilities.CurriculumFn] = None,
     wandb_run: Optional[Any] = None,
     render_options: Optional[metrics_utilities.RenderOptions] = None,
 ):
@@ -126,6 +128,13 @@ def train(
         action_repeat=action_repeat,
         randomization_fn=_randomization_fn,
     )
+
+    # Curriculum Wrapper:
+    if curriculum_fn is not None:
+        env = curriculum_utilities.CurriculumWrapper(
+            env,
+            curriculum_fn=curriculum_fn,
+        )
 
     # Reset Function
     reset_fn = jax.jit(env.reset)
@@ -306,6 +315,9 @@ def train(
         action_repeat=action_repeat,
         randomization_fn=eval_randomization_fn,
     )
+    constant_schedule = curriculum_utilities.get_constant_schedule(1.0)
+    eval_env = curriculum_utilities.CurriculumWrapper(eval_env, curriculum_fn=constant_schedule)
+
     evaluator = metrics_utilities.Evaluator(
         env=eval_env,
         num_envs=num_evaluation_envs,

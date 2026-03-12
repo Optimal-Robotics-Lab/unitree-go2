@@ -15,7 +15,7 @@ from mujoco import mjx
 
 from mujoco_playground._src import mjx_env
 
-from training.envs.unitree_go2.config import (
+from training.envs.unitree_go2_minimal.config import (
     RewardConfig,
     NoiseConfig,
     DisturbanceConfig,
