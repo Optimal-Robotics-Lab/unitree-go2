@@ -96,7 +96,7 @@ def main(argv=None):
                 termination=-1.0,
                 unwanted_contact=-1.0,
                 # Gait Reward Terms:
-                foot_slip=-0.5,
+                foot_slip=-1.0,
                 air_time=0.75,
                 foot_clearance=0.25,
                 gait_variance=-1.0,
@@ -106,7 +106,7 @@ def main(argv=None):
                 command_threshold=0.0,
                 velocity_threshold=0.5,
                 # Foot Clearance Reward Terms:
-                target_foot_height=0.1,
+                target_foot_height=0.125,
                 foot_clearance_velocity_scale=2.0,
                 foot_clearance_sigma=0.05,
                 # Hyperparameter for exponential kernel:
@@ -132,7 +132,7 @@ def main(argv=None):
                 termination=-1.0,
                 unwanted_contact=-1.0,
                 # Gait Reward Terms:
-                foot_slip=-0.5,
+                foot_slip=-1.0,
                 air_time=0.75,
                 foot_clearance=0.25,
                 gait_variance=-1.0,
@@ -142,7 +142,7 @@ def main(argv=None):
                 command_threshold=0.0,
                 velocity_threshold=0.5,
                 # Foot Clearance Reward Terms:
-                target_foot_height=0.1,
+                target_foot_height=0.125,
                 foot_clearance_velocity_scale=2.0,
                 foot_clearance_sigma=0.05,
                 # Hyperparameter for exponential kernel:
