@@ -29,6 +29,7 @@ from training.algorithms.ppo.loss_utilities import loss_function
 from training.algorithms.ppo.train import train
 from training import metrics_utilities
 from training import checkpoint_utilities
+from training import distribution_utilities
 
 os.environ['XLA_FLAGS'] = (
     '--xla_gpu_enable_triton_softmax_fusion=true '
@@ -203,6 +204,19 @@ def main(argv=None):
             key: jnp.zeros(value) for key, value in observation_size.items()
         }
 
+        # Create Residual Action Bijector:
+        dist_to_upper = env.joint_ub - env.default_ctrl
+        dist_to_lower = env.default_ctrl - env.joint_lb
+        scale = jnp.minimum(dist_to_upper, dist_to_lower)
+        shift = jnp.zeros_like(env.default_ctrl)
+        residual_action_bijector = distrax.Block(
+            distrax.Chain([
+                distrax.ScalarAffine(shift=shift, scale=scale),
+                distrax.Tanh()
+            ]),
+            ndims=1
+        )
+
         # Setup agent:
         policy_layer_size = [512, 256, 128,]
         value_layer_size = [512, 256, 128,]
@@ -229,6 +243,10 @@ def main(argv=None):
             value_kernel_init=value_kernel_init,
             policy_observation_key="state",
             value_observation_key="privileged_state",
+            action_distribution=distribution_utilities.ParametricDistribution(
+                distribution=distrax.Normal,
+                bijector=residual_action_bijector,
+            ),
         )
 
         # Aggregate Metadata:

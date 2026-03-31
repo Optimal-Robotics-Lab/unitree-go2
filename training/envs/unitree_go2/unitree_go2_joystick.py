@@ -489,13 +489,13 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         noisy_joint_velocities = qd + joint_velocity_noise
 
         # Feet Contacts:
-        state_info['rng'], noise_key = jax.random.split(state_info['rng'])
-        dropout_mask = jax.random.bernoulli(
-            noise_key,
-            p=self.noise_config.contact_dropout,
-            shape=(4,)
-        )
-        noisy_feet_contacts = contacts * dropout_mask
+        # state_info['rng'], noise_key = jax.random.split(state_info['rng'])
+        # dropout_mask = jax.random.bernoulli(
+        #     noise_key,
+        #     p=self.noise_config.contact_dropout,
+        #     shape=(4,)
+        # )
+        # noisy_feet_contacts = contacts * dropout_mask
 
         observation = jnp.concatenate([
             noisy_linear_velocity,                      # 3
@@ -503,7 +503,6 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
             noisy_projected_gravity,                    # 3
             noisy_joint_positions - self.default_pose,  # 12
             noisy_joint_velocities,                     # 12
-            noisy_feet_contacts,                        # 4
             state_info['previous_action'],              # 12 or 24
             state_info['command'],                      # 3
         ])
