@@ -81,7 +81,7 @@ class CommandConfig:
 class EnvironmentConfig:
     filename: str = "scene_mjx.xml"
     impl: str = "jax"
-    action_scale: float = 0.5
+    action_scale: float | None = 0.5
     control_timestep: float = 0.02
     optimizer_timestep: float = 0.004
     nconmax: int = 8 * 8192

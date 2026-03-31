@@ -1,6 +1,8 @@
 from typing import Optional, Sequence, Tuple
 
 import jax
+import jax.numpy as jnp
+
 import distrax
 
 from flax import nnx
@@ -16,6 +18,7 @@ class Agent(nnx.Module):
         self,
         observation_size: types.ObservationSize,
         action_size: int,
+        state_dependent_std: bool = True,
         policy_input_normalization: Optional[statistics.RunningStatistics] = None,
         value_input_normalization: Optional[statistics.RunningStatistics] = None,
         policy_layer_sizes: Sequence[int] = (256, 256),
@@ -31,6 +34,7 @@ class Agent(nnx.Module):
     ):
         self.observation_size = observation_size
         self.action_size = action_size
+        self.state_dependent_std = state_dependent_std
 
         # Validate Keys exist in Observation
         assert policy_observation_key in observation_size, (
@@ -41,9 +45,10 @@ class Agent(nnx.Module):
         )
 
         """Creates the Policy and Value Networks for PPO."""
+        policy_output_size = action_size * 2 if state_dependent_std else action_size
         self.policy = networks.Policy(
             input_size=observation_size,
-            output_size=2*action_size,
+            output_size=policy_output_size,
             input_normalization=policy_input_normalization,
             layer_sizes=policy_layer_sizes,
             activation=activation,
@@ -63,6 +68,10 @@ class Agent(nnx.Module):
             rngs=rngs,
         )
 
+        self.action_log_std = None
+        if not self.state_dependent_std:
+            self.action_log_std = nnx.Param(jnp.zeros(action_size))
+
         self.action_distribution = action_distribution
 
     def get_actions(
@@ -79,7 +88,16 @@ class Agent(nnx.Module):
             key: A PRNGKey for sampling actions.
             deterministic: Whether to use deterministic actions (e.g., for evaluation).
         """
-        logits = self.policy(x)
+
+        policy_output = self.policy(x)
+
+        if self.state_dependent_std:
+            logits = policy_output
+        else:
+            assert self.action_log_std is not None
+            mean = policy_output
+            log_std = jnp.broadcast_to(self.action_log_std.value, mean.shape)
+            logits = jnp.concatenate([mean, log_std], axis=-1)
 
         if deterministic:
             actions = self.action_distribution.mode(logits)

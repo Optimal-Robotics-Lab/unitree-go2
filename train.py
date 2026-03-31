@@ -174,7 +174,7 @@ def main(argv=None):
 
         environment_config = config.EnvironmentConfig(
             filename=scene,
-            action_scale=0.5,
+            action_scale=None,
             control_timestep=0.02,
             optimizer_timestep=0.004,
         )
@@ -204,27 +204,14 @@ def main(argv=None):
             key: jnp.zeros(value) for key, value in observation_size.items()
         }
 
-        # Create Residual Action Bijector:
-        dist_to_upper = env.joint_ub - env.default_ctrl
-        dist_to_lower = env.default_ctrl - env.joint_lb
-        scale = jnp.minimum(dist_to_upper, dist_to_lower)
-        shift = jnp.zeros_like(env.default_ctrl)
-        residual_action_bijector = distrax.Block(
-            distrax.Chain([
-                distrax.ScalarAffine(shift=shift, scale=scale),
-                distrax.Tanh()
-            ]),
-            ndims=1
-        )
-
         # Setup agent:
         policy_layer_size = [512, 256, 128,]
         value_layer_size = [512, 256, 128,]
         activation_fn = jax.nn.swish
-        policy_kernel_init = jax.nn.initializers.lecun_uniform()
-        value_kernel_init = jax.nn.initializers.variance_scaling(
-            scale=0.01, mode="fan_in", distribution="uniform",
-        )
+        hidden_init = jax.nn.initializers.orthogonal(jnp.sqrt(2.0))
+        output_init = jax.nn.initializers.orthogonal(0.01)
+        policy_kernel_init = [hidden_init] * len(policy_layer_size) + [output_init]
+        value_kernel_init = [hidden_init] * len(value_layer_size) + [output_init]
         policy_input_normalization = statistics.RunningStatistics(
             reference_input=reference_observation["state"],
         )
