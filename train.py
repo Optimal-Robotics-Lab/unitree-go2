@@ -230,10 +230,6 @@ def main(argv=None):
             value_kernel_init=value_kernel_init,
             policy_observation_key="state",
             value_observation_key="privileged_state",
-            action_distribution=distribution_utilities.ParametricDistribution(
-                distribution=distrax.Normal,
-                bijector=residual_action_bijector,
-            ),
         )
 
         # Aggregate Metadata:

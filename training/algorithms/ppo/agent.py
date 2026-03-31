@@ -1,4 +1,4 @@
-from typing import Optional, Sequence, Tuple
+from typing import Optional, Sequence, Tuple, List
 
 import jax
 import jax.numpy as jnp
@@ -24,8 +24,8 @@ class Agent(nnx.Module):
         policy_layer_sizes: Sequence[int] = (256, 256),
         value_layer_sizes: Sequence[int] = (256, 256),
         activation: networks.ActivationFn = jax.nn.swish,
-        policy_kernel_init: types.Initializer = jax.nn.initializers.lecun_uniform(),
-        value_kernel_init: types.Initializer = jax.nn.initializers.lecun_uniform(),
+        policy_kernel_init: types.Initializer | List[types.Initializer] = jax.nn.initializers.lecun_uniform(),
+        value_kernel_init: types.Initializer | List[types.Initializer] = jax.nn.initializers.lecun_uniform(),
         policy_observation_key: str = "state",
         value_observation_key: str = "state",
         action_distribution: distribution_utilities.ParametricDistribution = distribution_utilities
