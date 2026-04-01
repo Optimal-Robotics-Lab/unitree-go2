@@ -235,8 +235,7 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         ]
 
         # Observation Size:
-        self.filter_observation_size = self.filter.observation_size
-        self.num_observations = 36 + self.nu + self.filter_observation_size
+        self.num_observations = 33 + self.nu + self.filter.observation_size
         self.num_privileged_observations = self.num_observations + 79 + self.nu
 
     # Custom Step Method to Capture Acutator Pipeline:

@@ -432,14 +432,13 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
     ) -> Dict[str, jax.Array]:
         """
             Observation: [
-                linear_velocity,
                 gyroscope,
                 projected_gravity,
                 relative_motor_positions,
                 motor_velocities,
-                contacts,
                 previous_action,
                 command,
+                filter_observation,
             ]
         """
         q = data.qpos[7:]
@@ -511,7 +510,6 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         filter_observation = self.filter.get_observation(state_info['filter_state'])
 
         observation = jnp.concatenate([
-            noisy_linear_velocity,                      # 3
             noisy_angular_rate,                         # 3
             noisy_projected_gravity,                    # 3
             noisy_joint_positions - self.default_pose,  # 12
