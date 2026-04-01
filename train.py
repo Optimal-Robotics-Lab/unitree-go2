@@ -175,12 +175,26 @@ def main(argv=None):
 
         # Setup Filter: (Currently Hardcodes action_dim)
         control_timestep = 0.02
-        cutoff_frequency = 4.0
-        tau = 1 / (2 * jnp.pi * cutoff_frequency)
-        alpha = control_timestep / (tau + control_timestep)
-        filter_impl = filters.FirstOrderFilter(
+        
+        # First Order Filter:
+        # cutoff_frequency = 4.0
+        # tau = 1 / (2 * jnp.pi * cutoff_frequency)
+        # alpha = control_timestep / (tau + control_timestep)
+        # filter_impl = filters.FirstOrderFilter(
+        #     action_dim=12,
+        #     alpha=alpha,
+        # )
+
+        # Second Order Filter:
+        b0, b1, b2 = 0.04613, 0.09227, 0.04613
+        a1, a2 = -1.30728, 0.49181
+        filter_impl = filters.SecondOrderFilter(
             action_dim=12,
-            alpha=alpha,
+            b0=b0,
+            b1=b1,
+            b2=b2,
+            a1=a1,
+            a2=a2,
         )
 
         environment_config = config.EnvironmentConfig(
