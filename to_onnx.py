@@ -9,8 +9,9 @@ jax.config.update("jax_enable_x64", True)
 import flax
 from flax import nnx
 
-from training.envs.unitree_go2_minimal import unitree_go2_joystick
-from training.envs.unitree_go2_minimal import config
+from training.envs.unitree_go2 import unitree_go2_joystick
+from training.envs.unitree_go2 import config
+import training.envs.utilities.filter as filters
 
 import training.statistics as statistics
 from training.algorithms.ppo import agent
@@ -44,14 +45,27 @@ def main(argv=None):
     # Setup Environments:
     scene = 'scene_mjx_vendor_torque.xml'
     # scene = 'scene_mjx_vendor_velocity.xml'
+
+    control_timestep = 0.02
+
+    cutoff_frequency = 4.0
+    tau = 1 / (2 * jnp.pi * cutoff_frequency)
+    alpha = control_timestep / (tau + control_timestep)
+    filter_impl = filters.FirstOrderFilter(
+        action_dim=12,
+        alpha=alpha,
+    )
+
     environment_config = config.EnvironmentConfig(
         filename=scene,
-        action_scale=0.5,
-        control_timestep=0.02,
+        action_scale=None,
+        control_timestep=control_timestep,
         optimizer_timestep=0.004,
     )
+
     env = unitree_go2_joystick.UnitreeGo2Env(
         environment_config=environment_config,
+        filter_impl=filter_impl,
     )
 
     observation_size = env.observation_size
@@ -64,10 +78,10 @@ def main(argv=None):
     policy_layer_size = [512, 256, 128,]
     value_layer_size = [512, 256, 128,]
     activation_fn = jax.nn.swish
-    policy_kernel_init = jax.nn.initializers.lecun_uniform()
-    value_kernel_init = jax.nn.initializers.variance_scaling(
-        scale=0.01, mode="fan_in", distribution="uniform",
-    )
+    hidden_init = jax.nn.initializers.orthogonal(jnp.sqrt(2.0))
+    output_init = jax.nn.initializers.orthogonal(0.01)
+    policy_kernel_init = [hidden_init] * len(policy_layer_size) + [output_init]
+    value_kernel_init = [hidden_init] * len(value_layer_size) + [output_init]
     policy_input_normalization = statistics.RunningStatistics(
         reference_input=reference_observation["state"],
     )
@@ -77,6 +91,7 @@ def main(argv=None):
     model = agent.Agent(
         observation_size=observation_size,
         action_size=action_size,
+        state_dependent_std=False,
         policy_input_normalization=policy_input_normalization,
         value_input_normalization=value_input_normalization,
         policy_layer_sizes=policy_layer_size,
@@ -102,7 +117,13 @@ def main(argv=None):
         iteration=FLAGS.checkpoint_iteration,
     )
 
-    nnx.update(model, restored_checkpoint.agent)
+    # Make sure dtype is casted to float32:
+    agent_state = jax.tree.map(
+        lambda x: x.astype(jnp.float32) if hasattr(x, 'dtype') and x.dtype == jnp.float64 else x,
+        restored_checkpoint.agent
+    )
+
+    nnx.update(model, agent_state)
 
     def inference_wrapper(observation: jax.Array) -> jax.Array:
         dummy_key = jax.random.key(0)
@@ -116,7 +137,7 @@ def main(argv=None):
         return actions
 
     # ONNX Runtime needs Rank 2 Inputs:
-    reference_input = reference_observation["state"][None, ...]
+    reference_input = reference_observation["state"][None, ...].astype(jnp.float32)
 
     model_proto = jax2onnx.to_onnx(
         fn=inference_wrapper,
