@@ -68,9 +68,7 @@ class Agent(nnx.Module):
             rngs=rngs,
         )
 
-        self.action_log_std = None
-        if not self.state_dependent_std:
-            self.action_log_std = nnx.Param(jnp.zeros(action_size))
+        self.action_log_std = nnx.Param(jnp.zeros(action_size))
 
         self.action_distribution = action_distribution
 
@@ -89,15 +87,7 @@ class Agent(nnx.Module):
             deterministic: Whether to use deterministic actions (e.g., for evaluation).
         """
 
-        policy_output = self.policy(x)
-
-        if self.state_dependent_std:
-            logits = policy_output
-        else:
-            assert self.action_log_std is not None
-            mean = policy_output
-            log_std = jnp.broadcast_to(self.action_log_std.value, mean.shape)
-            logits = jnp.concatenate([mean, log_std], axis=-1)
+        logits = self.get_logits(x)
 
         if deterministic:
             actions = self.action_distribution.mode(logits)
@@ -109,6 +99,22 @@ class Agent(nnx.Module):
         actions = self.action_distribution.process_sample(raw_actions)
 
         return actions, {"log_prob": log_prob, "raw_action": raw_actions, "logits": logits}
+
+    def get_logits(
+        self,
+        x: types.Observation,
+    ) -> jnp.ndarray:
+        """Forward pass to get policy logits without sampling."""
+        policy_output = self.policy(x)
+
+        if self.state_dependent_std:
+            logits = policy_output
+        else:
+            mean = policy_output
+            log_std = jnp.broadcast_to(self.action_log_std.value, mean.shape)
+            logits = jnp.concatenate([mean, log_std], axis=-1)
+
+        return logits
 
     def get_values(
         self,

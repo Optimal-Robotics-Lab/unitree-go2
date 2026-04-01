@@ -20,6 +20,7 @@ import wandb
 from training.envs.unitree_go2 import unitree_go2_joystick
 from training.envs.unitree_go2 import config
 from training.envs.unitree_go2 import randomize
+import training.envs.utilities.filter as filters
 
 import training.statistics as statistics
 import training.algorithms.ppo.agent as agent
@@ -172,10 +173,20 @@ def main(argv=None):
         if suffix == 'torque':
             motor_config = config.MotorConfig()
 
+        # Setup Filter: (Currently Hardcodes action_dim)
+        control_timestep = 0.02
+        cutoff_frequency = 4.0
+        tau = 1 / (2 * jnp.pi * cutoff_frequency)
+        alpha = control_timestep / (tau + control_timestep)
+        filter_impl = filters.FirstOrderFilter(
+            action_dim=12,
+            alpha=alpha,
+        )
+
         environment_config = config.EnvironmentConfig(
             filename=scene,
             action_scale=None,
-            control_timestep=0.02,
+            control_timestep=control_timestep,
             optimizer_timestep=0.004,
         )
 
@@ -187,6 +198,7 @@ def main(argv=None):
             command_config=command_config,
             motor_config=motor_config,
             model_params=model_params,
+            filter_impl=filter_impl,
         )
         eval_env = unitree_go2_joystick.UnitreeGo2Env(
             environment_config=environment_config,
@@ -196,6 +208,7 @@ def main(argv=None):
             command_config=command_config,
             motor_config=motor_config,
             model_params=model_params,
+            filter_impl=filter_impl,
         )
 
         observation_size = env.observation_size
@@ -221,6 +234,7 @@ def main(argv=None):
         model = agent.Agent(
             observation_size=observation_size,
             action_size=action_size,
+            state_dependent_std=False,
             policy_input_normalization=policy_input_normalization,
             value_input_normalization=value_input_normalization,
             policy_layer_sizes=policy_layer_size,

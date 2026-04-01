@@ -141,6 +141,9 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         )
         data = mjx.forward(self._mjx_model, data)
 
+        # Initialize Filter:
+        filter_state = self.filter.init()
+
         # Disturbance: (Force Based)
         rng, disturbance_time_key, disturbance_duration_key, disturbance_magnitude_key = jax.random.split(rng, 4)
         time_until_next_disturbance = jax.random.uniform(
@@ -204,6 +207,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
             'disturbance_step': 0,
             'disturbance_magnitude': disturbance_magnitude,
             'disturbance_direction': jnp.array([0.0, 0.0, 0.0]),
+            'filter_state': filter_state,
         }
 
         # Observation Initialization:
@@ -237,8 +241,14 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         if self.disturbance_config.magnitudes[1] > 0.0:
             state = self.maybe_apply_perturbation(state)
 
+        # Apply Action Filter:
+        filtered_action, filter_state = self.filter.apply(
+            action, state.info['filter_state']
+        )
+        state.info['filter_state'] = filter_state
+
         # Physics step:
-        data = self._step(state.data, action)
+        data = self._step(state.data, filtered_action)
 
         imu_height = data.site_xpos[self.imu_site_idx][2]
         joint_angles = data.qpos[7:]
@@ -497,6 +507,9 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         # )
         # noisy_feet_contacts = contacts * dropout_mask
 
+        # Filter State:
+        filter_observation = self.filter.get_observation(state_info['filter_state'])
+
         observation = jnp.concatenate([
             noisy_linear_velocity,                      # 3
             noisy_angular_rate,                         # 3
@@ -505,6 +518,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
             noisy_joint_velocities,                     # 12
             state_info['previous_action'],              # 12 or 24
             state_info['command'],                      # 3
+            filter_observation,                         # Dynamic based on filter
         ])
 
         accelerometer = self.get_accelerometer(data)

@@ -24,6 +24,8 @@ from training.envs.unitree_go2.config import (
     MotorConfig,
 )
 
+import training.envs.utilities.filter as filters
+
 
 class UnitreeGo2Env(mjx_env.MjxEnv):
     """Base class for Unitree Go2 environments."""
@@ -36,6 +38,7 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         disturbance_config: DisturbanceConfig = DisturbanceConfig(),
         command_config: CommandConfig = CommandConfig(),
         motor_config: MotorConfig = None,
+        filter_impl: filters.Filter = filters.NoFilter(),
         **kwargs,
     ) -> None:
         config = config_dict.ConfigDict()
@@ -112,6 +115,8 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         self.disturbance_config = disturbance_config
         self.command_config = command_config
         self.motor_config = motor_config
+
+        self.filter = filter_impl
 
         # Constants Setup:
         self.floor_geom_idx = self._mj_model.geom('floor').id
@@ -230,7 +235,8 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         ]
 
         # Observation Size:
-        self.num_observations = 36 + self.nu
+        self.filter_observation_size = self.filter.observation_size
+        self.num_observations = 36 + self.nu + self.filter_observation_size
         self.num_privileged_observations = self.num_observations + 79 + self.nu
 
     # Custom Step Method to Capture Acutator Pipeline:
