@@ -125,10 +125,10 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         )
         self.base_link_mass = self._mj_model.body_subtreemass[self.base_idx]
 
-        self.home_qpos = jnp.array(self._mj_model.keyframe('home').qpos)
-        self.home_qvel = jnp.zeros(self._mj_model.nv)
-        self.default_pose = jnp.array(self._mj_model.keyframe('home').qpos[7:])
-        self.default_ctrl = jnp.array(self._mj_model.keyframe('home').ctrl)
+        self.home_qpos = np.array(self._mj_model.keyframe('home').qpos)
+        self.home_qvel = np.zeros(self._mj_model.nv)
+        self.default_pose = np.array(self._mj_model.keyframe('home').qpos[7:])
+        self.default_ctrl = np.array(self._mj_model.keyframe('home').ctrl)
         self.joint_lb, self.joint_ub = self._mj_model.jnt_range[1:].T
 
         self.action_scale = environment_config.action_scale
