@@ -86,6 +86,7 @@
         <mesh file="calf_mirror_0.obj"/>
         <mesh file="calf_mirror_1.obj"/>
         <mesh file="foot.obj"/>
+		<mesh file="zedmini_camera.obj"/>
 	</asset>
 
 	<worldbody>
@@ -102,6 +103,8 @@
 			<geom name="left_torso_collision" class="go2/collision/torso/left"/>
 			<geom name="right_torso_collision" class="go2/collision/torso/right"/>
 			<site name="imu" pos="-0.02557 0 0.04232"/>
+			<camera name="zedm_left_lens" pos="0.22 0.0315 0.05" xyaxes="0 -1 0 0 0 1" fovy="60" resolution="6 6"/>
+			<camera name="zedm_right_lens" pos="0.22 -0.0315 0.05" xyaxes="0 -1 0 0 0 1" fovy="60" resolution="6 6"/>
 			<site name="vicon_marker" pos="0.22 0 0.095" material="black"/>
 			<body name="front_right_hip" pos="0.1934 -0.0465 0">
 				<inertial pos="-0.0054 -0.00194 -0.000105" quat="0.498237 0.505462 0.499245 0.497014"

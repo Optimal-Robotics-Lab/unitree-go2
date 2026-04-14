@@ -1,0 +1,6 @@
+<mujoco>
+    <sensor>
+        <rangefinder name="left_depth_cam" camera="zedm_left_lens" data="point depth"/>
+        <rangefinder name="right_depth_cam" camera="zedm_right_lens" data="point depth"/>
+    </sensor>
+</mujoco>

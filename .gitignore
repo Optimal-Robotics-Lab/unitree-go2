@@ -240,8 +240,8 @@ examples/jax/jax-llm/proteins-base/
 checkpoints/*
 
 # PNG files
-*.png
-**/assets/hfield.png
+# *.png
+# **/assets/hfield.png
 
 # PDF files
 *.pdf
