@@ -212,7 +212,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
 
         # Observation Initialization:
         observation = self.get_observation(
-            data, feet_contacts, state_info,
+            data, state_info,
         )
 
         reward, done = jnp.zeros(2)
@@ -292,7 +292,6 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         # Observation data:
         observation = self.get_observation(
             data,
-            feet_contacts,
             state.info,
         )
 
@@ -427,7 +426,6 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
     def get_observation(
         self,
         data: mjx.Data,
-        contacts: jax.Array,
         state_info: dict[str, Any],
     ) -> Dict[str, jax.Array]:
         """
@@ -496,15 +494,6 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
             maxval=self.noise_config.joint_velocity,
         )
         noisy_joint_velocities = qd + joint_velocity_noise
-
-        # Feet Contacts:
-        # state_info['rng'], noise_key = jax.random.split(state_info['rng'])
-        # dropout_mask = jax.random.bernoulli(
-        #     noise_key,
-        #     p=self.noise_config.contact_dropout,
-        #     shape=(4,)
-        # )
-        # noisy_feet_contacts = contacts * dropout_mask
 
         # Filter State:
         filter_observation = self.filter.get_observation(state_info['filter_state'])

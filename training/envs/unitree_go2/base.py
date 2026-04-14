@@ -125,10 +125,10 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         )
         self.base_link_mass = self._mj_model.body_subtreemass[self.base_idx]
 
-        self.home_qpos = np.array(self._mj_model.keyframe('home').qpos)
-        self.home_qvel = np.zeros(self._mj_model.nv)
-        self.default_pose = np.array(self._mj_model.keyframe('home').qpos[7:])
-        self.default_ctrl = np.array(self._mj_model.keyframe('home').ctrl)
+        self.home_qpos = jnp.array(self._mj_model.keyframe('home').qpos)
+        self.home_qvel = jnp.zeros(self._mj_model.nv)
+        self.default_pose = jnp.array(self._mj_model.keyframe('home').qpos[7:])
+        self.default_ctrl = jnp.array(self._mj_model.keyframe('home').ctrl)
         self.joint_lb, self.joint_ub = self._mj_model.jnt_range[1:].T
 
         self.action_scale = environment_config.action_scale
@@ -152,7 +152,7 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
             self._mj_model.geom(name).id for name in feet_geom
         ]
         assert not any(id_ == -1 for id_ in feet_geom_idx), 'Site not found.'
-        self.feet_geom_idx = np.array(feet_geom_idx)
+        self.feet_geom_idx = jnp.array(feet_geom_idx)
         feet_site = [
             'front_right_foot',
             'front_left_foot',
@@ -164,7 +164,7 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
             for f in feet_site
         ]
         assert not any(id_ == -1 for id_ in feet_site_idx), 'Site not found.'
-        self.feet_site_idx = np.array(feet_site_idx)
+        self.feet_site_idx = jnp.array(feet_site_idx)
         calf_body = [
             'front_right_calf',
             'front_left_calf',
@@ -176,12 +176,12 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
             for c in calf_body
         ]
         assert not any(id_ == -1 for id_ in calf_body_idx), 'Body not found.'
-        self.calf_body_idx = np.array(calf_body_idx)
+        self.calf_body_idx = jnp.array(calf_body_idx)
         imu_site_idx = mujoco.mj_name2id(
             self._mj_model, mujoco.mjtObj.mjOBJ_SITE.value, 'imu'
         )
         assert not any(id_ == -1 for id_ in [imu_site_idx]), 'IMU site not found.'
-        self.imu_site_idx = np.array(imu_site_idx)
+        self.imu_site_idx = jnp.array(imu_site_idx)
 
         # Sensors:
         self.feet_position_sensor = [
