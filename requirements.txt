@@ -1,4 +1,4 @@
-jax[cuda12]
+jax
 mujoco
 mujoco-mjx
 flax
