@@ -53,42 +53,6 @@ flags.DEFINE_string(
     'parameter_checkpoint_path', None, 'Parameter checkpoint path to load.', short_name='p',
 )
 
-# Utility Functions:
-def simulation_step(env: unitree_go2_joystick.UnitreeGo2Env, data: mujoco.MjData, action: npt.NDArray, n_substeps: int) -> mujoco.MjData:
-    # Compute Target Joint Positions from Action:
-    target_qpos = env.default_pose + action * env.action_scale
-    target_qpos = np.clip(target_qpos, env.joint_lb, env.joint_ub)
-
-    if env.motor_config is not None:
-        def motor_model(mj_data: mujoco.MjData, target_qpos: npt.NDArray) -> npt.NDArray:
-            # Extract Joint States:
-            joint_positions = mj_data.qpos[7:]
-            joint_velocities = mj_data.qvel[6:]
-
-            # PD Control Law
-            desired_torque = env.motor_config.kp * (target_qpos - joint_positions) \
-                - env.motor_config.kv * joint_velocities
-
-            # Torque Speed Curve:
-            available_torque = env.motor_config.tau_max - (env.motor_config.damping_slope * np.abs(joint_velocities))
-            available_torque = np.maximum(available_torque, 0.0)
-
-            # Apply Torque Limits:
-            torque = np.clip(desired_torque, -available_torque, available_torque)
-
-            return torque
-    else:
-        def motor_model(mj_data: mujoco.MjData, target_qpos: npt.NDArray) -> npt.NDArray:
-            return target_qpos
-
-    # Run Physics Substeps:
-    for _ in range(n_substeps):
-        ctrl = motor_model(data, target_qpos)
-        data.ctrl = ctrl
-        mujoco.step(env._mujoco_model, data)
-
-    return data
-
 
 def main(argv=None):
     # Rehydrate Model from Parameter Checkpoint:
@@ -141,6 +105,43 @@ def main(argv=None):
     mujoco.mj_resetDataKeyframe(env._mj_model, data, 0)
     control_rate = 0.02
     n_substeps = int(control_rate / env._mj_model.opt.timestep)
+
+    # Set Motor Model:
+    if env.motor_config is not None:
+        def motor_model(mj_data: mujoco.MjData, target_qpos: npt.NDArray) -> npt.NDArray:
+            # Extract Joint States:
+            joint_positions = mj_data.qpos[7:]
+            joint_velocities = mj_data.qvel[6:]
+
+            # PD Control Law
+            desired_torque = env.motor_config.kp * (target_qpos - joint_positions) \
+                - env.motor_config.kv * joint_velocities
+
+            # Torque Speed Curve:
+            available_torque = env.motor_config.tau_max - (env.motor_config.damping_slope * np.abs(joint_velocities))
+            available_torque = np.maximum(available_torque, 0.0)
+
+            # Apply Torque Limits:
+            torque = np.clip(desired_torque, -available_torque, available_torque)
+
+            return torque
+    else:
+        def motor_model(mj_data: mujoco.MjData, target_qpos: npt.NDArray) -> npt.NDArray:
+            return target_qpos
+        
+    # Utility Functions:
+    def simulation_step(env: unitree_go2_joystick.UnitreeGo2Env, data: mujoco.MjData, action: npt.NDArray, n_substeps: int) -> mujoco.MjData:
+        # Compute Target Joint Positions from Action:
+        target_qpos = env.default_pose + action * env.action_scale
+        target_qpos = np.clip(target_qpos, env.joint_lb, env.joint_ub)
+
+        # Run Physics Substeps:
+        for _ in range(n_substeps):
+            ctrl = motor_model(data, target_qpos)
+            data.ctrl = ctrl
+            mujoco.mj_step(env._mj_model, data)
+
+        return data
 
     # Set Simulation Step Function:
     step_fn = functools.partial(
@@ -210,6 +211,7 @@ def main(argv=None):
         return actions
 
     inference_fn = jax.jit(inference_wrapper)
+    observation_fn = jax.jit(env.get_observation)
 
 
     # Initialize Observation History:
@@ -242,17 +244,17 @@ def main(argv=None):
                 if joystick.get_button(6) == 1:
                     termination_flag = True
 
-                # XBox One:
+                # Logitech:
                 forward_command = -1 * joystick.get_axis(1)
                 lateral_command = -1 * joystick.get_axis(0)
-                rotation_command = -1 * joystick.get_axis(3)
+                rotation_command = -1 * joystick.get_axis(2)
 
             # Walking Policy:
+            x_scale, y_scale, z_scale = 1.5, 1.0, 3.0
             command = np.array([
-                forward_command, lateral_command, rotation_command,
+                x_scale * forward_command, y_scale * lateral_command, z_scale * rotation_command,
             ])
             command = np.where(np.abs(command) < 0.1, 0.0, command)
-            command = np.clip(command, -1.0, 1.0)
 
             step_time = time.time()
 
@@ -264,31 +266,31 @@ def main(argv=None):
                 'command': command,
                 'rng': key,
                 # Dummy values for Critic Network (Not Used for Inference):
-                'previous_contact': jnp.zeros(4),
-                'feet_air_time': jnp.zeros(4),
-                'feet_contact_time': jnp.zeros(4),
-                'previous_air_time': jnp.zeros(4),
-                'previous_contact_time': jnp.zeros(4),
-                'swing_peak': jnp.zeros(4),
+                'previous_contact': np.zeros(4),
+                'feet_air_time': np.zeros(4),
+                'feet_contact_time': np.zeros(4),
+                'previous_air_time': np.zeros(4),
+                'previous_contact_time': np.zeros(4),
+                'swing_peak': np.zeros(4),
                 'steps_until_next_disturbance': 0,
                 'steps_since_previous_disturbance': 0,
             }
 
-            mjx_data = mjx.put_data(env._mujoco_model, data)
-            observation = jax.jit(env.get_observation)(
-                data=mjx_data,
-                state_info=state_info,
+            mjx_data = mjx.put_data(env._mj_model, data)
+            observation = observation_fn(
+                mjx_data,
+                state_info,
             )
 
             # Inference Policy for Action:
-            action = inference_fn(observation),
+            action = inference_fn(observation)
             action, filter_state = jax.jit(filter_impl.apply)(action, filter_state)
 
             # Move from GPU to CPU: This should be a blocking operation
             action = np.asarray(action)
             
             # Step Simulation:
-            data = step_fn(data, action)
+            data = step_fn(data=data, action=action)
 
             viewer.sync()
 
