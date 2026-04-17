@@ -308,3 +308,7 @@ onnx_env/
 *.db3
 *.sqlite
 *.sqlite3
+
+# Specific Checkpoint Files:
+!checkpoints/eternal-lake-24/
+!regression/checkpoints/hardy-sound-81/regressed_params.pkl

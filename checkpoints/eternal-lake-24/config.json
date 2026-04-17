@@ -1,0 +1,65 @@
+{
+  "optimizer_config": {
+    "optimizer_type": "adam",
+    "scheduler_type": "constant_schedule",
+    "optimizer_params": {},
+    "scheduler_params": {
+      "value": 0.0003
+    },
+    "grad_clip_norm": 1.0
+  },
+  "agent_metadata": {
+    "observation_size": {
+      "privileged_state": [
+        148
+      ],
+      "state": [
+        57
+      ]
+    },
+    "action_size": 12,
+    "policy_layer_sizes": [
+      512,
+      256,
+      128
+    ],
+    "value_layer_sizes": [
+      512,
+      256,
+      128
+    ],
+    "policy_input_normalization": "statistics.RunningStatistics(                 reference_input=reference_observation[\"state\"],             )",
+    "value_input_normalization": "statistics.RunningStatistics(                 reference_input=reference_observation[\"privileged_state\"],             )",
+    "activation": "jax.nn.swish",
+    "policy_kernel_init": "jax.nn.initializers.lecun_uniform()",
+    "value_kernel_init": "value_kernel_init = jax.nn.initializers.variance_scaling(                 scale=0.01, mode=\"fan_in\", distribution=\"uniform\",             )",
+    "policy_observation_key": "state",
+    "value_observation_key": "privileged_state",
+    "action_distribution": "ParametricDistribution(distribution=distrax.Normal, bijector=distrax.Tanh())"
+  },
+  "loss_metadata": {
+    "policy_clip_coef": 0.2,
+    "value_clip_coef": 0.4,
+    "value_coef": 1.0,
+    "entropy_coef": 0.01,
+    "gamma": 0.99,
+    "gae_lambda": 0.95,
+    "normalize_advantages": true
+  },
+  "training_metadata": {
+    "num_epochs": 10,
+    "num_training_steps": 20,
+    "episode_length": 1000,
+    "num_policy_steps": 40,
+    "action_repeat": 1,
+    "num_envs": 8192,
+    "num_evaluation_envs": 128,
+    "deterministic_evaluation": true,
+    "reset_per_epoch": false,
+    "seed": 42,
+    "batch_size": 256,
+    "num_minibatches": 32,
+    "num_ppo_iterations": 4,
+    "normalize_observations": true
+  }
+}
