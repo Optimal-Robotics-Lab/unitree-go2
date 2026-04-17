@@ -6,8 +6,6 @@ from pathlib import Path
 import pickle
 import time
 
-import pygame
-
 import jax
 
 jax.config.update("jax_enable_x64", True)
@@ -42,8 +40,6 @@ os.environ['XLA_FLAGS'] = (
 )
 
 logging.set_verbosity(logging.FATAL)
-
-pygame.init()
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
@@ -219,40 +215,58 @@ def main(argv=None):
     action = np.zeros_like(env.default_ctrl)
     command = np.array([0.0, 0.0, 0.0])
 
-    # Setup Joystick:
-    joysticks = {}
-
     key = jax.random.key(0)
-    termination_flag = False
 
-    with mujoco.viewer.launch_passive(env._mj_model, data) as viewer:
+
+    ## keyboard inputs instead of joystick commands
+    
+    # Keyboard Command State (shared between viewer key_callback and sim loop):
+    command_state = {'forward': 0.0, 'lateral': 0.0, 'rotation': 0.0}
+    termination_flag = [False]
+    command_increment = 0.25
+
+    def key_callback(keycode):
+        try:
+            k = chr(keycode)
+        except ValueError:
+            k = ''
+        if k == 'W':
+            command_state['forward'] = min(1.0, command_state['forward'] + command_increment)
+        elif k == 'S':
+            command_state['forward'] = max(-1.0, command_state['forward'] - command_increment)
+        elif k == 'A':
+            command_state['lateral'] = min(1.0, command_state['lateral'] + command_increment)
+        elif k == 'D':
+            command_state['lateral'] = max(-1.0, command_state['lateral'] - command_increment)
+        elif k == 'Q':
+            command_state['rotation'] = min(1.0, command_state['rotation'] + command_increment)
+        elif k == 'E':
+            command_state['rotation'] = max(-1.0, command_state['rotation'] - command_increment)
+        elif k == ' ':
+            command_state['forward'] = 0.0
+            command_state['lateral'] = 0.0
+            command_state['rotation'] = 0.0
+        elif keycode == 256:
+            termination_flag[0] = True
+        print(
+            f"command: fwd={command_state['forward']:+.2f} "
+            f"lat={command_state['lateral']:+.2f} "
+            f"rot={command_state['rotation']:+.2f}"
+        )
+
+    with mujoco.viewer.launch_passive(env._mj_model, data, key_callback=key_callback) as viewer:
         viewer.cam.trackbodyid = 1
         viewer.cam.distance = 5
 
-        while viewer.is_running() and not termination_flag:
-            for event in pygame.event.get():
-                if event.type == pygame.JOYDEVICEADDED:
-                    joy = pygame.joystick.Joystick(event.device_index)
-                    joysticks[joy.get_instance_id()] = joy
-                    print(f"Joystick {joy.get_instance_id()} connencted")
+        print("Keyboard controls: W/S fwd/back, A/D lateral, Q/E yaw, Space zero, ESC quit")
 
-                if event.type == pygame.JOYDEVICEREMOVED:
-                    del joysticks[event.instance_id]
-                    print(f"Joystick {event.instance_id} disconnected")
-
-            for joystick in joysticks.values():
-                if joystick.get_button(6) == 1:
-                    termination_flag = True
-
-                # Logitech:
-                forward_command = -1 * joystick.get_axis(1)
-                lateral_command = -1 * joystick.get_axis(0)
-                rotation_command = -1 * joystick.get_axis(2)
-
+        while viewer.is_running() and not termination_flag[0]:
             # Walking Policy:
             x_scale, y_scale, z_scale = 1.5, 1.0, 3.0
             command = np.array([
-                x_scale * forward_command, y_scale * lateral_command, z_scale * rotation_command,
+                x_scale * command_state['forward'],
+                y_scale * command_state['lateral'],
+                z_scale * command_state['rotation'],
             ])
             command = np.where(np.abs(command) < 0.1, 0.0, command)
 

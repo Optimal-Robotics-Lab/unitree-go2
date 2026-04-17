@@ -1,0 +1,1 @@
+command to run the interactive viewer: mjpython play_policy.py --c=checkpoints/eternal-lake-24 --p=regression/checkpoints/hardy-sound-81

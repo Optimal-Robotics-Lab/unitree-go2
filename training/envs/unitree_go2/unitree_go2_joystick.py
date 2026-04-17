@@ -136,8 +136,6 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
             qvel=qvel,
             ctrl=ctrl,
             impl=self._mjx_model.impl.value,
-            nconmax=self.environment_config.nconmax,
-            njmax=self.environment_config.njmax,
         )
         data = mjx.forward(self._mjx_model, data)
 
