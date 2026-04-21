@@ -15,6 +15,9 @@ from mujoco import mjx
 
 import plotly.express as px
 
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 from ..utilities import evaluation
 from ..utilities.data_utilities import chunk_and_flatten_dataset, shuffle_data
 from ..utilities.model_utilities import hydrate_model
@@ -258,7 +261,7 @@ def analyze_regression(parameter_checkpoints: str | list[str], load_analysis: bo
                 zmin=-1, 
                 zmax=1,
                 color_continuous_scale='RdBu_r', 
-                # text_auto='.2f',
+                text_auto='.2f',
                 aspect='equal',
                 title="Parameter Correlation Matrix (Fisher Information)"
             )
@@ -274,8 +277,40 @@ def analyze_regression(parameter_checkpoints: str | list[str], load_analysis: bo
             html_path = checkpoint_path / "correlation_matrix.html"
             fig.write_html(str(html_path))
 
+            fig, ax = plt.subplots(figsize=(10, 8))
+            
+            sns.heatmap(
+                correlation_matrix,
+                xticklabels=labels,
+                yticklabels=labels,
+                vmin=-1.0,
+                vmax=1.0,
+                cmap="RdBu_r",
+                center=0,
+                annot=False,
+                square=True,
+                linewidths=0.5,
+                cbar_kws={
+                    "shrink": .8, 
+                    "label": "Correlation Coefficient"
+                },
+                ax=ax
+            )
+
+            ax.set_title("Parameter Correlation Matrix", fontsize=14, pad=20, weight='bold')
+            ax.set_xlabel("Parameters", fontsize=12, labelpad=10)
+            ax.set_ylabel("Parameters", fontsize=12, labelpad=10)
+            
+            plt.xticks(rotation=45, ha='right', fontsize=9)
+            plt.yticks(rotation=0, fontsize=9)
+
+
+            plt.tight_layout()
+
             pdf_path = checkpoint_path / "correlation_matrix.pdf"
-            fig.write_image(str(pdf_path))
+            plt.savefig(str(pdf_path), format='pdf', bbox_inches='tight', dpi=300)
+            
+            plt.close(fig)
         else:
             # Load Existing Analysis Results:
             pickle_path = checkpoint_path / "optimization_analysis.pkl"
