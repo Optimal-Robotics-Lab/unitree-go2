@@ -258,7 +258,7 @@ def analyze_regression(parameter_checkpoints: str | list[str], load_analysis: bo
                 zmin=-1, 
                 zmax=1,
                 color_continuous_scale='RdBu_r', 
-                text_auto='.2f',
+                # text_auto='.2f',
                 aspect='equal',
                 title="Parameter Correlation Matrix (Fisher Information)"
             )
@@ -273,6 +273,9 @@ def analyze_regression(parameter_checkpoints: str | list[str], load_analysis: bo
             
             html_path = checkpoint_path / "correlation_matrix.html"
             fig.write_html(str(html_path))
+
+            pdf_path = checkpoint_path / "correlation_matrix.pdf"
+            fig.write_image(str(pdf_path))
         else:
             # Load Existing Analysis Results:
             pickle_path = checkpoint_path / "optimization_analysis.pkl"
@@ -309,3 +312,4 @@ def analyze_regression(parameter_checkpoints: str | list[str], load_analysis: bo
                 print(f"Correlation Matrix Eigenvalues: {eigenvalues}")
                 print(f"Correlation Matrix Minimum and Max Eigen Values: {np.min(eigenvalues)}, {np.max(eigenvalues)}")
                 print(f"Correlation Matrix Condition Number: {condition_number}")
+
