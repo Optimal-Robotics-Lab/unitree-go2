@@ -14,13 +14,6 @@ import jax.numpy as jnp
 from training.module_types import NestedArray
 
 
-if not jax.config.read("jax_enable_x64"):
-    raise RuntimeError(
-        "JAX float64 support is disabled. This module requires high precision. "
-        "Please enable it by adding `jax.config.update('jax_enable_x64', True)` before importing this module."
-    )
-
-
 class NormalizationMode(enum.IntEnum):
     WELFORD = 0
     EMA = 1

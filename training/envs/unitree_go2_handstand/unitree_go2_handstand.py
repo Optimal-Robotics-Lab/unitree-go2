@@ -18,8 +18,8 @@ from mujoco_playground._src import mjx_env
 
 from brax.io import html
 
-from training.envs.unitree_go2 import base
-from training.envs.unitree_go2.config import (
+from training.envs.unitree_go2_handstand import base
+from training.envs.unitree_go2_handstand.config import (
     RewardConfig,
     NoiseConfig,
     DisturbanceConfig,
@@ -136,10 +136,18 @@ class Handstand(base.UnitreeGo2Env):
             qvel=qvel,
             ctrl=ctrl,
             impl=self._mjx_model.impl.value,
-            nconmax=self.environment_config.nconmax,
+            naconmax=self.environment_config.nconmax,
+            naccdmax=self.environment_config.naccdmax,
             njmax=self.environment_config.njmax,
         )
+
+        if self.environment_config.impl == 'warp':
+            data = self._to_f32(data)
+
         data = mjx.forward(self._mjx_model, data)
+
+        if self.environment_config.impl == 'warp':
+            data = self._to_f64(data)
 
         # Initialize Filter:
         filter_state = self.filter.init()
@@ -231,8 +239,8 @@ class Handstand(base.UnitreeGo2Env):
         rng, cmd_key, cmd_frequency_key = jax.random.split(state.info['rng'], 3)
 
         # Disturbance: (Force based)
-        if self.disturbance_config.magnitudes[1] > 0.0:
-            state = self.maybe_apply_perturbation(state)
+        # if self.disturbance_config.magnitudes[1] > 0.0:
+        #     state = self.maybe_apply_perturbation(state)
 
         # Apply Action Filter:
         filtered_action, filter_state = self.filter.apply(
@@ -278,6 +286,7 @@ class Handstand(base.UnitreeGo2Env):
         # Termination:
         done = self._get_termination(
             data,
+            feet_contacts,
             termination_contacts,
             unwanted_contacts,
             terminate_on_unwanted_contacts=False,
@@ -286,7 +295,10 @@ class Handstand(base.UnitreeGo2Env):
         # Rewards:
         rewards = {
             'tracking_orientation': (
-                self._reward_tracking_orientation(forward_vector, self.kernel_sigma)
+                self._reward_tracking_orientation(forward_vector, self.orientation_sigma)
+            ),
+            'tracking_pose': (
+                self._reward_tracking_joint_pose(joint_angles, self.pose_sigma)
             ),
             'orientation_regularization': self._cost_orientation_regularization(
                 forward_vector,
@@ -367,6 +379,7 @@ class Handstand(base.UnitreeGo2Env):
     def _get_termination(
         self,
         data: mjx.Data,
+        feet_contacts: jax.Array,
         termination_contacts: jax.Array,
         unwanted_contacts: jax.Array,
         terminate_on_unwanted_contacts: bool = False,
@@ -374,6 +387,7 @@ class Handstand(base.UnitreeGo2Env):
         # Termination Condition:
         done = jnp.any(termination_contacts)
         done |= terminate_on_unwanted_contacts * jnp.any(unwanted_contacts)
+        done |= (data.time >= 2.0) & jnp.any(feet_contacts[:2])
         return done
 
     def get_observation(
@@ -397,14 +411,6 @@ class Handstand(base.UnitreeGo2Env):
 
         # Linear Velocity:
         linear_velocity = self.get_local_linear_velocity(data)
-        state_info['rng'], noise_key = jax.random.split(state_info['rng'])
-        linear_velocity_noise = jax.random.uniform(
-            noise_key,
-            shape=linear_velocity.shape,
-            minval=-self.noise_config.linear_velocity,
-            maxval=self.noise_config.linear_velocity,
-        )
-        noisy_linear_velocity = linear_velocity + linear_velocity_noise
 
         # Gyroscope Noise:
         gyroscope = self.get_gyro(data)
@@ -457,7 +463,6 @@ class Handstand(base.UnitreeGo2Env):
             noisy_joint_positions - self.default_pose,  # 12
             noisy_joint_velocities,                     # 12
             state_info['previous_action'],              # 12 or 24
-            state_info['command'],                      # 3
             filter_observation,                         # Based on filter
         ])
 
@@ -467,7 +472,7 @@ class Handstand(base.UnitreeGo2Env):
         feet_velocity = self.get_feet_velocity(data).ravel()
 
         privileged_observation = jnp.concatenate([
-            observation,                                                                                # 45 or 57
+            observation,                                                                                
             accelerometer,                                                                              # 3
             gyroscope,                                                                                  # 3
             projected_gravity,                                                                          # 3
@@ -483,13 +488,19 @@ class Handstand(base.UnitreeGo2Env):
                 state_info['steps_since_previous_disturbance'] >= state_info['steps_until_next_disturbance']
             ]),                                                                                         # 1
         ])
-        # Size: 91 or 115
 
         return {
             'state': observation,
             'privileged_state': privileged_observation,
         }
 
+    def _reward_tracking_orientation(
+        self, forward_vector: jax.Array, up_vec: jax.Array
+    ) -> jax.Array:
+        cos_dist = jnp.dot(forward_vector, self.tracking_vector)
+        normalized = 0.5 * cos_dist + 0.5
+        return jnp.square(normalized)
+        
     def _reward_tracking_orientation(
         self,
         forward_vector: jax.Array,
@@ -513,11 +524,18 @@ class Handstand(base.UnitreeGo2Env):
 
     def _reward_tracking_joint_pose(
         self,
-        joint_positions: jax.Array,
+        qpos: jax.Array,
         kernel_sigma: float = 0.25,
     ) -> jax.Array:
-        # Reward Tracking a Desired Joint Pose:
-        error = jnp.sum(jnp.square(joint_positions - self.footstand_pose))
+        # Reward for Handstand/Footstand Pose:
+        weight = jnp.array([
+            1.0, 1.0, 1.0,
+            1.0, 1.0, 1.0,
+            1.0, 1.0, 1.0,
+            1.0, 1.0, 1.0,
+        ])
+        weight = weight / jnp.sum(weight)
+        error = jnp.sum(jnp.square(qpos - self.footstand_pose) * weight)
         return jnp.exp(-error / kernel_sigma)
 
     def _cost_orientation_regularization(

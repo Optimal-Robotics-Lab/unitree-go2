@@ -11,6 +11,7 @@ import flax.struct
 class RewardConfig:
     # Rewards:
     tracking_orientation: float = 1.0
+    tracking_pose: float = 0.25
     # Orientation Regularization Terms:
     orientation_regularization: float = -0.5
     # Energy Regularization Terms:
@@ -26,7 +27,8 @@ class RewardConfig:
     foot_slip: float = -0.1
     # Handstand Hyperparameters:
     # Hyperparameter for exponential kernel:
-    kernel_sigma: float = 0.25
+    orientation_sigma: float = 0.05
+    pose_sigma: float = 0.5
 
 
 @flax.struct.dataclass
@@ -69,8 +71,9 @@ class EnvironmentConfig:
     action_scale: float | None = 0.5
     control_timestep: float = 0.02
     optimizer_timestep: float = 0.004
-    nconmax: int = 8 * 8192
-    njmax: int = 12 + 48
+    nconmax: int = 20 * 8192
+    naccdmax: int = 0
+    njmax: int = 50
 
 
 @flax.struct.dataclass

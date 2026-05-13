@@ -15,7 +15,7 @@ from mujoco import mjx
 
 from mujoco_playground._src import mjx_env
 
-from training.envs.unitree_go2.config import (
+from training.envs.unitree_go2_handstand.config import (
     RewardConfig,
     NoiseConfig,
     DisturbanceConfig,
@@ -78,6 +78,9 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         self._mj_model = mj_model
         self._mjx_model = mjx.put_model(self._mj_model, impl=environment_config.impl)
 
+        if environment_config.impl == 'warp':
+            self._mjx_model = self._to_f32(self._mjx_model)
+
         # Increase offscreen framebuffer size to render at higher resolutions.
         self._mj_model.vis.global_.offwidth = 3840
         self._mj_model.vis.global_.offheight = 2160
@@ -91,9 +94,11 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         self._step = functools.partial(self._simulation_step, n_substeps=self._n_substeps)
 
         # Parse Configs:
-        self.kernel_sigma = reward_config.kernel_sigma
+        self.orientation_sigma = reward_config.orientation_sigma
+        self.pose_sigma = reward_config.pose_sigma
         reward_config_dict = flax.serialization.to_state_dict(reward_config)
-        del reward_config_dict['kernel_sigma']
+        del reward_config_dict['orientation_sigma']
+        del reward_config_dict['pose_sigma']
         self.reward_config = reward_config_dict
 
         self.environment_config = environment_config
@@ -230,8 +235,8 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         ]
 
         # Observation Size:
-        self.num_observations = 33 + self.nu + self.filter.observation_size
-        self.num_privileged_observations = self.num_observations + 79 + self.nu
+        self.num_observations = 30 + self.nu + self.filter.observation_size
+        self.num_privileged_observations = self.num_observations + 59 + self.nu
 
     # Custom Step Method to Capture Acutator Pipeline:
     def _simulation_step(self, data: mjx.Data, action: jax.Array, n_substeps: int) -> mjx.Data:
@@ -265,11 +270,19 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         # Run Physics Substeps:
         def _substep(carry: mjx.Data, unused_t) -> tuple[mjx.Data, None]:
             ctrl = motor_model(carry, target_qpos)
+            if self.environment_config.impl == 'warp':
+                ctrl = ctrl.astype(jnp.float32)
             data = carry.replace(ctrl=ctrl)
             return mjx.step(self._mjx_model, data), None
 
+        if self.environment_config.impl == 'warp':
+                data = self._to_f32(data)
+
         # Scan over substeps:
         data, _ = jax.lax.scan(_substep, data, None, length=n_substeps)
+
+        if self.environment_config.impl == 'warp':
+            data = self._to_f64(data)
 
         return data
 
@@ -345,3 +358,21 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
     @property
     def mjx_model(self) -> mjx.Model:
         return self._mjx_model
+
+    @staticmethod
+    def _to_f32(tree):
+        if jax.config.x64_enabled and self.environment_config.impl == 'warp':
+            return jax.tree.map(
+                lambda x: x.astype(jnp.float32) if getattr(x, 'dtype', None) == jnp.float64 else x,
+                tree
+            )
+        return tree
+
+    @staticmethod
+    def _to_f64(tree):
+        if jax.config.x64_enabled:
+            return jax.tree.map(
+                lambda x: x.astype(jnp.float64) if getattr(x, 'dtype', None) == jnp.float32 else x,
+                tree
+            )
+        return tree
