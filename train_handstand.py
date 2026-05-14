@@ -84,8 +84,10 @@ def main(argv=None):
             reward_config = config.RewardConfig(
                 # Rewards:
                 tracking_orientation=1.0,
-                tracking_pose=0.25,
+                tracking_height=1.0,
+                # tracking_pose=0.25,
                 # Orientation Regularization Terms:
+                pose_regularization=-0.1,
                 orientation_regularization=-1.0,
                 # Energy Regularization Terms:
                 torque=-2e-4,
@@ -96,21 +98,24 @@ def main(argv=None):
                 termination=-1.0,
                 unwanted_contact=-1.0,
                 # Gait Reward Terms:
-                feet_contact=0.5,
+                feet_contact=-0.5,
                 foot_slip=-1.0,
                 # Hyperparameter for exponential kernel:
                 orientation_sigma=0.05,
                 pose_sigma=0.5,
+                height_sigma=1.0,
             )
             command_config = config.CommandConfig()
-            num_epochs = 100
+            num_epochs = 75
         elif training_type == 'finetune' or training_type == 'rough':
             reward_config = config.RewardConfig(
                 # Rewards:
+                tracking_height=1.0,
                 tracking_orientation=1.0,
-                tracking_pose=0.25,
+                # tracking_pose=0.25,
                 # Orientation Regularization Terms:
-                orientation_regularization=-0.5,
+                pose_regularization=-0.1,
+                orientation_regularization=-1.0,
                 # Energy Regularization Terms:
                 torque=-2e-4,
                 action_rate=-0.1,
@@ -120,18 +125,19 @@ def main(argv=None):
                 termination=-1.0,
                 unwanted_contact=-1.0,
                 # Gait Reward Terms:
-                feet_contact=0.5,
+                feet_contact=-0.5,
                 foot_slip=-1.0,
                 # Hyperparameter for exponential kernel:
                 orientation_sigma=0.05,
                 pose_sigma=0.5,
+                height_sigma=1.0,
             )
             command_config = config.CommandConfig(
                 command_range=jax.numpy.array([1.5, 1.0, 3.14]),
                 command_mask_probability=0.9,
                 command_frequency=[0.5, 2.0],
             )
-            num_epochs = 10
+            num_epochs = 25
         else:
             raise ValueError(f'Unknown FLAG.tag prefix: {prefix}')
 

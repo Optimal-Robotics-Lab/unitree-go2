@@ -294,12 +294,14 @@ class Handstand(base.UnitreeGo2Env):
 
         # Rewards:
         rewards = {
+            'tracking_height': self._reward_tracking_height(imu_height, self.height_sigma),
             'tracking_orientation': (
                 self._reward_tracking_orientation(forward_vector, self.orientation_sigma)
             ),
-            'tracking_pose': (
-                self._reward_tracking_joint_pose(joint_angles, self.pose_sigma)
-            ),
+            # 'tracking_pose': (
+            #     self._reward_tracking_joint_pose(joint_angles, self.pose_sigma)
+            # ),
+            'pose_regularization': self._cost_joint_pose(joint_angles),
             'orientation_regularization': self._cost_orientation_regularization(
                 forward_vector,
             ),
@@ -494,6 +496,15 @@ class Handstand(base.UnitreeGo2Env):
             'privileged_state': privileged_observation,
         }
 
+    def _reward_tracking_height(
+        self,
+        imu_height: jax.Array,
+        kernel_sigma: float = 1.0,
+    ) -> jax.Array:
+        height = jnp.min(jnp.array([imu_height, self.target_height]))
+        error = self.target_height - height
+        return jnp.exp(-error / kernel_sigma)
+
     def _reward_tracking_orientation(
         self, forward_vector: jax.Array, up_vec: jax.Array
     ) -> jax.Array:
@@ -501,26 +512,26 @@ class Handstand(base.UnitreeGo2Env):
         normalized = 0.5 * cos_dist + 0.5
         return jnp.square(normalized)
         
-    def _reward_tracking_orientation(
-        self,
-        forward_vector: jax.Array,
-        kernel_sigma: float = 0.25,
-    ) -> jax.Array:
-        '''
-            Sigma tuning: Desired Allowed Angle Deviation to achieve 61% Reward
-                sigma = 2 * (allowed_angle * pi / 180)^2
+    # def _reward_tracking_orientation(
+    #     self,
+    #     forward_vector: jax.Array,
+    #     kernel_sigma: float = 0.25,
+    # ) -> jax.Array:
+    #     '''
+    #         Sigma tuning: Desired Allowed Angle Deviation to achieve 61% Reward
+    #             sigma = 2 * (allowed_angle * pi / 180)^2
 
-                Ex. Angle Deviation of 20 Degrees to achieve 61% Reward
-                    sigma = 2 * (20 * pi / 180)^2 = 0.24
-        '''
-        # Reward Handstand/Footstand Orientation:
-        dot_product = jnp.clip(
-            jnp.dot(forward_vector, self.tracking_vector),
-            -1.0,
-            1.0,
-        )
-        error = jnp.square(dot_product - 1.0)
-        return jnp.exp(-error / kernel_sigma)
+    #             Ex. Angle Deviation of 20 Degrees to achieve 61% Reward
+    #                 sigma = 2 * (20 * pi / 180)^2 = 0.24
+    #     '''
+    #     # Reward Handstand/Footstand Orientation:
+    #     dot_product = jnp.clip(
+    #         jnp.dot(forward_vector, self.tracking_vector),
+    #         -1.0,
+    #         1.0,
+    #     )
+    #     error = jnp.square(dot_product - 1.0)
+    #     return jnp.exp(-error / kernel_sigma)
 
     def _reward_tracking_joint_pose(
         self,
@@ -537,6 +548,14 @@ class Handstand(base.UnitreeGo2Env):
         weight = weight / jnp.sum(weight)
         error = jnp.sum(jnp.square(qpos - self.footstand_pose) * weight)
         return jnp.exp(-error / kernel_sigma)
+
+    def _cost_joint_pose(
+        self,
+        qpos: jax.Array,
+    ) -> jax.Array:
+        # Penalize Non-Contact Pose:
+        error = jnp.sum(jnp.square(qpos[self.footstand_joint_indices] - self.default_pose[self.footstand_joint_indices]))
+        return error
 
     def _cost_orientation_regularization(
         self, forward_vector: jax.Array,
@@ -580,14 +599,24 @@ class Handstand(base.UnitreeGo2Env):
         self,
         contact: jax.Array,
     ) -> jax.Array:
-        # Reward Correct Feet Contact and Penalize Incorrect Feet Contact
-        correct_contact = jnp.sum(jnp.array([0, 0, 1, 1]) * contact)
-        incorrect_contact = jnp.sum(
-            jnp.array([1, 1, 0, 0]) * contact       # Front Feet in Contact
-            + jnp.array([0, 0, 1, 1]) * ~contact    # Hind Feet not in Contact
+        # Penalize Incorrect Feet Contact:
+        reward = jnp.sum(
+            jnp.array([1, 1, 0, 0]) * contact
         )
-        reward = (correct_contact - incorrect_contact) / 2.0
         return reward
+
+    # def _cost_feet_contact(
+    #     self,
+    #     contact: jax.Array,
+    # ) -> jax.Array:
+    #     # Reward Correct Feet Contact and Penalize Incorrect Feet Contact
+    #     correct_contact = jnp.sum(jnp.array([0, 0, 1, 1]) * contact)
+    #     incorrect_contact = jnp.sum(
+    #         jnp.array([1, 1, 0, 0]) * contact       # Front Feet in Contact
+    #         + jnp.array([0, 0, 1, 1]) * ~contact    # Hind Feet not in Contact
+    #     )
+    #     reward = (correct_contact - incorrect_contact) / 2.0
+    #     return reward
 
     # Could be a possible reward term to try:
     # def _reward_feet_forces(

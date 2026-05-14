@@ -10,9 +10,11 @@ import flax.struct
 @flax.struct.dataclass
 class RewardConfig:
     # Rewards:
+    tracking_height: float = 1.0
     tracking_orientation: float = 1.0
-    tracking_pose: float = 0.25
+    # tracking_pose: float = 0.25
     # Orientation Regularization Terms:
+    pose_regularization: float = -0.1
     orientation_regularization: float = -0.5
     # Energy Regularization Terms:
     torque: float = -2e-4
@@ -23,11 +25,12 @@ class RewardConfig:
     termination: float = -1.0
     unwanted_contact: float = -0.5
     # Handstand Feet Reward Terms:
-    feet_contact: float = 0.5
+    feet_contact: float = -0.5
     foot_slip: float = -0.1
     # Handstand Hyperparameters:
     # Hyperparameter for exponential kernel:
     orientation_sigma: float = 0.05
+    height_sigma: float = 1.0
     pose_sigma: float = 0.5
 
 

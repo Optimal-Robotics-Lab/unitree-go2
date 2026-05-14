@@ -79,8 +79,7 @@ class RunningStatistics(nnx.Module):
             lambda x: nnx.BatchStat(jnp.ones_like(x)), reference_input
         )
 
-        # Count needs to be high precision for long training runs
-        self.count = nnx.BatchStat(jnp.array(0.0, dtype=jnp.float64))
+        self.count = nnx.BatchStat(jnp.array(0.0, dtype=jnp.float32))
 
     def __call__(
         self,
@@ -131,11 +130,11 @@ class RunningStatistics(nnx.Module):
 
         # Increment count:
         if weights is not None:
-            step_increment = jnp.sum(weights).astype(jnp.float64)
+            step_increment = jnp.sum(weights).astype(jnp.float32)
         else:
             step_increment = jnp.prod(
                 jnp.array(batch_dims),
-            ).astype(jnp.float64)
+            ).astype(jnp.float32)
 
         if self.pmap_axis_name:
             step_increment = jax.lax.psum(

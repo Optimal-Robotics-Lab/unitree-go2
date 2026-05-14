@@ -96,9 +96,11 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         # Parse Configs:
         self.orientation_sigma = reward_config.orientation_sigma
         self.pose_sigma = reward_config.pose_sigma
+        self.height_sigma = reward_config.height_sigma
         reward_config_dict = flax.serialization.to_state_dict(reward_config)
         del reward_config_dict['orientation_sigma']
         del reward_config_dict['pose_sigma']
+        del reward_config_dict['height_sigma']
         self.reward_config = reward_config_dict
 
         self.environment_config = environment_config
@@ -135,7 +137,8 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         # Task Pose:
         self.footstand_qpos = jnp.array(self._mj_model.keyframe('footstand').qpos)
         self.footstand_pose = jnp.array(self._mj_model.keyframe('footstand').qpos[7:])
-        self.desired_height = 0.53
+        self.footstand_joint_indices = jnp.array([0, 1, 2, 3, 4, 5])
+        self.target_height = 0.53
         self.tracking_vector = jnp.array([0.0, 0.0, 1.0])
         self.target_pose_threshold = 0.9
 
