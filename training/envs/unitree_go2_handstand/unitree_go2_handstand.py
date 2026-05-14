@@ -141,16 +141,14 @@ class Handstand(base.UnitreeGo2Env):
             njmax=self.environment_config.njmax,
         )
 
-        if self.environment_config.impl == 'warp':
-            data = self._to_f32(data)
-
         data = mjx.forward(self._mjx_model, data)
-
-        if self.environment_config.impl == 'warp':
-            data = self._to_f64(data)
 
         # Initialize Filter:
         filter_state = self.filter.init()
+
+        # Get Intial Heading:
+        forward_vector = self.get_forwardvector(data)
+        target_heading = jnp.arctan2(forward_vector[1], forward_vector[0])
 
         # Disturbance: (Force Based)
         rng, disturbance_time_key, disturbance_duration_key, disturbance_magnitude_key = jax.random.split(rng, 4)
@@ -211,6 +209,7 @@ class Handstand(base.UnitreeGo2Env):
             'disturbance_magnitude': disturbance_magnitude,
             'disturbance_direction': jnp.array([0.0, 0.0, 0.0]),
             'filter_state': filter_state,
+            'target_heading': target_heading,
         }
 
         # Observation Initialization:
@@ -296,11 +295,13 @@ class Handstand(base.UnitreeGo2Env):
         rewards = {
             'tracking_height': self._reward_tracking_height(imu_height, self.height_sigma),
             'tracking_orientation': (
-                self._reward_tracking_orientation(forward_vector, self.orientation_sigma)
+                self._reward_tracking_orientation(forward_vector)
             ),
-            # 'tracking_pose': (
-            #     self._reward_tracking_joint_pose(joint_angles, self.pose_sigma)
-            # ),
+            'tracking_heading': self._reward_tracking_heading(
+                data,
+                state.info['target_heading'],
+                forward_vector,
+            ),
             'pose_regularization': self._cost_joint_pose(joint_angles),
             'orientation_regularization': self._cost_orientation_regularization(
                 forward_vector,
@@ -506,48 +507,44 @@ class Handstand(base.UnitreeGo2Env):
         return jnp.exp(-error / kernel_sigma)
 
     def _reward_tracking_orientation(
-        self, forward_vector: jax.Array, up_vec: jax.Array
+        self, forward_vector: jax.Array,
     ) -> jax.Array:
-        cos_dist = jnp.dot(forward_vector, self.tracking_vector)
-        normalized = 0.5 * cos_dist + 0.5
+        dot_product = jnp.dot(forward_vector, self.tracking_vector)
+        normalized = 0.5 * dot_product + 0.5
         return jnp.square(normalized)
-        
-    # def _reward_tracking_orientation(
-    #     self,
-    #     forward_vector: jax.Array,
-    #     kernel_sigma: float = 0.25,
-    # ) -> jax.Array:
-    #     '''
-    #         Sigma tuning: Desired Allowed Angle Deviation to achieve 61% Reward
-    #             sigma = 2 * (allowed_angle * pi / 180)^2
 
-    #             Ex. Angle Deviation of 20 Degrees to achieve 61% Reward
-    #                 sigma = 2 * (20 * pi / 180)^2 = 0.24
-    #     '''
-    #     # Reward Handstand/Footstand Orientation:
-    #     dot_product = jnp.clip(
-    #         jnp.dot(forward_vector, self.tracking_vector),
-    #         -1.0,
-    #         1.0,
-    #     )
-    #     error = jnp.square(dot_product - 1.0)
-    #     return jnp.exp(-error / kernel_sigma)
-
-    def _reward_tracking_joint_pose(
+    def _reward_tracking_heading(
         self,
-        qpos: jax.Array,
-        kernel_sigma: float = 0.25,
+        data: mjx.Data,
+        target_yaw: jax.Array,
+        forward_vector: jax.Array,
     ) -> jax.Array:
-        # Reward for Handstand/Footstand Pose:
-        weight = jnp.array([
-            1.0, 1.0, 1.0,
-            1.0, 1.0, 1.0,
-            1.0, 1.0, 1.0,
-            1.0, 1.0, 1.0,
-        ])
-        weight = weight / jnp.sum(weight)
-        error = jnp.sum(jnp.square(qpos - self.footstand_pose) * weight)
-        return jnp.exp(-error / kernel_sigma)
+        negative_z = data.site_xmat[self.imu_site_idx] @ jnp.array([0.0, 0.0, -1.0])
+        local_xy = negative_z[:2] / (jnp.linalg.norm(negative_z[:2]) + 1e-6)
+
+        target_yaw = target_yaw[0] if target_yaw.shape else target_yaw
+        target_vector = jnp.array([jnp.cos(target_yaw), jnp.sin(target_yaw)])
+
+        dot_product = jnp.dot(local_xy, target_vector)
+        error = 0.5 * dot_product + 0.5 
+        reward = jnp.square(error)
+
+        upright_factor = jnp.maximum(0.0, jnp.dot(forward_vector, self.tracking_vector))
+        
+        return reward * upright_factor
+
+    def _cost_heading_deviation(
+        self, data: mjx.Data, target_yaw: jax.Array
+    ) -> jax.Array:
+        negative_z_vector = data.site_xmat[self.imu_site_idx] @ jnp.array([0.0, 0.0, -1.0])
+        local_xy = negative_z_vector[:2]
+        
+        local_xy = local_xy / (jnp.linalg.norm(local_xy) + 1e-6)
+
+        target_yaw = target_yaw[0] if target_yaw.shape else target_yaw
+        target_vector = jnp.array([jnp.cos(target_yaw), jnp.sin(target_yaw)])
+
+        return jnp.square(jnp.dot(local_xy, target_vector) - 1.0)
 
     def _cost_joint_pose(
         self,
@@ -604,47 +601,6 @@ class Handstand(base.UnitreeGo2Env):
             jnp.array([1, 1, 0, 0]) * contact
         )
         return reward
-
-    # def _cost_feet_contact(
-    #     self,
-    #     contact: jax.Array,
-    # ) -> jax.Array:
-    #     # Reward Correct Feet Contact and Penalize Incorrect Feet Contact
-    #     correct_contact = jnp.sum(jnp.array([0, 0, 1, 1]) * contact)
-    #     incorrect_contact = jnp.sum(
-    #         jnp.array([1, 1, 0, 0]) * contact       # Front Feet in Contact
-    #         + jnp.array([0, 0, 1, 1]) * ~contact    # Hind Feet not in Contact
-    #     )
-    #     reward = (correct_contact - incorrect_contact) / 2.0
-    #     return reward
-
-    # Could be a possible reward term to try:
-    # def _reward_feet_forces(
-    #     self,
-    #     foot_forces: jax.Array,
-    #     force_kernel_sigma: float = 0.25,
-    # ) -> jax.Array:
-    #     # Penalize front feet forces:
-    #     front_force_error = jnp.sum(jnp.square(foot_forces[:2]))
-
-    #     # Reward maintaining a target force on the hind feet:
-    #     target_force = (self.robot_mass * 9.81) / 2.0
-    #     hind_force_error = jnp.sum(jnp.square(foot_forces[2:] - target_force))
-
-    #     total_error = front_force_error + hind_force_error
-    #     return jnp.exp(-total_error / force_kernel_sigma)
-
-    # def _reward_front_clearance(
-    #     self,
-    #     data: mjx.Data,
-    #     target_foot_height: float = 0.25,
-    #     clearance_kernel_sigma: float = 0.1,
-    # ) -> jax.Array:
-    #     # Penalize the front feet for being below the target height:
-    #     foot_position = data.site_xpos[self.feet_site_idx]
-    #     foot_height = jnp.minimum(foot_position[..., -1], target_foot_height)[..., :2]
-    #     foot_error = jnp.sum(jnp.square(foot_height - target_foot_height))
-    #     return jnp.exp(-foot_error / clearance_kernel_sigma)
 
     def _cost_foot_slip(
         self,

@@ -12,7 +12,7 @@ class RewardConfig:
     # Rewards:
     tracking_height: float = 1.0
     tracking_orientation: float = 1.0
-    # tracking_pose: float = 0.25
+    tracking_heading: float = 1.0
     # Orientation Regularization Terms:
     pose_regularization: float = -0.1
     orientation_regularization: float = -0.5

@@ -85,7 +85,7 @@ def main(argv=None):
                 # Rewards:
                 tracking_orientation=1.0,
                 tracking_height=1.0,
-                # tracking_pose=0.25,
+                tracking_heading=1.0,
                 # Orientation Regularization Terms:
                 pose_regularization=-0.1,
                 orientation_regularization=-1.0,
@@ -106,13 +106,13 @@ def main(argv=None):
                 height_sigma=1.0,
             )
             command_config = config.CommandConfig()
-            num_epochs = 75
+            num_epochs = 65
         elif training_type == 'finetune' or training_type == 'rough':
             reward_config = config.RewardConfig(
                 # Rewards:
                 tracking_height=1.0,
                 tracking_orientation=1.0,
-                # tracking_pose=0.25,
+                tracking_heading=1.0,
                 # Orientation Regularization Terms:
                 pose_regularization=-0.1,
                 orientation_regularization=-1.0,
@@ -137,7 +137,7 @@ def main(argv=None):
                 command_mask_probability=0.9,
                 command_frequency=[0.5, 2.0],
             )
-            num_epochs = 25
+            num_epochs = 35
         else:
             raise ValueError(f'Unknown FLAG.tag prefix: {prefix}')
 
