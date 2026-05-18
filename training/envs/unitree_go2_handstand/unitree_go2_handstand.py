@@ -254,6 +254,9 @@ class Handstand(base.UnitreeGo2Env):
         joint_angles = data.qpos[7:]
         joint_velocities = data.qvel[6:]
 
+        # Calculate Target Heading:
+        state.info['target_heading'] += state.info['command'][2] * self.dt
+
         # Sensor Contacts:
         feet_contacts = jnp.array([
             data.sensordata[self._mj_model.sensor_adr[sensor_id]] > 0
@@ -272,6 +275,7 @@ class Handstand(base.UnitreeGo2Env):
         global_body_velocity = self.get_global_linear_velocity(data)
         global_angular_velocity = self.get_global_angular_velocity(data)
         local_body_velocity = self.get_local_linear_velocity(data)
+        local_angular_velocity = self.get_gyro(data)
 
         # Forward Vector:
         forward_vector = self.get_forwardvector(data)
@@ -302,8 +306,24 @@ class Handstand(base.UnitreeGo2Env):
                 state.info['target_heading'],
                 forward_vector,
             ),
+            'tracking_linear_velocity': self._reward_tracking_linear_velocity(
+                state.info['command'],
+                local_body_velocity,
+                forward_vector,
+                self.velocity_sigma,
+            ),
+            'tracking_angular_velocity': self._reward_tracking_angular_velocity(
+                state.info['command'],
+                local_angular_velocity,
+                forward_vector,
+                self.velocity_sigma,
+            ),
             'pose_regularization': self._cost_joint_pose(joint_angles),
             'orientation_regularization': self._cost_orientation_regularization(
+                forward_vector,
+            ),
+            'vertical_velocity': self._cost_vertical_velocity(
+                global_body_velocity,
                 forward_vector,
             ),
             'torque': self._cost_torques(data.actuator_force),
@@ -314,6 +334,7 @@ class Handstand(base.UnitreeGo2Env):
             'stand_still': self._cost_stand_still(
                 global_body_velocity,
                 global_angular_velocity,
+                state.info['command'],
             ),
             'feet_contact': self._cost_feet_contact(
                 feet_contacts,
@@ -466,8 +487,15 @@ class Handstand(base.UnitreeGo2Env):
             noisy_joint_positions - self.default_pose,  # 12
             noisy_joint_velocities,                     # 12
             state_info['previous_action'],              # 12 or 24
+            state_info['command'],                      # 3
             filter_observation,                         # Based on filter
         ])
+
+        # Critic Observation:
+        negative_z = data.site_xmat[self.imu_site_idx] @ jnp.array([0.0, 0.0, -1.0])
+        current_heading = jnp.arctan2(negative_z[1], negative_z[0])
+        heading_error = state_info['target_heading'] - current_heading
+        heading_observation = jnp.array([jnp.sin(heading_error), jnp.cos(heading_error)])
 
         accelerometer = self.get_accelerometer(data)
         global_angular_velocity = self.get_global_angular_velocity(data)
@@ -487,6 +515,7 @@ class Handstand(base.UnitreeGo2Env):
             feet_velocity,                                                                              # 12
             state_info['previous_contact'],                                                             # 4
             data.xfrc_applied[self.base_idx, :3],                                                       # 3
+            heading_observation,                                                                        # 2
             jnp.asarray([
                 state_info['steps_since_previous_disturbance'] >= state_info['steps_until_next_disturbance']
             ]),                                                                                         # 1
@@ -513,6 +542,31 @@ class Handstand(base.UnitreeGo2Env):
         normalized = 0.5 * dot_product + 0.5
         return jnp.square(normalized)
 
+    def _reward_tracking_linear_velocity(
+        self,
+        commands: jax.Array,
+        local_linear_velocity: jax.Array,
+        forward_vector: jax.Array,
+        kernel_sigma: float = 0.25,
+    ) -> jax.Array:
+        # Tracking of linear velocity commands (xy axes)
+        local_velocity_xy = jnp.array([-local_linear_velocity[-1], local_linear_velocity[1]])
+        error = jnp.sum(jnp.square(commands[:2] - local_velocity_xy[:2]))
+        upright_factor = jnp.maximum(0.0, jnp.dot(forward_vector, self.tracking_vector))
+        return jnp.exp(-error / kernel_sigma) * upright_factor
+
+    def _reward_tracking_angular_velocity(
+        self,
+        commands: jax.Array,
+        gyroscope: jax.Array,
+        forward_vector: jax.Array,
+        kernel_sigma: float = 0.25,
+    ) -> jax.Array:
+        # Tracking of angular velocity commands (yaw)
+        error = jnp.square(commands[2] - gyroscope[0])
+        upright_factor = jnp.maximum(0.0, jnp.dot(forward_vector, self.tracking_vector))
+        return jnp.exp(-error / kernel_sigma) * upright_factor
+
     def _reward_tracking_heading(
         self,
         data: mjx.Data,
@@ -532,19 +586,6 @@ class Handstand(base.UnitreeGo2Env):
         upright_factor = jnp.maximum(0.0, jnp.dot(forward_vector, self.tracking_vector))
         
         return reward * upright_factor
-
-    def _cost_heading_deviation(
-        self, data: mjx.Data, target_yaw: jax.Array
-    ) -> jax.Array:
-        negative_z_vector = data.site_xmat[self.imu_site_idx] @ jnp.array([0.0, 0.0, -1.0])
-        local_xy = negative_z_vector[:2]
-        
-        local_xy = local_xy / (jnp.linalg.norm(local_xy) + 1e-6)
-
-        target_yaw = target_yaw[0] if target_yaw.shape else target_yaw
-        target_vector = jnp.array([jnp.cos(target_yaw), jnp.sin(target_yaw)])
-
-        return jnp.square(jnp.dot(local_xy, target_vector) - 1.0)
 
     def _cost_joint_pose(
         self,
@@ -582,15 +623,48 @@ class Handstand(base.UnitreeGo2Env):
         # Penalize Motor/Joint Acceleration
         return jnp.sqrt(jnp.sum(jnp.square(qacc)))
 
+    def _cost_vertical_velocity(
+        self,
+        global_base_linear_velocity: jax.Array,
+        forward_vector: jax.Array,
+    ) -> jax.Array:
+        # Penalize z axis base linear velocity
+        upright_factor = jnp.maximum(0.0, jnp.dot(forward_vector, self.tracking_vector))
+        return jnp.square(global_base_linear_velocity[2]) * upright_factor
+
     def _cost_stand_still(
         self,
         global_base_linear_velocity: jax.Array,
         global_base_angular_velocity: jax.Array,
+        commands: jax.Array,
     ) -> jax.Array:
+        # We could add upright factor heere as well.
+        # We could additionally penalize all angular velocity.
         # Penalize Base Velocity:
+        command_norm = jnp.linalg.norm(commands)
         linear_xy_error = jnp.sum(jnp.square(global_base_linear_velocity[:2]))
         angular_z_error = jnp.sum(jnp.square(global_base_angular_velocity[-1]))
-        return linear_xy_error + angular_z_error
+        return (linear_xy_error + angular_z_error) * (command_norm < 0.1)
+
+    def _cost_gait(
+        self, 
+        contact: jax.Array, 
+        commands: jax.Array,
+        forward_vector: jax.Array,
+    ) -> jax.Array:
+        front_left_contact = contact[0]
+        front_right_contact = contact[1]
+
+        double_support = front_left_contact * front_right_contact
+        double_flight = (1.0 - front_left_contact) * (1.0 - front_right_contact)
+        gait_cost = double_support + double_flight
+
+        command_norm = jnp.linalg.norm(commands[:2])
+        is_moving = (command_norm > 0.1)
+
+        upright_factor = jnp.maximum(0.0, jnp.dot(forward_vector, self.tracking_vector))
+
+        return gait_cost * is_moving * upright_factor
 
     def _cost_feet_contact(
         self,

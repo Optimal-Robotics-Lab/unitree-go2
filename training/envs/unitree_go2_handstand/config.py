@@ -13,9 +13,12 @@ class RewardConfig:
     tracking_height: float = 1.0
     tracking_orientation: float = 1.0
     tracking_heading: float = 1.0
+    tracking_linear_velocity: float = 0.5
+    tracking_angular_velocity: float = 0.5
     # Orientation Regularization Terms:
     pose_regularization: float = -0.1
     orientation_regularization: float = -0.5
+    vertical_velocity: float = -2.0
     # Energy Regularization Terms:
     torque: float = -2e-4
     action_rate: float = -0.01
@@ -27,11 +30,9 @@ class RewardConfig:
     # Handstand Feet Reward Terms:
     feet_contact: float = -0.5
     foot_slip: float = -0.1
-    # Handstand Hyperparameters:
     # Hyperparameter for exponential kernel:
-    orientation_sigma: float = 0.05
+    velocity_sigma: float = 0.25
     height_sigma: float = 1.0
-    pose_sigma: float = 0.5
 
 
 @flax.struct.dataclass
@@ -58,7 +59,7 @@ class DisturbanceConfig:
 @flax.struct.dataclass
 class CommandConfig:
     command_range: jax.Array = flax.struct.field(
-        default_factory=lambda: jnp.array([1.5, 1.0, 1.2]),
+        default_factory=lambda: jnp.array([0.5, 0.5, 0.75]),
     )
     single_command_probability: float = 0.0
     command_mask_probability: float = 0.9

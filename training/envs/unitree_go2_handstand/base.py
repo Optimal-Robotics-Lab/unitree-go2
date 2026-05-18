@@ -78,9 +78,6 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         self._mj_model = mj_model
         self._mjx_model = mjx.put_model(self._mj_model, impl=environment_config.impl)
 
-        if environment_config.impl == 'warp':
-            self._mjx_model = self._to_f32(self._mjx_model)
-
         # Increase offscreen framebuffer size to render at higher resolutions.
         self._mj_model.vis.global_.offwidth = 3840
         self._mj_model.vis.global_.offheight = 2160
@@ -94,13 +91,11 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         self._step = functools.partial(self._simulation_step, n_substeps=self._n_substeps)
 
         # Parse Configs:
-        self.orientation_sigma = reward_config.orientation_sigma
-        self.pose_sigma = reward_config.pose_sigma
         self.height_sigma = reward_config.height_sigma
+        self.velocity_sigma = reward_config.velocity_sigma
         reward_config_dict = flax.serialization.to_state_dict(reward_config)
-        del reward_config_dict['orientation_sigma']
-        del reward_config_dict['pose_sigma']
         del reward_config_dict['height_sigma']
+        del reward_config_dict['velocity_sigma']
         self.reward_config = reward_config_dict
 
         self.environment_config = environment_config
@@ -238,8 +233,8 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         ]
 
         # Observation Size:
-        self.num_observations = 30 + self.nu + self.filter.observation_size
-        self.num_privileged_observations = self.num_observations + 59 + self.nu
+        self.num_observations = 33 + self.nu + self.filter.observation_size
+        self.num_privileged_observations = self.num_observations + 61 + self.nu
 
     # Custom Step Method to Capture Acutator Pipeline:
     def _simulation_step(self, data: mjx.Data, action: jax.Array, n_substeps: int) -> mjx.Data:

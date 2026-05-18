@@ -143,10 +143,18 @@ class Evaluator:
     def _render_html(
         self,
         states: List[Tuple[jax.Array, jax.Array, jax.Array]],
-        iteration: int,
+        iteration: int | str,
+        environment_idx: int = 0,
     ) -> None:
         """ Render using Brax HTML renderer. """
-        qpos, xpos, xquat = jax.tree.map(lambda x: x[:, 0, :], states)
+        leaf = jax.tree.leaves(states)[0]
+        is_batched = leaf.ndim == 3
+        def _maybe_unbatch_trajectory(x: jax.Array) -> jax.Array:
+            if is_batched:
+                return x[:, environment_idx, ...]
+            return x
+        
+        qpos, xpos, xquat = jax.tree.map(_maybe_unbatch_trajectory, states)
         data = mujoco.mjx.make_data(self.mj_model)
         data_args = data.__dict__
         data_args['contact'] = brax.mjx.pipeline._reformat_contact(
@@ -169,13 +177,6 @@ class Evaluator:
                     **data_args,
                 ),
             )
-
-        html_string = html.render(
-            sys=self.sys,
-            states=state_list,
-            height="100vh",
-            colab=False,
-        )
 
         html_string = html.render(
             sys=self.sys,

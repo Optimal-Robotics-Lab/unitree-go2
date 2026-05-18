@@ -75,7 +75,7 @@ def main(argv=None):
         }
 
     # Training Types:
-    training_types = ['baseline', 'finetune']
+    training_types = ['baseline', 'command', 'finetune']
 
     previous_run = None
     for training_type in training_types:
@@ -83,12 +83,15 @@ def main(argv=None):
         if training_type == 'baseline':
             reward_config = config.RewardConfig(
                 # Rewards:
-                tracking_orientation=1.0,
                 tracking_height=1.0,
+                tracking_orientation=1.0,
                 tracking_heading=1.0,
+                tracking_linear_velocity=0.5,
+                tracking_angular_velocity=0.5,
                 # Orientation Regularization Terms:
                 pose_regularization=-0.1,
                 orientation_regularization=-1.0,
+                vertical_velocity=-0.1,
                 # Energy Regularization Terms:
                 torque=-2e-4,
                 action_rate=-0.01,
@@ -101,21 +104,60 @@ def main(argv=None):
                 feet_contact=-0.5,
                 foot_slip=-1.0,
                 # Hyperparameter for exponential kernel:
-                orientation_sigma=0.05,
-                pose_sigma=0.5,
+                velocity_sigma=0.25,
                 height_sigma=1.0,
             )
-            command_config = config.CommandConfig()
-            num_epochs = 65
+            command_config = config.CommandConfig(
+                command_range=jax.numpy.array([0.0, 0.0, 0.0]),
+                command_mask_probability=0.9,
+                command_frequency=[10.0, 10.0],
+            )
+            num_epochs = 50
+        elif training_type == 'command':
+            reward_config = config.RewardConfig(
+                # Rewards:
+                tracking_height=1.0,
+                tracking_orientation=1.0,
+                tracking_heading=1.0,
+                tracking_linear_velocity=0.5,
+                tracking_angular_velocity=0.5,
+                # Orientation Regularization Terms:
+                pose_regularization=-0.1,
+                orientation_regularization=-1.0,
+                vertical_velocity=-2.0,
+                # Energy Regularization Terms:
+                torque=-2e-4,
+                action_rate=-0.01,
+                acceleration=-2.5e-5,
+                # Auxilary Terms:
+                stand_still=-1.0,
+                termination=-1.0,
+                unwanted_contact=-1.0,
+                # Gait Reward Terms:
+                feet_contact=-0.5,
+                foot_slip=-1.0,
+                # Hyperparameter for exponential kernel:
+                velocity_sigma=0.25,
+                height_sigma=1.0,
+            )
+            command_config = config.CommandConfig(
+                command_range=jax.numpy.array([0.5, 0.5, 0.5]),
+                command_mask_probability=0.9,
+                command_frequency=[2.0, 5.0],
+            )
+            num_epochs = 50
         elif training_type == 'finetune' or training_type == 'rough':
             reward_config = config.RewardConfig(
                 # Rewards:
                 tracking_height=1.0,
                 tracking_orientation=1.0,
                 tracking_heading=1.0,
+                tracking_linear_velocity=1.0,
+                tracking_angular_velocity=1.0,
                 # Orientation Regularization Terms:
                 pose_regularization=-0.1,
                 orientation_regularization=-1.0,
+                vertical_velocity=-2.0,
                 # Energy Regularization Terms:
                 torque=-2e-4,
                 action_rate=-0.1,
@@ -128,16 +170,15 @@ def main(argv=None):
                 feet_contact=-0.5,
                 foot_slip=-1.0,
                 # Hyperparameter for exponential kernel:
-                orientation_sigma=0.05,
-                pose_sigma=0.5,
+                velocity_sigma=0.25,
                 height_sigma=1.0,
             )
             command_config = config.CommandConfig(
-                command_range=jax.numpy.array([1.5, 1.0, 3.14]),
+                command_range=jax.numpy.array([0.5, 0.5, 0.5]),
                 command_mask_probability=0.9,
                 command_frequency=[0.5, 2.0],
             )
-            num_epochs = 35
+            num_epochs = 50
         else:
             raise ValueError(f'Unknown FLAG.tag prefix: {prefix}')
 
