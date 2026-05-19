@@ -7,8 +7,6 @@ import pickle
 
 import jax
 
-jax.config.update("jax_enable_x64", True)
-
 import jax.numpy as jnp
 import flax.nnx as nnx
 
@@ -202,6 +200,7 @@ def main(argv=None):
             action_scale=None,
             control_timestep=control_timestep,
             optimizer_timestep=0.004,
+            impl="warp",
         )
 
         env = unitree_go2_joystick.UnitreeGo2Env(
@@ -325,7 +324,7 @@ def main(argv=None):
 
         # Start Wandb and save metadata:
         run = wandb.init(
-            project='UnitreeGo2-State-Estimator-Tests',
+            project='UnitreeGo2',
             tags=[FLAGS.tag],
             config={
                 'reward_config': reward_config,

@@ -4,13 +4,15 @@ from absl import app, flags
 import jax
 import jax.numpy as jnp
 
-jax.config.update("jax_enable_x64", True)
-
 import flax
 from flax import nnx
 
-from training.envs.unitree_go2 import unitree_go2_joystick
-from training.envs.unitree_go2 import config
+# from training.envs.unitree_go2 import unitree_go2_joystick
+# from training.envs.unitree_go2 import config
+
+from training.envs.unitree_go2_handstand import unitree_go2_handstand
+from training.envs.unitree_go2_handstand import config
+
 import training.envs.utilities.filter as filters
 
 import training.statistics as statistics
@@ -63,7 +65,12 @@ def main(argv=None):
         optimizer_timestep=0.004,
     )
 
-    env = unitree_go2_joystick.UnitreeGo2Env(
+    # env = unitree_go2_joystick.UnitreeGo2Env(
+    #     environment_config=environment_config,
+    #     filter_impl=filter_impl,
+    # )
+
+    env = unitree_go2_handstand.Handstand(
         environment_config=environment_config,
         filter_impl=filter_impl,
     )
