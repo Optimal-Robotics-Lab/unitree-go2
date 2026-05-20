@@ -48,7 +48,7 @@ flags.DEFINE_string(
     'tag', '', 'Tag for wandb run.', short_name='t',
 )
 flags.DEFINE_string(
-    'parameter_checkpoint', None, 'Parameter checkpoint path to load.', short_name='p', required=True,
+    'parameter_checkpoint', None, 'Parameter checkpoint path to load.', short_name='p', required=False,
 )
 
 
@@ -124,7 +124,7 @@ def main(argv=None):
                 # Orientation Regularization Terms:
                 pose_regularization=-0.1,
                 orientation_regularization=-1.0,
-                vertical_velocity=-2.0,
+                vertical_velocity=-1.0,
                 # Energy Regularization Terms:
                 torque=-2e-4,
                 action_rate=-0.01,
@@ -157,7 +157,7 @@ def main(argv=None):
                 # Orientation Regularization Terms:
                 pose_regularization=-0.1,
                 orientation_regularization=-1.0,
-                vertical_velocity=-2.0,
+                vertical_velocity=-1.0,
                 # Energy Regularization Terms:
                 torque=-2e-4,
                 action_rate=-0.1,
@@ -174,7 +174,7 @@ def main(argv=None):
                 height_sigma=1.0,
             )
             command_config = config.CommandConfig(
-                command_range=jax.numpy.array([0.5, 0.5, 0.5]),
+                command_range=jax.numpy.array([1.0, 1.0, 1.0]),
                 command_mask_probability=0.9,
                 command_frequency=[0.5, 2.0],
             )

@@ -238,8 +238,8 @@ class Handstand(base.UnitreeGo2Env):
         rng, cmd_key, cmd_frequency_key = jax.random.split(state.info['rng'], 3)
 
         # Disturbance: (Force based)
-        # if self.disturbance_config.magnitudes[1] > 0.0:
-        #     state = self.maybe_apply_perturbation(state)
+        if self.disturbance_config.magnitudes[1] > 0.0:
+            state = self.maybe_apply_perturbation(state)
 
         # Apply Action Filter:
         filtered_action, filter_state = self.filter.apply(

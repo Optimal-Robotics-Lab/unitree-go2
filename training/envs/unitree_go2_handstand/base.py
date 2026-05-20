@@ -273,14 +273,8 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
             data = carry.replace(ctrl=ctrl)
             return mjx.step(self._mjx_model, data), None
 
-        if self.environment_config.impl == 'warp':
-                data = self._to_f32(data)
-
         # Scan over substeps:
         data, _ = jax.lax.scan(_substep, data, None, length=n_substeps)
-
-        if self.environment_config.impl == 'warp':
-            data = self._to_f64(data)
 
         return data
 
