@@ -112,7 +112,7 @@ def main(argv=None):
                 command_mask_probability=0.9,
                 command_frequency=[10.0, 10.0],
             )
-            num_epochs = 50
+            num_epochs = 35
         elif training_type == 'command':
             reward_config = config.RewardConfig(
                 # Rewards:
@@ -121,39 +121,6 @@ def main(argv=None):
                 tracking_heading=1.0,
                 tracking_linear_velocity=0.5,
                 tracking_angular_velocity=0.5,
-                # Orientation Regularization Terms:
-                pose_regularization=-0.1,
-                orientation_regularization=-1.0,
-                vertical_velocity=-1.0,
-                # Energy Regularization Terms:
-                torque=-2e-4,
-                action_rate=-0.01,
-                acceleration=-2.5e-5,
-                # Auxilary Terms:
-                stand_still=-1.0,
-                termination=-1.0,
-                unwanted_contact=-1.0,
-                # Gait Reward Terms:
-                feet_contact=-0.5,
-                foot_slip=-1.0,
-                # Hyperparameter for exponential kernel:
-                velocity_sigma=0.25,
-                height_sigma=1.0,
-            )
-            command_config = config.CommandConfig(
-                command_range=jax.numpy.array([0.5, 0.5, 0.5]),
-                command_mask_probability=0.9,
-                command_frequency=[2.0, 5.0],
-            )
-            num_epochs = 50
-        elif training_type == 'finetune' or training_type == 'rough':
-            reward_config = config.RewardConfig(
-                # Rewards:
-                tracking_height=1.0,
-                tracking_orientation=1.0,
-                tracking_heading=1.0,
-                tracking_linear_velocity=1.0,
-                tracking_angular_velocity=1.0,
                 # Orientation Regularization Terms:
                 pose_regularization=-0.1,
                 orientation_regularization=-1.0,
@@ -174,17 +141,52 @@ def main(argv=None):
                 height_sigma=1.0,
             )
             command_config = config.CommandConfig(
-                command_range=jax.numpy.array([1.0, 1.0, 1.0]),
+                command_range=jax.numpy.array([0.5, 0.5, 0.5]),
+                command_mask_probability=0.9,
+                command_frequency=[2.0, 5.0],
+            )
+            num_epochs = 35
+        elif training_type == 'finetune' or training_type == 'rough':
+            reward_config = config.RewardConfig(
+                # Rewards:
+                tracking_height=1.0,
+                tracking_orientation=1.0,
+                tracking_heading=1.0,
+                tracking_linear_velocity=1.0,
+                tracking_angular_velocity=1.0,
+                # Orientation Regularization Terms:
+                pose_regularization=-0.1,
+                orientation_regularization=-1.0,
+                vertical_velocity=-1.0,
+                # Energy Regularization Terms:
+                torque=-2e-3,
+                action_rate=-0.5,
+                acceleration=-2.5e-3,
+                # Auxilary Terms:
+                stand_still=-1.0,
+                termination=-1.0,
+                unwanted_contact=-1.0,
+                # Gait Reward Terms:
+                feet_contact=-0.5,
+                foot_slip=-1.0,
+                # Hyperparameter for exponential kernel:
+                velocity_sigma=0.25,
+                height_sigma=1.0,
+            )
+            command_config = config.CommandConfig(
+                command_range=jax.numpy.array([0.5, 0.5, 0.5]),
                 command_mask_probability=0.9,
                 command_frequency=[0.5, 2.0],
             )
-            num_epochs = 50
+            num_epochs = 35
         else:
             raise ValueError(f'Unknown FLAG.tag prefix: {prefix}')
 
         # Configs:
         noise_config = config.NoiseConfig()
-        disturbance_config = config.DisturbanceConfig()
+        disturbance_config = config.DisturbanceConfig(
+            magnitudes=[0.0, 0.0],
+        )
 
         if training_type == 'rough':
             scene = f'scene_mjx_{prefix}_{suffix}_rough.xml'
@@ -200,17 +202,22 @@ def main(argv=None):
         control_timestep = 0.02
 
         # First Order Filter:
-        cutoff_frequency = 4.0
-        tau = 1 / (2 * jnp.pi * cutoff_frequency)
-        alpha = control_timestep / (tau + control_timestep)
-        filter_impl = filters.FirstOrderFilter(
-            action_dim=12,
-            alpha=alpha,
-        )
+        # action_scale = None
+        # cutoff_frequency = 4.0
+        # tau = 1 / (2 * jnp.pi * cutoff_frequency)
+        # alpha = control_timestep / (tau + control_timestep)
+        # filter_impl = filters.FirstOrderFilter(
+        #     action_dim=12,
+        #     alpha=alpha,
+        # )
+
+        # No Filter:
+        filter_impl = filters.NoFilter()
+        action_scale = 1.5
 
         environment_config = config.EnvironmentConfig(
             filename=scene,
-            action_scale=None,
+            action_scale=action_scale,
             control_timestep=control_timestep,
             optimizer_timestep=0.004,
             impl="warp",
