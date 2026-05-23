@@ -294,6 +294,11 @@ def analyze_regression(parameter_checkpoints: str | list[str], load_analysis: bo
             hessian_eigenvalues = analysis_results["hessian_matrix_eigenvalues"]
             hessian_condition_number = analysis_results["hessian_matrix_condition_number"]
 
+            # Calculate the rank of the FIM to assess identifiability: (Hessian is the FIM for MLE)
+            num_parameters = hessian_matrix.shape[0]
+            fim_rank = np.linalg.matrix_rank(hessian_matrix)
+
+
             with np.printoptions(precision=3, suppress=True, linewidth=100):
                 print("Hessian Matrix Analysis:")
                 print(f"Hessian Matrix Eigenvalues: {hessian_eigenvalues}")

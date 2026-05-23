@@ -213,7 +213,12 @@ def main(argv=None):
 
         # No Filter:
         filter_impl = filters.NoFilter()
-        action_scale = 1.5
+        action_scale = jnp.array([
+            0.5, 0.5, 0.5,
+            0.5, 0.5, 0.5,
+            0.5, 2.0, 1.0,
+            0.5, 2.0, 1.0,
+        ])
 
         environment_config = config.EnvironmentConfig(
             filename=scene,
