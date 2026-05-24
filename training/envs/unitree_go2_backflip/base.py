@@ -196,6 +196,10 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
             "hind_left_calf_lower_to_floor",
             "hind_right_thigh_to_floor",
             "hind_left_thigh_to_floor",
+            "front_right_hip_to_floor",
+            "front_left_hip_to_floor",
+            "hind_right_hip_to_floor",
+            "hind_left_hip_to_floor",
         ]
         self.unwanted_contact_sensor = [
             self._mj_model.sensor(f'{sensor_name}').id
@@ -225,10 +229,9 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
             "right_torso_to_floor",
         ]
 
-        termination_sensor_names.extend(unwanted_contact_sensor_names)
+        # termination_sensor_names.extend(unwanted_contact_sensor_names)
 
-        # New:
-        termination_sensor_names.extend(self_collision_sensor_names)
+        # termination_sensor_names.extend(self_collision_sensor_names)
 
         self.termination_contact_sensor = [
             self._mj_model.sensor(f'{termination_sensor_name}').id

@@ -23,6 +23,9 @@ class RewardConfig:
     action_rate: float = -0.01
     acceleration: float = -2.5e-7
     mechanical_power: float = 0.0
+    # Landing Regularization Terms:
+    dof_limit: float = -0.5
+    base_clearance: float = -1.0
     # Auxilary Terms:
     stand_still: float = -1.0
     foot_slip: float = -0.5
@@ -68,6 +71,7 @@ class EnvironmentConfig:
     action_scale: float | None = 0.5
     control_timestep: float = 0.02
     optimizer_timestep: float = 0.004
+    terminate_on_unwanted_contacts: bool = False
     nconmax: int = 20 * 8192
     naccdmax: int = 0
     njmax: int = 50

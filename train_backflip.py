@@ -81,7 +81,7 @@ def main(argv=None):
 
     training_types = ['baseline', 'finetune', 'landing-finetune']
 
-    previous_run = None
+    previous_run = FLAGS.checkpoint
     for training_type in training_types:
         # Baseline Reward Config:
         if training_type == 'baseline':
@@ -92,6 +92,7 @@ def main(argv=None):
                 spin=3.0,
                 brake=0.0,
                 # Orientation Regularization Terms:
+                unwanted_spin=-2.0,
                 pose_regularization=-0.01,
                 orientation_regularization=-0.5,
                 # Energy Regularization Terms:
@@ -99,6 +100,9 @@ def main(argv=None):
                 action_rate=-0.001,
                 acceleration=-2.5e-6,
                 mechanical_power=2e-7,
+                # Landing Regularization Terms:
+                dof_limit=-0.5,
+                base_clearance=-1.0,
                 # Auxilary Terms:
                 stand_still=-0.1,
                 foot_slip=-0.5,
@@ -108,7 +112,8 @@ def main(argv=None):
                 height_sigma=0.05,
                 brake_sigma=1.0,
             )
-            num_epochs = 50
+            num_epochs = 30
+            terminate_on_unwanted_contacts = False
         elif training_type == 'finetune':
             reward_config = config.RewardConfig(
                 # Rewards:
@@ -117,13 +122,17 @@ def main(argv=None):
                 spin=3.0,
                 brake=0.5,
                 # Orientation Regularization Terms:
+                unwanted_spin=-3.0,
                 pose_regularization=-0.1,
                 orientation_regularization=-0.5,
                 # Energy Regularization Terms:
                 torque=-2e-4,
-                action_rate=-0.1,
+                action_rate=-0.01,
                 acceleration=-2.5e-5,
-                mechanical_power=-2e-5,
+                mechanical_power=-2e-6,
+                # Landing Regularization Terms:
+                dof_limit=-0.5,
+                base_clearance=-1.0,
                 # Auxilary Terms:
                 stand_still=-1.0,
                 foot_slip=-0.5,
@@ -133,7 +142,8 @@ def main(argv=None):
                 height_sigma=0.05,
                 brake_sigma=1.0,
             )
-            num_epochs = 50
+            num_epochs = 30
+            terminate_on_unwanted_contacts = True
         elif training_type == 'landing-finetune':
             reward_config = config.RewardConfig(
                 # Rewards:
@@ -142,13 +152,17 @@ def main(argv=None):
                 spin=3.0,
                 brake=0.5,
                 # Orientation Regularization Terms:
-                pose_regularization=-0.1,
+                unwanted_spin=-3.0,
+                pose_regularization=-0.5,
                 orientation_regularization=-0.5,
                 # Energy Regularization Terms:
                 torque=-2e-4,
-                action_rate=-0.1,
+                action_rate=-0.01,
                 acceleration=-2.5e-5,
-                mechanical_power=-2e-3,
+                mechanical_power=-2e-5,
+                # Landing Regularization Terms:
+                dof_limit=-0.5,
+                base_clearance=-1.0,
                 # Auxilary Terms:
                 stand_still=-1.0,
                 foot_slip=-0.5,
@@ -158,7 +172,8 @@ def main(argv=None):
                 height_sigma=0.05,
                 brake_sigma=1.0,
             )
-            num_epochs = 50
+            num_epochs = 30
+            terminate_on_unwanted_contacts = True
         else:
             raise ValueError(f'Unknown FLAG.tag prefix: {prefix}')
 
@@ -184,8 +199,8 @@ def main(argv=None):
 
         # First Order Filter:
         action_scale = None
-        # cutoff_frequency = 4.0
-        cutoff_frequency = 20.0
+        cutoff_frequency = 4.0
+        # cutoff_frequency = 20.0
         tau = 1 / (2 * jnp.pi * cutoff_frequency)
         alpha = control_timestep / (tau + control_timestep)
         filter_impl = filters.FirstOrderFilter(
@@ -199,6 +214,7 @@ def main(argv=None):
             control_timestep=control_timestep,
             optimizer_timestep=0.004,
             impl="warp",
+            terminate_on_unwanted_contacts=terminate_on_unwanted_contacts,
         )
 
         env = unitree_go2_backflip.Backflip(
@@ -380,10 +396,7 @@ def main(argv=None):
             print('\n')
 
         # Restore Checkpoint:
-        restored_checkpoint = None
-        if FLAGS.checkpoint is not None:
-            previous_run = FLAGS.checkpoint
-        
+        restored_checkpoint = None        
         if previous_run is not None:
             restore_directory = os.path.join(
                 os.path.dirname(__file__),
@@ -396,7 +409,9 @@ def main(argv=None):
                 manager=restore_manager,
                 agent=model,
             )
-            optimizer = restored_checkpoint.optimizer
+
+            # Test Turning off the Opimizer State Restoration:
+            # optimizer = restored_checkpoint.optimizer
 
         # Setup Checkpoint Manager:
         checkpoint_directory = os.path.join(

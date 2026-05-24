@@ -358,6 +358,10 @@ class Backflip(base.UnitreeGo2Env):
             data.sensordata[self._mj_model.sensor_adr[sensor_id]] > 0
             for sensor_id in self.unwanted_contact_sensor
         ])
+        self_collision_contacts = jnp.array([
+            data.sensordata[self._mj_model.sensor_adr[sensor_id]] > 0
+            for sensor_id in self.self_collision_contact_sensor
+        ])
         termination_contacts = jnp.array([
             data.sensordata[self._mj_model.sensor_adr[sensor_id]] > 0
             for sensor_id in self.termination_contact_sensor
@@ -378,13 +382,14 @@ class Backflip(base.UnitreeGo2Env):
         )
 
         # Termination:
+        unwanted_contacts = jnp.concatenate([unwanted_contacts, self_collision_contacts])
         done = self._get_termination(
             termination_contacts,
             unwanted_contacts,
             projected_gravity,
             imu_height,
             state.info['phase_step'],
-            terminate_on_unwanted_contacts=False,
+            terminate_on_unwanted_contacts=self.environment_config.terminate_on_unwanted_contacts,
         )
 
         # Rewards:
@@ -772,6 +777,21 @@ class Backflip(base.UnitreeGo2Env):
         power = jnp.abs(torques * velocities)
         
         return is_landing * jnp.sum(jnp.square(power))
+
+    def _cost_dof_limit(self, qpos: jax.Array) -> jax.Array:
+        upper_margin = jnp.maximum(0.0, qpos - (self.joint_ub - 0.1))
+        lower_margin = jnp.maximum(0.0, (self.joint_lb + 0.1) - qpos)
+        return jnp.sum(upper_margin) + jnp.sum(lower_margin)
+
+    def _cost_base_clearance(
+        self, 
+        imu_height: jax.Array, 
+        phase_step: jax.Array
+    ) -> jax.Array:
+        phase = phase_step / self.num_phase_steps
+        is_landing = jnp.where(phase >= (self.phase_frames['apex'] + 0.2), 1.0, 0.0)
+        clearance_violation = jnp.maximum(0.0, 0.20 - imu_height)
+        return is_landing * jnp.square(clearance_violation)
     
     def _cost_stand_still(
         self,

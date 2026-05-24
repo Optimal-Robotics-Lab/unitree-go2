@@ -37,6 +37,8 @@
     <include file="sensors/front_calf_to_floor_collision_sensor.xml"/>
     <include file="sensors/hind_calf_to_floor_collision_sensor.xml"/>
     <include file="sensors/hind_thigh_to_floor_collision_sensor.xml"/>
+    <include file="sensors/front_hip_to_floor_collision_sensor.xml"/>
+    <include file="sensors/hind_hip_to_floor_collision_sensor.xml"/>
 
     <!-- Self Collision -->
     <include file="sensors/foot_to_foot_collision_sensor.xml"/>
