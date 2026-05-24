@@ -15,7 +15,8 @@ class RewardConfig:
     spin: float = 2.0
     brake: float = 0.5
     # Orientation Regularization Terms:
-    pose_regularization: float = -0.1
+    unwanted_spin: float = -2.0
+    pose_regularization: float = -0.01
     orientation_regularization: float = -0.5
     # Energy Regularization Terms:
     torque: float = -2e-4

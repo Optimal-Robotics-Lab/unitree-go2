@@ -69,18 +69,43 @@ class Backflip(base.UnitreeGo2Env):
         self.flip_duration_s = 1.2
         self.num_phase_steps = int(self.flip_duration_s / self.dt)
         self.phase_step_lookahead = 25
+        # self.phase_frames = {
+        #     'start': 0.0,
+        #     'crouch': 0.1,
+        #     'liftoff': 0.2,
+        #     'apex': 0.6,
+        #     'end': 1.0,
+        # }
+        # self.height_frames = {
+        #     'start': 0.3,
+        #     'crouch': 0.2,
+        #     'liftoff': 0.4,
+        #     'apex': 0.7,
+        #     'end': 0.3,
+        # }
+        # self.pitch_frames = {
+        #     'start': 0.0,
+        #     'crouch': 0.0,
+        #     'liftoff': -jnp.pi / 4,
+        #     'apex': -jnp.pi,
+        #     'end': -2 * jnp.pi,
+        # }
+
+        # Buffer Landing:
         self.phase_frames = {
             'start': 0.0,
             'crouch': 0.1,
             'liftoff': 0.2,
             'apex': 0.6,
+            'landing': 0.9,
             'end': 1.0,
         }
         self.height_frames = {
             'start': 0.3,
             'crouch': 0.2,
             'liftoff': 0.4,
-            'apex': 0.6,
+            'apex': 0.8,
+            'landing': 0.4,
             'end': 0.3,
         }
         self.pitch_frames = {
@@ -88,6 +113,7 @@ class Backflip(base.UnitreeGo2Env):
             'crouch': 0.0,
             'liftoff': -jnp.pi / 4,
             'apex': -jnp.pi,
+            'landing': -2 * jnp.pi,
             'end': -2 * jnp.pi,
         }
 
@@ -106,10 +132,10 @@ class Backflip(base.UnitreeGo2Env):
         )
         self.pitch_rate_reference_fn = self.pitch_reference_fn.derivative()
 
-        self.phase_reference = np.linspace(0.0, 1.0, self.num_phase_steps + 1)
-        self.height_reference = self.height_reference_fn(self.phase_reference)
-        self.pitch_reference = self.pitch_reference_fn(self.phase_reference)
-        self.pitch_rate_reference = self.pitch_rate_reference_fn(self.phase_reference) / self.flip_duration_s
+        self.phase_reference = jnp.linspace(0.0, 1.0, self.num_phase_steps + 1)
+        self.height_reference = jnp.asarray(self.height_reference_fn(self.phase_reference))
+        self.pitch_reference = jnp.asarray(self.pitch_reference_fn(self.phase_reference))
+        self.pitch_rate_reference = jnp.asarray(self.pitch_rate_reference_fn(self.phase_reference)) / self.flip_duration_s
 
         # Task Specific Observation Details:
         self.num_observations = 31 + self.nu + self.filter.observation_size
@@ -311,6 +337,9 @@ class Backflip(base.UnitreeGo2Env):
         done = self._get_termination(
             termination_contacts,
             unwanted_contacts,
+            projected_gravity,
+            imu_height,
+            state.info['phase_step'],
             terminate_on_unwanted_contacts=False,
         )
 
@@ -322,7 +351,7 @@ class Backflip(base.UnitreeGo2Env):
                 state.info['phase_step'],
                 self.height_sigma,
             ),
-            'tracking_pitch_reference': self._reward_tracking_orientation(
+            'tracking_pitch_reference': self._reward_tracking_pitch(
                 projected_gravity,
                 state.info['phase_step'],
             ),
@@ -337,6 +366,9 @@ class Backflip(base.UnitreeGo2Env):
                 self.brake_sigma,
             ),
             # Regularization Costs:
+            'unwanted_spin': self._cost_unwanted_spin(
+                local_angular_velocity,
+            ),
             'pose_regularization': self._cost_pose_regularization(joint_angles),
             'orientation_regularization': self._cost_orientation_regularization(
                 up_vector,
@@ -417,11 +449,30 @@ class Backflip(base.UnitreeGo2Env):
         self,
         termination_contacts: jax.Array,
         unwanted_contacts: jax.Array,
+        projected_gravity: jax.Array,
+        imu_height: jax.Array,
+        phase_step: jax.Array,
         terminate_on_unwanted_contacts: bool = False,
     ) -> jax.Array:
         # Termination Condition:
         done = jnp.any(termination_contacts)
         done |= terminate_on_unwanted_contacts * jnp.any(unwanted_contacts)
+
+        # Tracking Failure Conditions:
+        phase = phase_step / self.num_phase_steps
+        is_flight_phase = (phase > self.phase_frames['liftoff']) & (phase < self.phase_frames['landing'])
+        # Height Tracking Failure:
+        target_height = self.height_reference[phase_step]
+        height_failure = is_flight_phase & ((target_height - imu_height) > 0.15)
+        # Pitch Tracking Failure:
+        pitch_reference = self.pitch_reference[phase_step]
+        target_gravity = jnp.array([jnp.sin(pitch_reference), 0.0, -jnp.cos(pitch_reference)])
+        dot_product = jnp.dot(projected_gravity, target_gravity)
+        pitch_failure = is_flight_phase & (dot_product < 0.0)
+        
+        kinematic_failure = height_failure | pitch_failure
+        done |= kinematic_failure
+
         return done
 
     def get_observation(
@@ -492,7 +543,7 @@ class Backflip(base.UnitreeGo2Env):
         filter_observation = self.filter.get_observation(state_info['filter_state'])
 
         # Phase:
-        phase = state_info['phase_step'].astype(jnp.float32) / self.num_phase_steps
+        phase = jnp.asarray([state_info['phase_step']], dtype=jnp.float32) / self.num_phase_steps
 
         observation = jnp.concatenate([
             noisy_angular_rate,                         # 3
@@ -505,13 +556,14 @@ class Backflip(base.UnitreeGo2Env):
         ])
 
         # Critic Observation:
-        imu_height = data.site_xpos[self.imu_site_idx][2]
+        imu_height = jnp.asarray([data.site_xpos[self.imu_site_idx][2]])
         accelerometer = self.get_accelerometer(data)
         global_angular_velocity = self.get_global_angular_velocity(data)
         actuator_force = data.actuator_force
 
         # Reference Information:
-        reference_steps = jnp.arange(state_info['phase_step'], state_info['phase_step'] + self.phase_step_lookahead)
+        offsets = jnp.arange(self.phase_step_lookahead)
+        reference_steps = state_info['phase_step'] + offsets
         reference_steps = jnp.minimum(reference_steps, self.num_phase_steps)
         reference_height_horizon = self.height_reference[reference_steps]
         reference_pitch_horizon = self.pitch_reference[reference_steps]
@@ -560,7 +612,8 @@ class Backflip(base.UnitreeGo2Env):
         target_gravity = jnp.array([jnp.sin(pitch_reference), 0.0, -jnp.cos(pitch_reference)])
         dot_product = jnp.dot(projected_gravity, target_gravity)
         normalized = 0.5 * dot_product + 0.5
-        return jnp.square(normalized)
+        tracking_condition = jnp.where((phase_step / self.num_phase_steps) < 1.0, 1.0, 0.0)
+        return tracking_condition * jnp.square(normalized)
     
     def _reward_spin(
         self,
@@ -571,9 +624,10 @@ class Backflip(base.UnitreeGo2Env):
         phase = phase_step / self.num_phase_steps
         
         # Phase Windows:
+        brake_start = self.phase_frames['apex'] + 0.2
         ramp_up = (phase - self.phase_frames['liftoff']) * 1 / (self.phase_frames['apex'] - self.phase_frames['liftoff'])
         ramp_up = jnp.clip(ramp_up, 0.0, 1.0)
-        ramp_down = 1.0 + (phase - self.phase_frames['apex']) * -1 / (self.phase_frames['end'] - self.phase_frames['apex'])
+        ramp_down = 1.0 + (phase - brake_start) * -1 / (self.phase_frames['end'] - brake_start)
         ramp_down = jnp.clip(ramp_down, 0.0, 1.0)
         phase_multiplier = jnp.minimum(ramp_up, ramp_down)
         
@@ -597,7 +651,8 @@ class Backflip(base.UnitreeGo2Env):
         phase = phase_step / self.num_phase_steps
         
         # Phase Window:
-        ramp_up = (phase - self.phase_frames['apex']) * 1 / (self.phase_frames['end'] - self.phase_frames['apex'])
+        brake_start = self.phase_frames['apex'] + 0.2
+        ramp_up = (phase - brake_start) * 1 / (self.phase_frames['end'] - brake_start)
         phase_multiplier = jnp.clip(ramp_up, 0.0, 1.0)
         
         # Reward:
@@ -606,6 +661,12 @@ class Backflip(base.UnitreeGo2Env):
         error = jnp.square(spin_rate - target_spin)
         reward = jnp.exp(-error / kernel_sigma)
         return phase_multiplier * reward
+
+    def _cost_unwanted_spin(
+        self,
+        local_angular_velocity: jax.Array,
+    ) -> jax.Array:
+        return jnp.square(local_angular_velocity[0]) + jnp.square(local_angular_velocity[2])
 
     def _cost_pose_regularization(
         self,

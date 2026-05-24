@@ -7,8 +7,6 @@ import pickle
 
 import jax
 
-# jax.config.update("jax_enable_x64", True)
-
 import jax.numpy as jnp
 import flax.nnx as nnx
 
@@ -83,17 +81,17 @@ def main(argv=None):
         if training_type == 'baseline':
             reward_config = config.RewardConfig(
                 # Rewards:
-                tracking_height_reference=1.0,
-                tracking_pitch_reference=1.0,
-                spin=2.0,
+                tracking_height_reference=0.75,
+                tracking_pitch_reference=1.5,
+                spin=3.0,
                 brake=0.5,
                 # Orientation Regularization Terms:
-                pose_regularization=-0.1,
+                pose_regularization=-0.01,
                 orientation_regularization=-0.5,
                 # Energy Regularization Terms:
-                torque=-2e-4,
-                action_rate=-0.01,
-                acceleration=-2.5e-5,
+                torque=-2e-5,
+                action_rate=-0.001,
+                acceleration=-2.5e-6,
                 # Auxilary Terms:
                 stand_still=-1.0,
                 foot_slip=-0.5,
@@ -103,7 +101,7 @@ def main(argv=None):
                 height_sigma=0.05,
                 brake_sigma=1.0,
             )
-            num_epochs = 50
+            num_epochs = 100
         elif training_type == 'finetune':
             reward_config = config.RewardConfig(
                 # Rewards:
@@ -112,7 +110,7 @@ def main(argv=None):
                 spin=2.0,
                 brake=0.5,
                 # Orientation Regularization Terms:
-                pose_regularization=-0.1,
+                pose_regularization=-0.01,
                 orientation_regularization=-0.5,
                 # Energy Regularization Terms:
                 torque=-2e-4,
