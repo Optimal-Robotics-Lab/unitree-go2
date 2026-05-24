@@ -46,6 +46,7 @@ class RunningStatistics(nnx.Module):
     def __init__(
         self,
         reference_input: NestedArray,
+        mask: Optional[NestedArray] = None,
         mode: str = 'welford',
         epsilon: float = 1e-4,
         clip: Optional[float] = None,
@@ -62,6 +63,12 @@ class RunningStatistics(nnx.Module):
 
         # Get statistics shape from the reference input
         self.structure_def = jax.tree.structure(reference_input)
+
+        # Create mask for which elements to normalize:
+        if mask is None:
+            mask = jax.tree.map(lambda x: jnp.ones(x.shape, dtype=bool), reference_input)
+        
+        self.mask = _to_nnx(mask)
 
         # Upgrade to nnx containers:
         reference_input = _to_nnx(reference_input)
@@ -275,18 +282,20 @@ class RunningStatistics(nnx.Module):
             data: jnp.ndarray,
             mean: jnp.ndarray,
             std: jnp.ndarray,
+            mask_leaf: jnp.ndarray,
         ) -> jnp.ndarray:
             if not jnp.issubdtype(data.dtype, jnp.inexact):
                 return data
 
-            data = (data - mean) / std
+            norm_data = (data - mean) / std
 
             if self.clip is not None:
-                data = jnp.clip(data, -self.clip, +self.clip)
-            return data
+                norm_data = jnp.clip(norm_data, -self.clip, +self.clip)
+
+            return jnp.where(mask_leaf, norm_data, data)
 
         result = jax.tree.map(
-            normalize_leaf, batch, self.mean, self.std,
+            normalize_leaf, batch, self.mean, self.std, self.mask,
         )
 
         return jax.tree.unflatten(self.structure_def, jax.tree.leaves(result))
@@ -313,14 +322,17 @@ class RunningStatistics(nnx.Module):
             data: jnp.ndarray,
             mean: jnp.ndarray,
             std: jnp.ndarray,
+            mask_leaf: jnp.ndarray,
         ) -> jnp.ndarray:
             # Only denormalize inexact
             if not jnp.issubdtype(data.dtype, jnp.inexact):
                 return data
-            return data * std + mean
+
+            denorm_data = data * std + mean
+            return jnp.where(mask_leaf, denorm_data, data)
 
         result = jax.tree.map(
-            denormalize_leaf, batch, self.mean, self.std,
+            denormalize_leaf, batch, self.mean, self.std, self.mask,
         )
 
         return jax.tree.unflatten(self.structure_def, jax.tree.leaves(result))

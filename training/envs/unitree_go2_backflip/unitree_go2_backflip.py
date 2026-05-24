@@ -105,7 +105,7 @@ class Backflip(base.UnitreeGo2Env):
             'start': 0.3,
             'crouch': 0.2,
             'liftoff': 0.4,
-            'apex': 0.75, 
+            'apex': 0.78, 
             'end': 0.3,
         }
         self.pitch_frames = {
@@ -146,6 +146,44 @@ class Backflip(base.UnitreeGo2Env):
         # Task Specific Observation Details:
         self.num_observations = 31 + self.nu + self.filter.observation_size
         self.num_privileged_observations = self.num_observations + 48 + self.nu + (2 * self.phase_step_lookahead)
+        
+        # State Observation Mask:
+        state_mask = jnp.concatenate([
+            jnp.ones(3, dtype=bool),
+            jnp.ones(3, dtype=bool),
+            jnp.ones(12, dtype=bool),
+            jnp.ones(12, dtype=bool),
+            jnp.ones(12, dtype=bool),
+            jnp.zeros(1, dtype=bool),
+            jnp.ones(self.filter.observation_size, dtype=bool),
+        ])
+
+        # Privileged Observation Mask:
+        privileged_mask = jnp.concatenate([
+            state_mask,
+            jnp.ones(3, dtype=bool),
+            jnp.ones(3, dtype=bool),
+            jnp.ones(3, dtype=bool),
+            jnp.ones(3, dtype=bool),
+            jnp.ones(3, dtype=bool),
+            jnp.ones(1, dtype=bool),
+            jnp.ones(12, dtype=bool),
+            jnp.ones(12, dtype=bool),
+            jnp.ones(self.nu, dtype=bool),
+            jnp.zeros(4, dtype=bool),
+            jnp.ones(3, dtype=bool),
+            jnp.ones(self.phase_step_lookahead, dtype=bool),
+            jnp.ones(self.phase_step_lookahead, dtype=bool),
+            jnp.zeros(1, dtype=bool),
+        ])
+
+        assert state_mask.shape[0] == self.num_observations, f"State mask length {state_mask.shape[0]} does not match number of observations {self.num_observations}."
+        assert privileged_mask.shape[0] == self.num_privileged_observations, f"Privileged observation mask length {privileged_mask.shape[0]} does not match number of privileged observations {self.num_privileged_observations}."
+
+        self.observation_mask = {
+            'state': state_mask,
+            'privileged_state': privileged_mask,
+        }
 
 
     def reset(self, rng: PRNGKey) -> mjx_env.State:  # pytype: disable=signature-mismatch
@@ -385,6 +423,10 @@ class Backflip(base.UnitreeGo2Env):
             'acceleration': self._cost_acceleration(
                 data.qacc,
             ),
+            'mechanical_power': self._cost_mechanical_power(
+                data,
+                state.info['phase_step'],
+            ),
             'stand_still': self._cost_stand_still(
                 joint_angles,
                 state.info['phase_step'],
@@ -463,6 +505,10 @@ class Backflip(base.UnitreeGo2Env):
         # Termination Condition:
         done = jnp.any(termination_contacts)
         done |= terminate_on_unwanted_contacts * jnp.any(unwanted_contacts)
+
+        # Terminate Unwanted Contacts during Lift Off:
+        is_liftoff_phase = (phase_step / self.num_phase_steps) <= self.phase_frames['liftoff']
+        done |= is_liftoff_phase * jnp.any(unwanted_contacts)
 
         # Tracking Failure Conditions:
         phase = phase_step / self.num_phase_steps
@@ -712,6 +758,20 @@ class Backflip(base.UnitreeGo2Env):
     ) -> jax.Array:
         # Penalize Motor/Joint Acceleration
         return jnp.sqrt(jnp.sum(jnp.square(qacc)))
+
+    def _cost_mechanical_power(
+        self,
+        data: mjx.Data,
+        phase_step: jax.Array,
+    ) -> jax.Array:
+        phase = phase_step / self.num_phase_steps
+        is_landing = jnp.where(phase >= (self.phase_frames['apex'] + 0.2), 1.0, 0.0)
+        
+        torques = data.actuator_force
+        velocities = data.qvel[6:]
+        power = jnp.abs(torques * velocities)
+        
+        return is_landing * jnp.sum(jnp.square(power))
     
     def _cost_stand_still(
         self,

@@ -22,6 +22,7 @@ class RewardConfig:
     torque: float = -2e-4
     action_rate: float = -0.01
     acceleration: float = -2.5e-7
+    mechanical_power: float = 0.0
     # Auxilary Terms:
     stand_still: float = -1.0
     foot_slip: float = -0.5
