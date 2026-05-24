@@ -77,7 +77,9 @@ def main(argv=None):
 
     # Training Types:
     # training_types = ['baseline', 'finetune']
-    training_types = ['landing-finetune']
+    # training_types = ['landing-finetune']
+
+    training_types = ['baseline', 'finetune', 'landing-finetune']
 
     previous_run = None
     for training_type in training_types:
@@ -96,6 +98,7 @@ def main(argv=None):
                 torque=-2e-5,
                 action_rate=-0.001,
                 acceleration=-2.5e-6,
+                mechanical_power=2e-7,
                 # Auxilary Terms:
                 stand_still=-0.1,
                 foot_slip=-0.5,
@@ -105,7 +108,7 @@ def main(argv=None):
                 height_sigma=0.05,
                 brake_sigma=1.0,
             )
-            num_epochs = 100
+            num_epochs = 50
         elif training_type == 'finetune':
             reward_config = config.RewardConfig(
                 # Rewards:
@@ -120,6 +123,7 @@ def main(argv=None):
                 torque=-2e-4,
                 action_rate=-0.1,
                 acceleration=-2.5e-5,
+                mechanical_power=-2e-5,
                 # Auxilary Terms:
                 stand_still=-1.0,
                 foot_slip=-0.5,
@@ -129,7 +133,7 @@ def main(argv=None):
                 height_sigma=0.05,
                 brake_sigma=1.0,
             )
-            num_epochs = 100
+            num_epochs = 50
         elif training_type == 'landing-finetune':
             reward_config = config.RewardConfig(
                 # Rewards:
@@ -144,7 +148,7 @@ def main(argv=None):
                 torque=-2e-4,
                 action_rate=-0.1,
                 acceleration=-2.5e-5,
-                mechanical_power=-2e-4,
+                mechanical_power=-2e-3,
                 # Auxilary Terms:
                 stand_still=-1.0,
                 foot_slip=-0.5,
@@ -154,7 +158,7 @@ def main(argv=None):
                 height_sigma=0.05,
                 brake_sigma=1.0,
             )
-            num_epochs = 100
+            num_epochs = 50
         else:
             raise ValueError(f'Unknown FLAG.tag prefix: {prefix}')
 

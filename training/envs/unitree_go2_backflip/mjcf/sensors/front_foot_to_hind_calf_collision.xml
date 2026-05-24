@@ -1,8 +1,0 @@
-<mujoco>
-  <sensor>
-    <contact name="front_right_foot_to_hind_right_calf_upper" geom1="front_right" geom2="hind_right_calf_upper_collision" reduce="mindist" num="1" data="found"/>
-    <contact name="front_right_foot_to_hind_right_calf_lower" geom1="front_right" geom2="hind_right_calf_lower_collision" reduce="mindist" num="1" data="found"/>
-    <contact name="front_left_foot_to_hind_left_foot" geom1="front_left" geom2="hind_left" reduce="mindist" num="1" data="found"/>
-    <contact name="front_left_foot_to_hind_left_calf_lower" geom1="front_left" geom2="hind_left_calf_lower_collision" reduce="mindist" num="1" data="found"/>
-  </sensor>
-</mujoco>

@@ -38,9 +38,9 @@
     <include file="sensors/hind_calf_to_floor_collision_sensor.xml"/>
     <include file="sensors/hind_thigh_to_floor_collision_sensor.xml"/>
 
-    <include file="sensors/foot_to_foot_collision.xml"/>
-    <include file="sensors/hind_foot_to_front_calf_collision.xml"/>
-    <include file="sensors/front_foot_to_hind_calf_collision.xml"/>
-
+    <!-- Self Collision -->
+    <include file="sensors/foot_to_foot_collision_sensor.xml"/>
+    <include file="sensors/hind_foot_to_front_calf_collision_sensor.xml"/>
+    <include file="sensors/front_foot_to_hind_calf_collision_sensor.xml"/>
 
 </mujoco>

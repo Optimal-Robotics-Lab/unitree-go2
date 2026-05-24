@@ -202,13 +202,32 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
             for sensor_name in unwanted_contact_sensor_names
         ]
 
+        self_collision_sensor_names = [
+            "front_right_foot_to_hind_right_foot",
+            "front_left_foot_to_hind_left_foot",
+            "front_right_foot_to_hind_right_calf_upper",
+            "front_right_foot_to_hind_right_calf_lower",
+            "front_left_foot_to_hind_left_calf_upper",
+            "front_left_foot_to_hind_left_calf_lower",
+            "hind_right_foot_to_front_right_calf_upper",
+            "hind_right_foot_to_front_right_calf_lower",
+            "hind_left_foot_to_front_left_calf_upper",
+            "hind_left_foot_to_front_left_calf_lower",
+        ]
+        self.self_collision_contact_sensor = [
+            self._mj_model.sensor(f'{sensor_name}').id
+            for sensor_name in self_collision_sensor_names
+        ]
+
         termination_sensor_names = [
             "left_torso_to_floor",
             "right_torso_to_floor",
         ]
-        
 
         termination_sensor_names.extend(unwanted_contact_sensor_names)
+
+        # New:
+        termination_sensor_names.extend(self_collision_sensor_names)
 
         self.termination_contact_sensor = [
             self._mj_model.sensor(f'{termination_sensor_name}').id
