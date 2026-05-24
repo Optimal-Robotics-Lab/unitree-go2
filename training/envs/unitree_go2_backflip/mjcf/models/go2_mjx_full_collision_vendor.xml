@@ -28,6 +28,9 @@
             </default>
             <default class="go2/collision">
                 <geom group="3" contype="0" conaffinity="2"/>
+				<default class="go2/collision/lidar">
+					<geom type="sphere" size="0.05" pos="0.29 0 -0.055"/>
+				</default>
 				<default class="go2/collision/torso">
 					<geom type="capsule" size="0.058 0.125" quat="1 0 1 0"/>
 					<default class="go2/collision/torso/left">
@@ -99,6 +102,7 @@
 			<geom mesh="base_2" material="black" class="go2"/>
 			<geom mesh="base_3" material="white" class="go2"/>
 			<geom mesh="base_4" material="gray" class="go2"/>
+			<geom name="lidar_collision" class="go2/collision/lidar"/>
 			<geom name="left_torso_collision" class="go2/collision/torso/left"/>
 			<geom name="right_torso_collision" class="go2/collision/torso/right"/>
 			<site name="imu" pos="-0.02557 0 0.04232"/>

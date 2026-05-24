@@ -220,6 +220,7 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         ]
 
         termination_sensor_names = [
+            "lidar_to_floor",
             "left_torso_to_floor",
             "right_torso_to_floor",
         ]
