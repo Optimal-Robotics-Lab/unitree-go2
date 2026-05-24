@@ -84,7 +84,7 @@ def main(argv=None):
                 tracking_height_reference=0.75,
                 tracking_pitch_reference=1.5,
                 spin=3.0,
-                brake=0.5,
+                brake=0.0,
                 # Orientation Regularization Terms:
                 pose_regularization=-0.01,
                 orientation_regularization=-0.5,
@@ -105,17 +105,17 @@ def main(argv=None):
         elif training_type == 'finetune':
             reward_config = config.RewardConfig(
                 # Rewards:
-                tracking_height_reference=1.0,
-                tracking_pitch_reference=1.0,
-                spin=2.0,
+                tracking_height_reference=0.75,
+                tracking_pitch_reference=1.5,
+                spin=3.0,
                 brake=0.5,
                 # Orientation Regularization Terms:
-                pose_regularization=-0.01,
+                pose_regularization=-0.1,
                 orientation_regularization=-0.5,
                 # Energy Regularization Terms:
                 torque=-2e-4,
                 action_rate=-0.1,
-                acceleration=-2.5e-4,
+                acceleration=-2.5e-5,
                 # Auxilary Terms:
                 stand_still=-1.0,
                 foot_slip=-0.5,
@@ -125,7 +125,7 @@ def main(argv=None):
                 height_sigma=0.05,
                 brake_sigma=1.0,
             )
-            num_epochs = 50
+            num_epochs = 100
         else:
             raise ValueError(f'Unknown FLAG.tag prefix: {prefix}')
 
@@ -151,7 +151,8 @@ def main(argv=None):
 
         # First Order Filter:
         action_scale = None
-        cutoff_frequency = 4.0
+        # cutoff_frequency = 4.0
+        cutoff_frequency = 8.0
         tau = 1 / (2 * jnp.pi * cutoff_frequency)
         alpha = control_timestep / (tau + control_timestep)
         filter_impl = filters.FirstOrderFilter(

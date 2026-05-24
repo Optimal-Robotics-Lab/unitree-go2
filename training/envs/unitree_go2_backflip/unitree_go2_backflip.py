@@ -66,9 +66,11 @@ class Backflip(base.UnitreeGo2Env):
         
         # Task Specific Implementation Details: Generate Reference Frames
         # Backflip Time: 0.8 - 1.2s
-        self.flip_duration_s = 1.2
+        self.flip_duration_s = 0.8
         self.num_phase_steps = int(self.flip_duration_s / self.dt)
         self.phase_step_lookahead = 25
+        
+        # 1.2s Backflip Frames:
         # self.phase_frames = {
         #     'start': 0.0,
         #     'crouch': 0.1,
@@ -80,40 +82,37 @@ class Backflip(base.UnitreeGo2Env):
         #     'start': 0.3,
         #     'crouch': 0.2,
         #     'liftoff': 0.4,
-        #     'apex': 0.7,
+        #     'apex': 0.75,
         #     'end': 0.3,
         # }
         # self.pitch_frames = {
         #     'start': 0.0,
-        #     'crouch': 0.0,
+        #     'crouch': jnp.pi / 8,
         #     'liftoff': -jnp.pi / 4,
         #     'apex': -jnp.pi,
         #     'end': -2 * jnp.pi,
         # }
 
-        # Buffer Landing:
+        # 0.8s Backflip Frames:
         self.phase_frames = {
             'start': 0.0,
-            'crouch': 0.1,
-            'liftoff': 0.2,
-            'apex': 0.6,
-            'landing': 0.9,
+            'crouch': 0.15,
+            'liftoff': 0.30,
+            'apex': 0.65,
             'end': 1.0,
         }
         self.height_frames = {
             'start': 0.3,
             'crouch': 0.2,
             'liftoff': 0.4,
-            'apex': 0.8,
-            'landing': 0.4,
+            'apex': 0.75, 
             'end': 0.3,
         }
         self.pitch_frames = {
             'start': 0.0,
-            'crouch': 0.0,
+            'crouch': jnp.pi / 8, 
             'liftoff': -jnp.pi / 4,
             'apex': -jnp.pi,
-            'landing': -2 * jnp.pi,
             'end': -2 * jnp.pi,
         }
 
@@ -136,6 +135,13 @@ class Backflip(base.UnitreeGo2Env):
         self.height_reference = jnp.asarray(self.height_reference_fn(self.phase_reference))
         self.pitch_reference = jnp.asarray(self.pitch_reference_fn(self.phase_reference))
         self.pitch_rate_reference = jnp.asarray(self.pitch_rate_reference_fn(self.phase_reference)) / self.flip_duration_s
+
+        self.tuck_pose = jnp.array([
+            0.0, 1.6, -2.6,
+            0.0, 1.6, -2.6,
+            0.0, 1.6, -2.6,
+            0.0, 1.6, -2.6,
+        ])
 
         # Task Specific Observation Details:
         self.num_observations = 31 + self.nu + self.filter.observation_size
@@ -460,10 +466,10 @@ class Backflip(base.UnitreeGo2Env):
 
         # Tracking Failure Conditions:
         phase = phase_step / self.num_phase_steps
-        is_flight_phase = (phase > self.phase_frames['liftoff']) & (phase < self.phase_frames['landing'])
+        is_flight_phase = (phase > self.phase_frames['liftoff']) & (phase < self.phase_frames['end'])
         # Height Tracking Failure:
         target_height = self.height_reference[phase_step]
-        height_failure = is_flight_phase & ((target_height - imu_height) > 0.15)
+        height_failure = is_flight_phase & ((target_height - imu_height) > 0.2)
         # Pitch Tracking Failure:
         pitch_reference = self.pitch_reference[phase_step]
         target_gravity = jnp.array([jnp.sin(pitch_reference), 0.0, -jnp.cos(pitch_reference)])
@@ -637,7 +643,13 @@ class Backflip(base.UnitreeGo2Env):
 
         # Spin Rate Reward:
         spin_rate = jnp.abs(local_angular_velocity[1])
-        target_spin = jnp.abs(self.pitch_rate_reference[phase_step]) + 1e-5
+        
+        # Using the Derivative of the Pitch Reference as the Target Spin Rate:
+        # target_spin = jnp.abs(self.pitch_rate_reference[phase_step]) + 1e-5
+        
+        flight_duration = self.flip_duration_s * (self.phase_frames['end'] - self.phase_frames['liftoff'])
+        target_spin = ((2 * jnp.pi) / flight_duration)
+
         spin_reward = jnp.tanh(spin_rate / target_spin)
         
         return in_air * is_backflip * phase_multiplier * spin_reward
