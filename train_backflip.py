@@ -90,7 +90,7 @@ def main(argv=None):
                 tracking_height_reference=0.75,
                 tracking_pitch_reference=1.5,
                 spin=3.0,
-                brake=0.0,
+                brake=0.5,
                 # Orientation Regularization Terms:
                 unwanted_spin=-2.0,
                 pose_regularization=-0.01,
@@ -112,7 +112,7 @@ def main(argv=None):
                 height_sigma=0.05,
                 brake_sigma=1.0,
             )
-            num_epochs = 30
+            num_epochs = 40
             terminate_on_unwanted_contacts = False
         elif training_type == 'finetune':
             reward_config = config.RewardConfig(
@@ -161,7 +161,7 @@ def main(argv=None):
                 acceleration=-2.5e-5,
                 mechanical_power=-2e-5,
                 # Landing Regularization Terms:
-                dof_limit=-0.5,
+                dof_limit=-1.0,
                 base_clearance=-1.0,
                 # Auxilary Terms:
                 stand_still=-1.0,

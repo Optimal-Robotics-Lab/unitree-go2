@@ -136,16 +136,33 @@ class Backflip(base.UnitreeGo2Env):
         self.pitch_reference = jnp.asarray(self.pitch_reference_fn(self.phase_reference))
         self.pitch_rate_reference = jnp.asarray(self.pitch_rate_reference_fn(self.phase_reference)) / self.flip_duration_s
 
-        self.tuck_pose = jnp.array([
-            0.0, 1.6, -2.6,
-            0.0, 1.6, -2.6,
-            0.0, 1.6, -2.6,
-            0.0, 1.6, -2.6,
+        # Task Contacts:
+        contact_geom_names = [
+            # Lidar:
+            'lidar_collision',
+            # Front Legs:
+            'front_right_foot_collision',
+            'front_left_foot_collision',
+            'front_right_calf_lower_collision',
+            'front_left_calf_lower_collision',
+            'front_right_hip_collision',
+            'front_left_hip_collision',
+            # Hind Legs:
+            'hind_right_foot_collision',
+            'hind_left_foot_collision',
+            'hind_right_calf_lower_collision',
+            'hind_left_calf_lower_collision',
+            'hind_right_hip_collision',
+            'hind_left_hip_collision',
+        ]
+        
+        self.contact_geom_idx = jnp.array([
+            self._mj_model.geom(name).id for name in contact_geom_names
         ])
 
         # Task Specific Observation Details:
         self.num_observations = 31 + self.nu + self.filter.observation_size
-        self.num_privileged_observations = self.num_observations + 48 + self.nu + (2 * self.phase_step_lookahead)
+        self.num_privileged_observations = self.num_observations + 48 + self.nu + (2 * self.phase_step_lookahead) + len(self.contact_geom_idx)
         
         # State Observation Mask:
         state_mask = jnp.concatenate([
@@ -174,6 +191,7 @@ class Backflip(base.UnitreeGo2Env):
             jnp.ones(3, dtype=bool),
             jnp.ones(self.phase_step_lookahead, dtype=bool),
             jnp.ones(self.phase_step_lookahead, dtype=bool),
+            jnp.zeros(len(self.contact_geom_idx), dtype=bool),
             jnp.zeros(1, dtype=bool),
         ])
 
@@ -423,6 +441,7 @@ class Backflip(base.UnitreeGo2Env):
                 up_vector,
                 state.info['phase_step'],
             ),
+            # Effort Costs:
             'torque': self._cost_torques(data.actuator_force),
             'action_rate': self._cost_action_rate(action, state.info['previous_action']),
             'acceleration': self._cost_acceleration(
@@ -432,6 +451,13 @@ class Backflip(base.UnitreeGo2Env):
                 data,
                 state.info['phase_step'],
             ),
+            # Landing Regularization Costs:
+            'dof_limit': self._cost_dof_limit(joint_angles),
+            'base_clearance': self._cost_base_clearance(
+                data,
+                state.info['phase_step'],
+            ),
+            # Auxilary Costs:
             'stand_still': self._cost_stand_still(
                 joint_angles,
                 state.info['phase_step'],
@@ -625,6 +651,9 @@ class Backflip(base.UnitreeGo2Env):
         reference_height_horizon = self.height_reference[reference_steps]
         reference_pitch_horizon = self.pitch_reference[reference_steps]
 
+        # Contact Distances:
+        contact_distances = data.geom_xpos[self.contact_geom_idx, 2]
+
         privileged_observation = jnp.concatenate([
             observation,                                                                                
             accelerometer,                                                                              # 3
@@ -640,6 +669,7 @@ class Backflip(base.UnitreeGo2Env):
             data.xfrc_applied[self.base_idx, :3],                                                       # 3
             reference_height_horizon,                                                                   # phase_step_lookahead
             reference_pitch_horizon,                                                                    # phase_step_lookahead
+            contact_distances,                                                                          # len(contact_geom_idx)
             jnp.asarray([
                 state_info['steps_since_previous_disturbance'] >= state_info['steps_until_next_disturbance']
             ]),                                                                                         # 1
@@ -785,14 +815,20 @@ class Backflip(base.UnitreeGo2Env):
 
     def _cost_base_clearance(
         self, 
-        imu_height: jax.Array, 
+        data: mjx.Data,
         phase_step: jax.Array
     ) -> jax.Array:
         phase = phase_step / self.num_phase_steps
         is_landing = jnp.where(phase >= (self.phase_frames['apex'] + 0.2), 1.0, 0.0)
-        clearance_violation = jnp.maximum(0.0, 0.20 - imu_height)
-        return is_landing * jnp.square(clearance_violation)
-    
+        imu_height = data.site_xpos[self.imu_site_idx][2]
+        right_hind_hip_height = data.geom_xpos[self._mj_model.geom('hind_right_hip_collision').id][2]
+        left_hind_hip_height = data.geom_xpos[self._mj_model.geom('hind_left_hip_collision').id][2]
+        base_clearance_violation = jnp.maximum(0.0, 0.20 - imu_height)
+        right_hind_hip_clearance_violation = jnp.maximum(0.0, 0.10 - right_hind_hip_height)
+        left_hind_hip_clearance_violation = jnp.maximum(0.0, 0.10 - left_hind_hip_height)
+        clearance_violation = jnp.square(base_clearance_violation) + jnp.square(right_hind_hip_clearance_violation) + jnp.square(left_hind_hip_clearance_violation)
+        return is_landing * clearance_violation
+
     def _cost_stand_still(
         self,
         joint_angles: jax.Array,

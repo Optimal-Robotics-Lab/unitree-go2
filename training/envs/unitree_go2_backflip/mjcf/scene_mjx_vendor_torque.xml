@@ -25,10 +25,17 @@
     <!-- Control Type -->
     <include file="controllers/torque_control.xml"/>
 
-    <!-- Add Task Specific Contacts -->
+    <!-- Floor Contacts -->
     <include file="contacts/torso_to_floor_contacts.xml"/>
-    <include file="contacts/calf_to_floor_contacts.xml"/>
+    <include file="contacts/front_calf_to_floor_contacts.xml"/>
+    <include file="contacts/hind_calf_to_floor_contacts.xml"/>
     <include file="contacts/hind_thigh_to_floor_contacts.xml"/>
+    <include file="contacts/hind_hip_to_floor_contacts.xml"/>
+
+    <!-- Self Collision -->
+    <include file="contacts/front_leg_self_contacts.xml"/>
+    <include file="contacts/hind_leg_self_contacts.xml"/>
+    <include file="contacts/front_leg_to_hind_leg_contacts.xml"/>
 
     <!-- Add Task Specific Sensors -->
     <include file="sensors/foot_to_floor_force_sensor.xml"/>
@@ -37,12 +44,13 @@
     <include file="sensors/front_calf_to_floor_collision_sensor.xml"/>
     <include file="sensors/hind_calf_to_floor_collision_sensor.xml"/>
     <include file="sensors/hind_thigh_to_floor_collision_sensor.xml"/>
-    <include file="sensors/front_hip_to_floor_collision_sensor.xml"/>
     <include file="sensors/hind_hip_to_floor_collision_sensor.xml"/>
 
-    <!-- Self Collision -->
+    <!-- Self Collision Sensors -->
     <include file="sensors/foot_to_foot_collision_sensor.xml"/>
-    <include file="sensors/hind_foot_to_front_calf_collision_sensor.xml"/>
+    <include file="sensors/front_leg_collision_sensor.xml"/>
+    <include file="sensors/hind_leg_collision_sensor.xml"/>
     <include file="sensors/front_foot_to_hind_calf_collision_sensor.xml"/>
+    <include file="sensors/hind_foot_to_front_calf_collision_sensor.xml"/>
 
 </mujoco>

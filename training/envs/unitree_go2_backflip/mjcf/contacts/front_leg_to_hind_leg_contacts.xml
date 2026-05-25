@@ -1,0 +1,14 @@
+<mujoco>
+    <contact>
+        <pair geom1="front_right_foot_collision" geom2="hind_right_foot_collision" condim="1" friction="0.8"/>
+        <pair geom1="front_right_foot_collision" geom2="hind_right_calf_upper_collision" condim="1" friction="0.8"/>
+        <pair geom1="front_right_foot_collision" geom2="hind_right_calf_lower_collision" condim="1" friction="0.8"/>
+        <pair geom1="hind_right_foot_collision" geom2="front_right_calf_upper_collision" condim="1" friction="0.8"/>
+        <pair geom1="hind_right_foot_collision" geom2="front_right_calf_lower_collision" condim="1" friction="0.8"/>
+        <pair geom1="front_left_foot_collision" geom2="hind_left_foot_collision" condim="1" friction="0.8"/>
+        <pair geom1="front_left_foot_collision" geom2="hind_left_calf_upper_collision" condim="1" friction="0.8"/>
+        <pair geom1="front_left_foot_collision" geom2="hind_left_calf_lower_collision" condim="1" friction="0.8"/>
+        <pair geom1="hind_left_foot_collision" geom2="front_left_calf_upper_collision" condim="1" friction="0.8"/>
+        <pair geom1="hind_left_foot_collision" geom2="front_left_calf_lower_collision" condim="1" friction="0.8"/>
+    </contact>
+</mujoco>
