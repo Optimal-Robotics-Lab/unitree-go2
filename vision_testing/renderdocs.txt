@@ -1,0 +1,172 @@
+================================================================================
+ mujoco.Renderer — Personal Reference
+ Generated from the installed package: mujoco 3.7.0
+ Source file on this machine:
+   ~/Library/Python/3.13/lib/python/site-packages/mujoco/rendering/classic/renderer.py
+================================================================================
+
+WHY THIS FILE EXISTS
+--------------------------------------------------------------------------------
+mujoco.Renderer is NOT documented in the official API reference
+(mujoco.readthedocs.io). It is a Python convenience wrapper that only appears in:
+  * The tutorial notebook:
+      https://colab.research.google.com/github/google-deepmind/mujoco/blob/main/python/tutorial.ipynb
+  * The source file on GitHub:
+      https://github.com/google-deepmind/mujoco/blob/main/python/mujoco/renderer.py
+  * Locally via:  help(mujoco.Renderer)
+So this file captures the real, version-correct API for quick reference.
+
+Rule of thumb for finding any MuJoCo Python helper:
+  - XML modeling + C API (cameras, ipd, resolution, sensors, mjr_render)
+    -> fully on readthedocs (XML reference / API reference).
+  - Python wrappers (Renderer, much of viewer)
+    -> use help(mujoco.X) or inspect.getsourcefile(mujoco.X), not the website.
+
+
+CLASS
+--------------------------------------------------------------------------------
+"Renders MuJoCo scenes."
+
+Renders a model OFFSCREEN to a numpy array. Independent of mujoco.viewer
+(the interactive window). On macOS, offscreen rendering works with plain
+`python3` — it does NOT require `mjpython` (only the interactive viewer does).
+
+
+CONSTRUCTOR
+--------------------------------------------------------------------------------
+Renderer(model, height=240, width=320, max_geom=10000,
+         font_scale=mjtFontScale.mjFONTSCALE_150)
+
+  model      : an MjModel instance.
+  height     : image height in pixels.
+  width      : image width in pixels.
+  max_geom   : max number of geoms renderable in one scene. If None, chosen
+               automatically from the model. Bump it only if a huge scene
+               silently drops geoms.
+  font_scale : font scale for text overlays.
+
+  Raises ValueError if width/height exceed MuJoCo's offscreen framebuffer.
+  (That framebuffer size is set in the model via:
+     model.vis.global_.offwidth / offheight
+   — in this repo base.py sets them to 3840 x 2160, so large captures are fine.)
+
+
+METHODS
+--------------------------------------------------------------------------------
+
+update_scene(data, camera=-1, scene_option=None)
+  Updates the geometry used for rendering from the current sim state.
+  Must be called before render(), and AGAIN after switching render mode.
+    data         : an MjData instance.
+    camera       : int id, str name, or MjvCamera. Default -1 = the free camera.
+    scene_option : optional MjvOption to override default visualization.
+  Raises ValueError if the camera id is out of range or the name doesn't exist.
+
+render(*, out=None) -> np.ndarray
+  Renders the scene to a numpy array. The CONTENT depends on the current mode:
+    * normal (default) : (H, W, 3) uint8  -> RGB  (NOT BGR; for OpenCV do
+                         cv2.cvtColor(img, cv2.COLOR_RGB2BGR) before imwrite)
+    * depth mode       : (H, W)    float32 -> metric depth in METERS
+                         (linear distance from camera; background = large value)
+    * segmentation mode: (H, W, 2) int32  -> [:,:,0]=geom object id,
+                         [:,:,1]=object type. -1 where nothing is hit.
+    out : optional preallocated array to render into (must match expected shape).
+  Raises RuntimeError if called after close().
+
+enable_depth_rendering()
+  Switches render() output to DEPTH. (Internally also turns segmentation OFF —
+  the modes are mutually exclusive.)
+      self._segmentation_rendering = False
+      self._depth_rendering = True
+
+disable_depth_rendering()
+  Switches render() output back to normal RGB.
+      self._depth_rendering = False
+
+enable_segmentation_rendering()
+  Switches render() output to SEGMENTATION (object id / type masks).
+  (Internally also turns depth OFF.)
+      self._segmentation_rendering = True
+      self._depth_rendering = False
+
+disable_segmentation_rendering()
+  Switches render() output back to normal RGB.
+      self._segmentation_rendering = False
+
+close() -> None
+  Frees renderer GL resources. Use directly (renderer.close()) or as a context
+  manager:
+      with mujoco.Renderer(model, H, W) as renderer:
+          ...   # auto-closed on exit
+
+
+PROPERTIES
+--------------------------------------------------------------------------------
+  model    : the MjModel being rendered.
+  scene    : the underlying mjvScene.
+  width    : render width  in pixels.
+  height   : render height in pixels.
+
+
+KEY BEHAVIOR / GOTCHAS
+--------------------------------------------------------------------------------
+1. MODE IS STICKY. enable_depth_rendering() stays on across render() calls until
+   you disable it. Only ONE special mode (RGB | depth | segmentation) is active
+   at a time. Forgetting to disable -> your next "RGB" grab silently returns
+   depth (a valid-looking but wrong array).
+
+2. RE-CALL update_scene AFTER TOGGLING A MODE, before render().
+
+3. You MUST run a forward pass before the first render, or geoms draw at the
+   origin (garbage):
+     * static snapshot  -> mujoco.mj_forward(model, data)  (computes poses,
+                           does NOT advance time)
+     * animated rollout -> mujoco.mj_step(model, data) in a loop
+                           (mj_step ~= mj_forward + integrate one dt)
+
+4. render() REUSES an internal buffer. In a loop, .copy() each frame you keep,
+   or every stored frame ends up identical.
+
+5. Depth is METRIC (meters), already linearized — no znear/zfar unprojection
+   needed. Background/sky comes back large; clip before visualizing, e.g.
+   np.clip(depth, 0, 5).
+
+
+COMMON PATTERNS
+--------------------------------------------------------------------------------
+# --- one static frame -------------------------------------------------------
+renderer = mujoco.Renderer(model, height=480, width=640)
+mujoco.mj_forward(model, data)
+renderer.update_scene(data, camera="wrist_cam")
+rgb = renderer.render()                              # (H,W,3) uint8 RGB
+
+# --- RGB + depth from the same camera ---------------------------------------
+renderer.update_scene(data, camera="wrist_cam")
+rgb = renderer.render()
+renderer.enable_depth_rendering()
+renderer.update_scene(data, camera="wrist_cam")      # re-update after toggle
+depth = renderer.render()                            # (H,W) float32 meters
+renderer.disable_depth_rendering()                   # back to RGB for next time
+
+# --- per-step capture in a sim loop -----------------------------------------
+for step in range(N):
+    mujoco.mj_step(model, data)
+    if step % CAPTURE_EVERY == 0:
+        renderer.update_scene(data, camera="zedm_left_lens")
+        rgb = renderer.render().copy()
+        renderer.enable_depth_rendering()
+        renderer.update_scene(data, camera="zedm_left_lens")
+        depth = renderer.render().copy()
+        renderer.disable_depth_rendering()
+
+# --- save with OpenCV (remember RGB->BGR) -----------------------------------
+import cv2
+cv2.imwrite('rgb.jpg', cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
+
+
+SELF-SERVE INTROSPECTION (always correct for your installed version)
+--------------------------------------------------------------------------------
+  python3 -c "import mujoco; help(mujoco.Renderer)"
+  python3 -c "import mujoco, inspect; print(inspect.getsourcefile(mujoco.Renderer))"
+  python3 -c "import mujoco, inspect; print(inspect.signature(mujoco.Renderer.__init__))"
+================================================================================
