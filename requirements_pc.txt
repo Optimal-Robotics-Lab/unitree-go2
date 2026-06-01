@@ -1,0 +1,9 @@
+jax[cuda12]
+mujoco
+mujoco-mjx
+flax
+optax
+brax
+distrax
+orbax-checkpoint
+wandb
