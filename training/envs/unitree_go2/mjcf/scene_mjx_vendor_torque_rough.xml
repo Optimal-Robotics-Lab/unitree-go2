@@ -24,7 +24,7 @@
     </worldbody>
 
     <!-- Control Type -->
-    <include file="controllers/torque_control.xml"/>
+    <include file="controllers/position_control.xml"/>
 
     <!-- Add Task Specific Contacts -->
     <include file="contacts/walking_task_contacts.xml"/>
