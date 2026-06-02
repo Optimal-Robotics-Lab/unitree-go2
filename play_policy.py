@@ -81,7 +81,7 @@ def main(argv=None):
     )
     filter_state = filter_impl.init()
 
-    scene = 'scene_mjx_vendor_torque.xml'
+    scene = 'scene_mjx_standard_position.xml'
     environment_config = config.EnvironmentConfig(
         filename=scene,
         action_scale=None,

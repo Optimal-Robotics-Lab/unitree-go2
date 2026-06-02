@@ -8,8 +8,6 @@ import time
 
 import jax
 
-jax.config.update("jax_enable_x64", True)
-
 import jax.numpy as jnp
 
 import numpy as np
@@ -30,6 +28,8 @@ import training.statistics as statistics
 import training.algorithms.ppo.agent as agent
 
 from training import checkpoint_utilities
+
+import cv2
 
 os.environ['XLA_FLAGS'] = (
     '--xla_gpu_enable_triton_softmax_fusion=true '
@@ -251,6 +251,9 @@ def main(argv=None):
             f"lat={command_state['lateral']:+.2f} "
             f"rot={command_state['rotation']:+.2f}"
         )
+    
+    renderer = mujoco.Renderer(env._mj_model, height=240, width=424)
+    renderer.enable_depth_rendering()
 
     with mujoco.viewer.launch_passive(env._mj_model, data, key_callback=key_callback) as viewer:
         viewer.cam.trackbodyid = 1
@@ -300,10 +303,37 @@ def main(argv=None):
 
             viewer.sync()
 
+            renderer.update_scene(data, camera="zedm") 
+            depth_array = renderer.render()
+
+            max_visual_depth = 5.0
+            
+            depth_array = np.nan_to_num(
+                depth_array, 
+                nan=max_visual_depth, 
+                posinf=max_visual_depth, 
+                neginf=0.0
+            )
+
+            depth_normalized = np.clip(depth_array, 0, max_visual_depth) / max_visual_depth
+            depth_uint8 = (depth_normalized * 255).astype(np.uint8)
+
+            depth_colored = cv2.applyColorMap(depth_uint8, cv2.COLORMAP_TURBO)
+            cv2.imshow("ZED - Depth", depth_colored)
+
+            # Manage Control Rate and OpenCV Event Loop
             sleep_time = control_rate - (time.time() - step_time)
             if sleep_time > 0:
-                time.sleep(sleep_time)
+                delay_ms = max(1, int(sleep_time * 1000))
+                cv2.waitKey(delay_ms)
+            else:
+                cv2.waitKey(1)
+
+    # Cleanup OpenCV windows when the viewer closes
+    cv2.destroyAllWindows()
 
 
 if __name__ == '__main__':
     app.run(main)
+
+ 
