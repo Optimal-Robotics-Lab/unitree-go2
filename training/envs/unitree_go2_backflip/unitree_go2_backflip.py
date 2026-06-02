@@ -160,6 +160,11 @@ class Backflip(base.UnitreeGo2Env):
             self._mj_model.geom(name).id for name in contact_geom_names
         ])
 
+        self.hip_contact_geom_idx = jnp.array([
+            self._mj_model.geom('hind_right_hip_collision').id,
+            self._mj_model.geom('hind_left_hip_collision').id,
+        ])
+
         # Task Specific Observation Details:
         self.num_observations = 31 + self.nu + self.filter.observation_size
         self.num_privileged_observations = self.num_observations + 48 + self.nu + (2 * self.phase_step_lookahead) + len(self.contact_geom_idx)
@@ -402,12 +407,14 @@ class Backflip(base.UnitreeGo2Env):
         # Termination:
         unwanted_contacts = jnp.concatenate([unwanted_contacts, self_collision_contacts])
         done = self._get_termination(
+            data,
             termination_contacts,
             unwanted_contacts,
             projected_gravity,
             imu_height,
             state.info['phase_step'],
             terminate_on_unwanted_contacts=self.environment_config.terminate_on_unwanted_contacts,
+            terminate_on_extreme_landing_compression=self.environment_config.terminate_on_extreme_landing_compression,
         )
 
         # Rewards:
@@ -526,20 +533,34 @@ class Backflip(base.UnitreeGo2Env):
 
     def _get_termination(
         self,
+        data: mjx.Data,
         termination_contacts: jax.Array,
         unwanted_contacts: jax.Array,
         projected_gravity: jax.Array,
         imu_height: jax.Array,
         phase_step: jax.Array,
         terminate_on_unwanted_contacts: bool = False,
+        terminate_on_extreme_landing_compression: bool = False,
     ) -> jax.Array:
         # Termination Condition:
         done = jnp.any(termination_contacts)
         done |= terminate_on_unwanted_contacts * jnp.any(unwanted_contacts)
 
+        phase = phase_step / self.num_phase_steps
+
         # Terminate Unwanted Contacts during Lift Off:
-        is_liftoff_phase = (phase_step / self.num_phase_steps) <= self.phase_frames['liftoff']
+        is_liftoff_phase = phase <= self.phase_frames['liftoff']
         done |= is_liftoff_phase * jnp.any(unwanted_contacts)
+
+        # Terminate Extreme Landing Compression:
+        is_landing_phase = phase >= (self.phase_frames['apex'] + 0.2)
+        right_hind_hip_height = data.geom_xpos[self.hip_contact_geom_idx[0]][2]
+        left_hind_hip_height = data.geom_xpos[self.hip_contact_geom_idx[1]][2]
+        right_hind_hip_clearance_violation = right_hind_hip_height < 0.11
+        left_hind_hip_clearance_violation = left_hind_hip_height < 0.11
+        done |= terminate_on_extreme_landing_compression & is_landing_phase & (
+            right_hind_hip_clearance_violation | left_hind_hip_clearance_violation
+        )
 
         # Tracking Failure Conditions:
         phase = phase_step / self.num_phase_steps
@@ -824,8 +845,8 @@ class Backflip(base.UnitreeGo2Env):
         right_hind_hip_height = data.geom_xpos[self._mj_model.geom('hind_right_hip_collision').id][2]
         left_hind_hip_height = data.geom_xpos[self._mj_model.geom('hind_left_hip_collision').id][2]
         base_clearance_violation = jnp.maximum(0.0, 0.20 - imu_height)
-        right_hind_hip_clearance_violation = jnp.maximum(0.0, 0.10 - right_hind_hip_height)
-        left_hind_hip_clearance_violation = jnp.maximum(0.0, 0.10 - left_hind_hip_height)
+        right_hind_hip_clearance_violation = jnp.maximum(0.0, 0.18 - right_hind_hip_height)
+        left_hind_hip_clearance_violation = jnp.maximum(0.0, 0.18 - left_hind_hip_height)
         clearance_violation = jnp.square(base_clearance_violation) + jnp.square(right_hind_hip_clearance_violation) + jnp.square(left_hind_hip_clearance_violation)
         return is_landing * clearance_violation
 

@@ -72,6 +72,7 @@ class EnvironmentConfig:
     control_timestep: float = 0.02
     optimizer_timestep: float = 0.004
     terminate_on_unwanted_contacts: bool = False
+    terminate_on_extreme_landing_compression: bool = False
     nconmax: int = 20 * 8192
     naccdmax: int = 0
     njmax: int = 50

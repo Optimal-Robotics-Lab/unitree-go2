@@ -79,7 +79,9 @@ def main(argv=None):
     # training_types = ['baseline', 'finetune']
     # training_types = ['landing-finetune']
 
-    training_types = ['baseline', 'finetune', 'landing-finetune']
+    # training_types = ['baseline', 'finetune', 'landing-finetune']
+    training_types = ['landing-finetune', 'landing-compression-finetune']
+    # training_types = ['baseline', 'finetune', 'landing-finetune', 'landing-compression-finetune']
 
     previous_run = FLAGS.checkpoint
     for training_type in training_types:
@@ -114,6 +116,7 @@ def main(argv=None):
             )
             num_epochs = 40
             terminate_on_unwanted_contacts = False
+            terminate_on_extreme_landing_compression = False
         elif training_type == 'finetune':
             reward_config = config.RewardConfig(
                 # Rewards:
@@ -144,6 +147,7 @@ def main(argv=None):
             )
             num_epochs = 30
             terminate_on_unwanted_contacts = True
+            terminate_on_extreme_landing_compression = False
         elif training_type == 'landing-finetune':
             reward_config = config.RewardConfig(
                 # Rewards:
@@ -174,6 +178,38 @@ def main(argv=None):
             )
             num_epochs = 30
             terminate_on_unwanted_contacts = True
+            terminate_on_extreme_landing_compression = False
+        elif training_type == 'landing-compression-finetune':
+            reward_config = config.RewardConfig(
+                # Rewards:
+                tracking_height_reference=0.75,
+                tracking_pitch_reference=1.5,
+                spin=3.0,
+                brake=0.5,
+                # Orientation Regularization Terms:
+                unwanted_spin=-3.0,
+                pose_regularization=-0.1,
+                orientation_regularization=-0.5,
+                # Energy Regularization Terms:
+                torque=-2e-4,
+                action_rate=-0.01,
+                acceleration=-2.5e-5,
+                mechanical_power=-2e-5,
+                # Landing Regularization Terms:
+                dof_limit=-1.0,
+                base_clearance=-1.0,
+                # Auxilary Terms:
+                stand_still=-1.0,
+                foot_slip=-0.5,
+                termination=-1.0,
+                unwanted_contact=-0.5,
+                # Hyperparameter for exponential kernel:
+                height_sigma=0.05,
+                brake_sigma=1.0,
+            )
+            num_epochs = 30
+            terminate_on_unwanted_contacts = True
+            terminate_on_extreme_landing_compression = True
         else:
             raise ValueError(f'Unknown FLAG.tag prefix: {prefix}')
 
@@ -215,6 +251,7 @@ def main(argv=None):
             optimizer_timestep=0.004,
             impl="warp",
             terminate_on_unwanted_contacts=terminate_on_unwanted_contacts,
+            terminate_on_extreme_landing_compression=terminate_on_extreme_landing_compression,
         )
 
         env = unitree_go2_backflip.Backflip(
