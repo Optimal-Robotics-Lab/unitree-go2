@@ -28,6 +28,7 @@ import training.statistics as statistics
 import training.algorithms.ppo.agent as agent
 
 from training import checkpoint_utilities
+from play_utils import utils
 
 import cv2
 
@@ -102,47 +103,13 @@ def main(argv=None):
     control_rate = 0.02
     n_substeps = int(control_rate / env._mj_model.opt.timestep)
 
-    # Set Motor Model:
-    if env.motor_config is not None:
-        def motor_model(mj_data: mujoco.MjData, target_qpos: npt.NDArray) -> npt.NDArray:
-            # Extract Joint States:
-            joint_positions = mj_data.qpos[7:]
-            joint_velocities = mj_data.qvel[6:]
-
-            # PD Control Law
-            desired_torque = env.motor_config.kp * (target_qpos - joint_positions) \
-                - env.motor_config.kv * joint_velocities
-
-            # Torque Speed Curve:
-            available_torque = env.motor_config.tau_max - (env.motor_config.damping_slope * np.abs(joint_velocities))
-            available_torque = np.maximum(available_torque, 0.0)
-
-            # Apply Torque Limits:
-            torque = np.clip(desired_torque, -available_torque, available_torque)
-
-            return torque
-    else:
-        def motor_model(mj_data: mujoco.MjData, target_qpos: npt.NDArray) -> npt.NDArray:
-            return target_qpos
-
-    # Utility Functions:
-    def simulation_step(env: unitree_go2_joystick.UnitreeGo2Env, data: mujoco.MjData, action: npt.NDArray, n_substeps: int) -> mujoco.MjData:
-        # Compute Target Joint Positions from Action:
-        target_qpos = env.default_pose + action * env.action_scale
-        target_qpos = np.clip(target_qpos, env.joint_lb, env.joint_ub)
-
-        # Run Physics Substeps:
-        for _ in range(n_substeps):
-            ctrl = motor_model(data, target_qpos)
-            data.ctrl = ctrl
-            mujoco.mj_step(env._mj_model, data)
-
-        return data
+    motor_model = utils.set_motor_model(env)
 
     # Set Simulation Step Function:
     step_fn = functools.partial(
-        simulation_step,
+        utils.simulation_step,
         env=env,
+        motor_model=motor_model,
         n_substeps=n_substeps,
     )
 
