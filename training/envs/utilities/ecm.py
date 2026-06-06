@@ -32,7 +32,7 @@ class BaseBatteryConfig:
 
 @struct.dataclass
 class EquivalentCircuitModel:
-    battery_config: BatteryConfig
+    battery_config: BaseBatteryConfig
     dt: float
 
     @struct.dataclass
