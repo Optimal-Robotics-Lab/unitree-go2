@@ -10,8 +10,11 @@ from flax import nnx
 # from training.envs.unitree_go2 import unitree_go2_joystick
 # from training.envs.unitree_go2 import config
 
-from training.envs.unitree_go2_handstand import unitree_go2_handstand
-from training.envs.unitree_go2_handstand import config
+# from training.envs.unitree_go2_handstand import unitree_go2_handstand
+# from training.envs.unitree_go2_handstand import config
+
+from training.envs.unitree_go2_backflip import unitree_go2_backflip
+from training.envs.unitree_go2_backflip import config
 
 import training.envs.utilities.filter as filters
 
@@ -70,7 +73,12 @@ def main(argv=None):
     #     filter_impl=filter_impl,
     # )
 
-    env = unitree_go2_handstand.Handstand(
+    # env = unitree_go2_handstand.Handstand(
+    #     environment_config=environment_config,
+    #     filter_impl=filter_impl,
+    # )
+
+    env = unitree_go2_backflip.Backflip(
         environment_config=environment_config,
         filter_impl=filter_impl,
     )
@@ -91,9 +99,11 @@ def main(argv=None):
     value_kernel_init = [hidden_init] * len(value_layer_size) + [output_init]
     policy_input_normalization = statistics.RunningStatistics(
         reference_input=reference_observation["state"],
+        mask=env.observation_mask["state"],
     )
     value_input_normalization = statistics.RunningStatistics(
         reference_input=reference_observation["privileged_state"],
+        mask=env.observation_mask["privileged_state"],
     )
     model = agent.Agent(
         observation_size=observation_size,
