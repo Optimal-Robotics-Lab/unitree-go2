@@ -269,6 +269,9 @@ class Backflip(base.UnitreeGo2Env):
         # Initialize Filter:
         filter_state = self.filter.init()
 
+        # Initialize Battery State:
+        battery_state = self.battery_model.init() if self.battery_model is not None else None
+
         # Disturbance: (Force Based)
         rng, disturbance_time_key, disturbance_duration_key, disturbance_magnitude_key = jax.random.split(rng, 4)
         time_until_next_disturbance = jax.random.uniform(
@@ -328,6 +331,7 @@ class Backflip(base.UnitreeGo2Env):
             'disturbance_magnitude': disturbance_magnitude,
             'disturbance_direction': jnp.array([0.0, 0.0, 0.0]),
             'filter_state': filter_state,
+            'battery_state': battery_state,
         }
 
         # Observation Initialization:
@@ -366,7 +370,7 @@ class Backflip(base.UnitreeGo2Env):
         state.info['filter_state'] = filter_state
 
         # Physics step:
-        data = self._step(state.data, filtered_action)
+        data, next_battery_state = self._step(state.data, filtered_action, state.info['battery_state'])
 
         imu_height = data.site_xpos[self.imu_site_idx][2]
         joint_angles = data.qpos[7:]
@@ -488,6 +492,7 @@ class Backflip(base.UnitreeGo2Env):
         reward = jnp.clip(sum(rewards.values()) * self.dt, 0.0, 10000.0)
 
         # State management
+        state.info['battery_state'] = next_battery_state
         state.info['previous_action'] = action
         state.info['previous_joint_positions'] = joint_angles
         state.info['previous_velocity'] = joint_velocities

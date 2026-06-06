@@ -6,6 +6,9 @@ import jax.numpy as jnp
 
 import flax.struct
 
+from training.envs.utilities.ecm import BaseBatteryConfig
+from training.envs.utilities.motor_model import BaseMotorConfig
+
 
 @flax.struct.dataclass
 class RewardConfig:
@@ -79,28 +82,48 @@ class EnvironmentConfig:
 
 
 @flax.struct.dataclass
-class MotorConfig:
+class MotorConfig(BaseMotorConfig):
     kp: float = 35.0
     kv: float = 0.5
-    kt: float = 0.63895
     tau_base: float = 23.7
     omega_base: float = 30.0
     reduction_ratio: jax.Array = flax.struct.field(
         default_factory=lambda: jnp.array([1.0, 1.0, 45.43 / 23.7] * 4),
     )
-    # Electrical Components:
-    working_voltage: float = 24.0
-    resistance: float = 0.11
-    regen_efficiency: float = 0.3
+
+    # From the Simplexity Go2 Motor Analysis:
+    internal_gear_ratio: float = 1 + (47.0 / 9.0)
+    kt_q: float = 0.26
+    ke_q: float = 0.26
 
     @property
-    def tau_max(self) -> jax.Array:
-        return self.tau_base * self.reduction_ratio
+    def kt(self) -> float:
+        return self.kt_q * self.internal_gear_ratio
+
+@flax.struct.dataclass
+class BatteryConfig(BaseBatteryConfig):
+    """Battery parameters for the Unitree Go2 BT2-05 pack."""
+    # BMS Parameters:
+    capacity_ah: float = 8.0            # Capacity in ampere-hours (Ah)
+    r_s: float = 0.15                   # Series resistance (Ohms)
+    r_p: float = 0.05                   # Polarization resistance (Ohms)
+    c_p: float = 40.0                   # Polarization capacitance (Farads)
+    i_continuous: float = 30.0          # Continuous safe current (Amps)
+    i_peak_allowed: float = 120.0       # Safe transient peak limit (Amps)
+    regen_current_limit: float = -3.5   # Maximum allowable charging current (Amps)
+    thermal_threshold: float = 500.0    # I^2t trip threshold (A^2s)
+    v_nominal: float = 29.6             # Nominal voltage (V)
+
+    # FOC Parameters:
+    internal_gear_ratio: float = 1 + (47.0 / 9.0)
+    kt_q: float = 0.26
+    ke_q: float = 0.26
+    r_phase: float = 0.66
 
     @property
-    def omega_max(self) -> jax.Array:
-        return self.omega_base / self.reduction_ratio
+    def kt(self) -> float:
+        return self.kt_q * self.internal_gear_ratio
 
     @property
-    def damping_slope(self) -> jax.Array:
-        return self.tau_max / self.omega_max
+    def ke(self) -> float:
+        return self.ke_q * self.internal_gear_ratio

@@ -30,6 +30,9 @@ from training import metrics_utilities
 from training import checkpoint_utilities
 from training import distribution_utilities
 
+from training.envs.utilities.motor_model import PositionControl
+from training.envs.utilities.ecm import EquivalentCircuitModel
+
 os.environ['XLA_FLAGS'] = (
     '--xla_gpu_enable_triton_softmax_fusion=true '
     '--xla_gpu_triton_gemm_any=True '
@@ -80,8 +83,8 @@ def main(argv=None):
     # training_types = ['landing-finetune']
 
     # training_types = ['baseline', 'finetune', 'landing-finetune']
-    training_types = ['landing-finetune', 'landing-compression-finetune']
-    # training_types = ['baseline', 'finetune', 'landing-finetune', 'landing-compression-finetune']
+    # training_types = ['landing-finetune', 'landing-compression-finetune']
+    training_types = ['baseline', 'finetune', 'landing-finetune', 'landing-compression-finetune']
 
     previous_run = FLAGS.checkpoint
     for training_type in training_types:
@@ -225,18 +228,12 @@ def main(argv=None):
         else:
             scene = f'scene_mjx_{prefix}_{suffix}.xml'
 
-        # Setup Environments:
-        motor_config = None
-        if suffix == 'torque':
-            motor_config = config.MotorConfig()
-
         # Setup Filter: (Currently Hardcodes action_dim)
         control_timestep = 0.02
 
         # First Order Filter:
         action_scale = None
         cutoff_frequency = 4.0
-        # cutoff_frequency = 20.0
         tau = 1 / (2 * jnp.pi * cutoff_frequency)
         alpha = control_timestep / (tau + control_timestep)
         filter_impl = filters.FirstOrderFilter(
@@ -244,11 +241,22 @@ def main(argv=None):
             alpha=alpha,
         )
 
+        # Motor Model with Position Controller:
+        motor_config = config.MotorConfig()
+        motor_model = PositionControl(motor_config=motor_config)
+
+        # Battery Model:
+        optimizer_timestep = 0.004
+        battery_config = config.BatteryConfig()
+        battery_model = EquivalentCircuitModel(
+            battery_config=battery_config, dt=optimizer_timestep,
+        )
+
         environment_config = config.EnvironmentConfig(
             filename=scene,
             action_scale=action_scale,
             control_timestep=control_timestep,
-            optimizer_timestep=0.004,
+            optimizer_timestep=optimizer_timestep,
             impl="warp",
             terminate_on_unwanted_contacts=terminate_on_unwanted_contacts,
             terminate_on_extreme_landing_compression=terminate_on_extreme_landing_compression,
@@ -262,6 +270,8 @@ def main(argv=None):
             command_config=command_config,
             motor_config=motor_config,
             model_params=model_params,
+            motor_model=motor_model,
+            battery_model=battery_model,
             filter_impl=filter_impl,
         )
         eval_env = unitree_go2_backflip.Backflip(
@@ -272,6 +282,8 @@ def main(argv=None):
             command_config=command_config,
             motor_config=motor_config,
             model_params=model_params,
+            motor_model=motor_model,
+            battery_model=battery_model,
             filter_impl=filter_impl,
         )
 

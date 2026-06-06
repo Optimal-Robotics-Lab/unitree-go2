@@ -17,10 +17,11 @@ from training.envs.unitree_go2_backflip.config import (
     DisturbanceConfig,
     CommandConfig,
     EnvironmentConfig,
-    MotorConfig,
 )
 
 import training.envs.utilities.filter as filters
+from training.envs.utilities.ecm import EquivalentCircuitModel
+from training.envs.utilities.motor_model import PositionControl
 
 
 class UnitreeGo2Env(mjx_env.MjxEnv):
@@ -32,7 +33,8 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         noise_config: NoiseConfig = NoiseConfig(),
         disturbance_config: DisturbanceConfig = DisturbanceConfig(),
         command_config: CommandConfig = CommandConfig(),
-        motor_config: MotorConfig | None = None,
+        motor_model: PositionControl | None = None,
+        battery_model: EquivalentCircuitModel | None = None,
         filter_impl: filters.Filter = filters.NoFilter(),
         model_parameters: dict | None = None,
         **kwargs,
@@ -91,7 +93,8 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         self.noise_config = noise_config
         self.disturbance_config = disturbance_config
         self.command_config = command_config
-        self.motor_config = motor_config
+        self.motor_model = motor_model
+        self.battery_model = battery_model
         self.filter = filter_impl
 
         # Constants Setup:
@@ -237,46 +240,50 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
 
 
     # Custom Step Method to Capture Acutator Pipeline:
-    def _simulation_step(self, data: mjx.Data, action: jax.Array, n_substeps: int) -> mjx.Data:
+    def _simulation_step(
+        self, data: mjx.Data, action: jax.Array, battery_state: EquivalentCircuitModel.State, n_substeps: int,
+    ) -> tuple[mjx.Data, EquivalentCircuitModel.State]:
 
         # Compute Target Joint Positions from Action:
-        target_qpos = self.default_pose + action * self.action_scale
+        target_qpos = self.default_pose + action * jnp.asarray(self.action_scale)
         target_qpos = jnp.clip(target_qpos, self.joint_lb, self.joint_ub)
 
-        if self.motor_config is not None:
-            def motor_model(mj_data: mjx.Data, target_qpos: jax.Array) -> jax.Array:
-                # Extract Joint States:
-                joint_positions = mj_data.qpos[7:]
-                joint_velocities = mj_data.qvel[6:]
-
-                # PD Control Law
-                desired_torque = self.motor_config.kp * (target_qpos - joint_positions) \
-                    - self.motor_config.kv * joint_velocities
-
-                # Torque Speed Curve:
-                available_torque = self.motor_config.tau_max - (self.motor_config.damping_slope * jnp.abs(joint_velocities))
-                available_torque = jnp.maximum(available_torque, 0.0)
-
-                # Apply Torque Limits:
-                torque = jnp.clip(desired_torque, -available_torque, available_torque)
-
-                return torque
-        else:
-            def motor_model(mj_data: mjx.Data, target_qpos: jax.Array) -> jax.Array:
-                return target_qpos
-
         # Run Physics Substeps:
-        def _substep(carry: mjx.Data, unused_t) -> tuple[mjx.Data, None]:
-            ctrl = motor_model(carry, target_qpos)
-            if self.environment_config.impl == 'warp':
-                ctrl = ctrl.astype(jnp.float32)
-            data = carry.replace(ctrl=ctrl)
-            return mjx.step(self._mjx_model, data), None
+        def _substep(
+            carry: tuple[mjx.Data, EquivalentCircuitModel.State], unused_t
+        ) -> tuple[tuple[mjx.Data, EquivalentCircuitModel.State], None]:
+            mj_data, battery_state = carry
+
+            qpos = mj_data.qpos[7:]
+            qvel = mj_data.qvel[6:]
+            
+            # Compute Desired Torque from Motor Model:
+            desired_joint_torque = self.motor_model.compute_desired_torque(
+                target_qpos, qpos, qvel,
+            )
+
+            # Map to Actuator Space:
+            desired_actuator_torque = self.motor_model.joint_to_actuator_torque(desired_joint_torque)
+            actuator_velocities = self.motor_model.joint_to_actuator_velocity(qvel)
+
+            # Apply Battery Constraints:
+            clipped_actuator_torque, next_battery_state = self.battery_model.apply(
+                desired_actuator_torque, actuator_velocities, battery_state,
+            )
+
+            # Map back to Joint Space:
+            clipped_joint_torque = self.motor_model.actuator_to_joint_torque(clipped_actuator_torque)
+
+            # Apply Motor Constraints:
+            joint_torque = self.motor_model.apply(clipped_joint_torque, qvel)
+
+            data = mj_data.replace(ctrl=joint_torque)
+            return (mjx.step(self._mjx_model, data), next_battery_state), None
 
         # Scan over substeps:
-        data, _ = jax.lax.scan(_substep, data, None, length=n_substeps)
+        (data, battery_state), _ = jax.lax.scan(_substep, (data, battery_state), None, length=n_substeps)
 
-        return data
+        return data, battery_state
 
     # Sensor readings.
     @staticmethod
