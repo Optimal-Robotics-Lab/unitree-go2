@@ -31,7 +31,6 @@ from training import checkpoint_utilities
 from training import distribution_utilities
 
 from training.envs.utilities.motor_model import PositionControl
-from training.envs.utilities.ecm import EquivalentCircuitModel
 
 os.environ['XLA_FLAGS'] = (
     '--xla_gpu_enable_triton_softmax_fusion=true '
@@ -245,13 +244,7 @@ def main(argv=None):
         motor_config = config.MotorConfig()
         motor_model = PositionControl(motor_config=motor_config)
 
-        # Battery Model:
         optimizer_timestep = 0.004
-        battery_config = config.BatteryConfig()
-        battery_model = EquivalentCircuitModel(
-            battery_config=battery_config, dt=optimizer_timestep,
-        )
-
         environment_config = config.EnvironmentConfig(
             filename=scene,
             action_scale=action_scale,
@@ -271,7 +264,6 @@ def main(argv=None):
             motor_config=motor_config,
             model_params=model_params,
             motor_model=motor_model,
-            battery_model=battery_model,
             filter_impl=filter_impl,
         )
         eval_env = unitree_go2_backflip.Backflip(
@@ -283,7 +275,6 @@ def main(argv=None):
             motor_config=motor_config,
             model_params=model_params,
             motor_model=motor_model,
-            battery_model=battery_model,
             filter_impl=filter_impl,
         )
 

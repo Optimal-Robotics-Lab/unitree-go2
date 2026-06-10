@@ -269,9 +269,6 @@ class Backflip(base.UnitreeGo2Env):
         # Initialize Filter:
         filter_state = self.filter.init()
 
-        # Initialize Battery State:
-        battery_state = self.battery_model.init() if self.battery_model is not None else None
-
         # Disturbance: (Force Based)
         rng, disturbance_time_key, disturbance_duration_key, disturbance_magnitude_key = jax.random.split(rng, 4)
         time_until_next_disturbance = jax.random.uniform(
@@ -331,7 +328,11 @@ class Backflip(base.UnitreeGo2Env):
             'disturbance_magnitude': disturbance_magnitude,
             'disturbance_direction': jnp.array([0.0, 0.0, 0.0]),
             'filter_state': filter_state,
-            'battery_state': battery_state,
+            'motor_metrics': {
+                'v_bus': jnp.float32(self.motor_model.motor_config.v_rated),
+                'i_bus': jnp.float32(0.0),
+                'is_voltage_sag': jnp.float32(0.0),
+            }
         }
 
         # Observation Initialization:
@@ -345,6 +346,9 @@ class Backflip(base.UnitreeGo2Env):
         metrics = {}
         for k in state_info['rewards']:
             metrics[k] = state_info['rewards'][k]
+        
+        for k, v in state_info['motor_metrics'].items():
+            metrics[f"motor/{k}"] = v
 
         state = mjx_env.State(
             data=data,
@@ -370,7 +374,7 @@ class Backflip(base.UnitreeGo2Env):
         state.info['filter_state'] = filter_state
 
         # Physics step:
-        data, next_battery_state = self._step(state.data, filtered_action, state.info['battery_state'])
+        data, motor_metrics = self._step(state.data, filtered_action)
 
         imu_height = data.site_xpos[self.imu_site_idx][2]
         joint_angles = data.qpos[7:]
@@ -492,7 +496,6 @@ class Backflip(base.UnitreeGo2Env):
         reward = jnp.clip(sum(rewards.values()) * self.dt, 0.0, 10000.0)
 
         # State management
-        state.info['battery_state'] = next_battery_state
         state.info['previous_action'] = action
         state.info['previous_joint_positions'] = joint_angles
         state.info['previous_velocity'] = joint_velocities
@@ -525,6 +528,15 @@ class Backflip(base.UnitreeGo2Env):
 
         # Proxy Metrics:
         state.metrics.update(state.info['rewards'])
+
+        motor_metrics = {
+            'v_bus': jnp.mean(motor_metrics['v_bus']),
+            'i_bus': jnp.mean(motor_metrics['i_bus']),
+            'is_voltage_sag': jnp.float32(jnp.any(motor_metrics['is_voltage_sag'])),
+        }
+        state.info['motor_metrics'] = motor_metrics
+        for k, v in state.info['motor_metrics'].items():
+            state.metrics[f"motor/{k}"] = v
 
         done = jnp.float64(done) if jax.config.x64_enabled else jnp.float32(done)
 
