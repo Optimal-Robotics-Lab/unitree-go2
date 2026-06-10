@@ -84,10 +84,11 @@ class PositionControl(MotorModel):
         """
 
         # Motor Current Demands:
-        i_motor = jnp.abs(actuator_torque) / self.motor_config.kt
+        clipped_actuator_torque = jnp.clip(actuator_torque, -self.motor_config.tau_base, self.motor_config.tau_base)
+        i_motor = jnp.abs(clipped_actuator_torque) / self.motor_config.kt
 
         # Power Calculation:
-        p_mechanical = jnp.maximum(actuator_torque * actuator_velocities, 0.0)
+        p_mechanical = jnp.maximum(clipped_actuator_torque * actuator_velocities, 0.0)
         p_loss = (i_motor**2) * self.motor_config.r_phase
 
         # Compute Bus Current and Voltage:
@@ -97,12 +98,13 @@ class PositionControl(MotorModel):
 
         # Scale Torque-Speed Curve for Voltage Sag:
         v_ratio = v_bus / self.motor_config.v_rated
-        scaled_omega_base = self.motor_config.omega_base * v_ratio
-        damping_slope = self.motor_config.tau_base / (scaled_omega_base + 1e-6)
+
+        scaled_tau_base = self.motor_config.tau_base * v_ratio
+        damping_slope = self.motor_config.tau_base / (self.motor_config.omega_base + 1e-6)
 
         # Calculate the available torque:
-        available_torque = self.motor_config.tau_base - (damping_slope * jnp.abs(actuator_velocities))
-        available_torque = jnp.clip(available_torque, 0.0, self.motor_config.tau_base)
+        available_torque = scaled_tau_base - (damping_slope * jnp.abs(actuator_velocities))
+        available_torque = jnp.clip(available_torque, 0.0, scaled_tau_base)
 
         # Clip the actuator torque to the available range:
         torque = jnp.clip(actuator_torque, -available_torque, available_torque)
