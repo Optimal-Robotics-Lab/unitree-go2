@@ -28,6 +28,20 @@ class BaseMotorConfig:
     r_series: jtp.ArrayLike
     r_phase: jtp.ArrayLike
 
+    def __post_init__(self):
+        assert jnp.all(self.kp >= 0.0), "Proportional gain must be >= 0."
+        assert jnp.all(self.kv >= 0.0), "Derivative gain must be >= 0."
+        
+        assert jnp.all(self.kt > 0.0), "Torque constant must be > 0."
+        assert jnp.all(self.tau_base > 0.0), "Base stall torque must be > 0."
+        assert jnp.all(self.omega_base > 0.0), "Base no-load speed must be > 0."
+        assert jnp.all(self.reduction_ratio > 0.0), "Reduction ratio must be > 0."
+        
+        assert jnp.all(self.v_rated > 0.0), "Rated voltage must be > 0."
+        assert jnp.all(self.v_nominal > 0.0), "Nominal voltage must be > 0."
+        assert jnp.all(self.r_series >= 0.0), "Series resistance must be >= 0."
+        assert jnp.all(self.r_phase >= 0.0), "Phase resistance must be >= 0."
+
 
 class MotorModel(abc.ABC):
     """Abstract base class for motor models as a PyTree."""
@@ -100,7 +114,7 @@ class PositionControl(MotorModel):
         v_ratio = v_bus / self.motor_config.v_rated
 
         scaled_tau_base = self.motor_config.tau_base * v_ratio
-        damping_slope = self.motor_config.tau_base / (self.motor_config.omega_base + 1e-6)
+        damping_slope = self.motor_config.tau_base / self.motor_config.omega_base
 
         # Calculate the available torque:
         available_torque = scaled_tau_base - (damping_slope * jnp.abs(actuator_velocities))
