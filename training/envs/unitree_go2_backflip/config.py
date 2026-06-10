@@ -94,5 +94,5 @@ class MotorConfig(BaseMotorConfig):
 
     v_nominal: float = 29.6
     v_rated: float = 24.0
-    r_phase: float = 0.66 * 1.5
+    r_phase: float = 0.22 * 1.5
     r_series: float = 0.039
