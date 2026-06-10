@@ -29,18 +29,17 @@ class BaseMotorConfig:
     r_phase: jtp.ArrayLike
 
     def __post_init__(self):
-        assert jnp.all(self.kp >= 0.0), "Proportional gain must be >= 0."
-        assert jnp.all(self.kv >= 0.0), "Derivative gain must be >= 0."
-        
-        assert jnp.all(self.kt > 0.0), "Torque constant must be > 0."
-        assert jnp.all(self.tau_base > 0.0), "Base stall torque must be > 0."
-        assert jnp.all(self.omega_base > 0.0), "Base no-load speed must be > 0."
-        assert jnp.all(self.reduction_ratio > 0.0), "Reduction ratio must be > 0."
-        
-        assert jnp.all(self.v_rated > 0.0), "Rated voltage must be > 0."
-        assert jnp.all(self.v_nominal > 0.0), "Nominal voltage must be > 0."
-        assert jnp.all(self.r_series >= 0.0), "Series resistance must be >= 0."
-        assert jnp.all(self.r_phase >= 0.0), "Phase resistance must be >= 0."
+        assert bool(jnp.all(self.kp >= 0.0)), "Proportional gain must be >= 0."
+        assert bool(jnp.all(self.kv >= 0.0)), "Derivative gain must be >= 0."
+        assert bool(jnp.all(self.kt > 0.0)), "Torque constant must be > 0."
+        assert bool(jnp.all(self.tau_base > 0.0)), "Base stall torque must be > 0."
+        assert bool(jnp.all(self.omega_base > 0.0)), "Base no-load speed must be > 0."
+        assert bool(jnp.all(self.reduction_ratio > 0.0)), "Reduction ratio must be > 0."
+        assert bool(jnp.all(self.v_rated > 0.0)), "Rated voltage must be > 0."
+        assert bool(jnp.all(self.v_nominal >= self.v_rated)), \
+            "Nominal voltage must be >= rated voltage."
+        assert bool(jnp.all(self.r_series >= 0.0)), "Series resistance must be >= 0."
+        assert bool(jnp.all(self.r_phase >= 0.0)), "Phase resistance must be >= 0."
 
 
 class MotorModel(abc.ABC):
@@ -108,7 +107,7 @@ class PositionControl(MotorModel):
         # Compute Bus Current and Voltage:
         i_bus = jnp.sum(p_mechanical + p_loss) / self.motor_config.v_nominal
         v_bus = self.motor_config.v_nominal - (i_bus * self.motor_config.r_series)
-        v_bus = jnp.minimum(v_bus, self.motor_config.v_rated)
+        v_bus = jnp.clip(v_bus, 0.0, self.motor_config.v_rated)
 
         # Scale Torque-Speed Curve for Voltage Sag:
         v_ratio = v_bus / self.motor_config.v_rated
