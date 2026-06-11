@@ -64,14 +64,14 @@ def main(argv=None):
         raise ValueError(f'Unknown FLAG.tag suffix: {suffix}')
 
     # Rehydrate Model from Parameter Checkpoint:
-    model_params = None
+    model_parameters = None
     if FLAGS.parameter_checkpoint is not None:
         parameter_checkpoint_path = Path(FLAGS.parameter_checkpoint) / 'regressed_params.pkl'
         with open(parameter_checkpoint_path, 'rb') as f:
             params = pickle.load(f)
 
         # Get Regressed Parameters:
-        model_params = {
+        model_parameters = {
             k: v
             for k, v in params.items()
             if not k.startswith('initial_')
@@ -261,17 +261,18 @@ def main(argv=None):
             noise_config=noise_config,
             disturbance_config=disturbance_config,
             command_config=command_config,
-            model_params=model_params,
+            model_parameters=model_parameters,
             motor_model=motor_model,
             filter_impl=filter_impl,
         )
+
         eval_env = unitree_go2_backflip.Backflip(
             reward_config=reward_config,
             environment_config=environment_config,
             noise_config=noise_config,
             disturbance_config=disturbance_config,
             command_config=command_config,
-            model_params=model_params,
+            model_parameters=model_parameters,
             motor_model=motor_model,
             filter_impl=filter_impl,
         )
@@ -389,7 +390,7 @@ def main(argv=None):
                 'environment_config': environment_config,
                 'noise_config': noise_config,
                 'disturbance_config': disturbance_config,
-                'model_params': model_params,
+                'model_parameters': model_parameters,
                 'optimizer_config': sanitized_optimizer_config,
             },
         )

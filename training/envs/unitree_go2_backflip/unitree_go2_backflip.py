@@ -52,6 +52,10 @@ class Backflip(base.UnitreeGo2Env):
             **kwargs,
         )
 
+        # Maybe this should be in the base. TODO: rework the architecture.
+        if 'model_parameters' in kwargs is None:
+            raise ValueError("model_parameters must be provided as a keyword argument.")
+        
         # Task Specific Constraints:
         if self.command_config.command_frequency[0] < 3.0:
             raise ValueError("Minimum command frequency must be at least 3.0 seconds for backflip environment.")

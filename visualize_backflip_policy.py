@@ -104,7 +104,7 @@ def main(argv=None):
         environment_config=environment_config,
         noise_config=noise_config,
         disturbance_config=disturbance_config,
-        model_params=model_params,
+        model_parameters=model_params,
         motor_model=motor_model,
         filter_impl=filter_impl,
     )
