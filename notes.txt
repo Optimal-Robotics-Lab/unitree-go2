@@ -5,3 +5,7 @@ for torque on mac: mjpython custom_play_policy.py --c=checkpoints/eternal-lake-2
 for torque on linux: python3 custom_play_policy.py --c=checkpoints/eternal-lake-24 --p=regression/checkpoints/hardy-sound-81
 
 python -m mujoco_scenes.generate --freq-rough 2 --rough-amplitude 0.5 --output training/envs/unitree_go2/assets patch_hfield.png
+
+
+-- in Hmap func:
+    the min_h/max_h range in live_heightmap may need tuning to match the actual height values coming out.

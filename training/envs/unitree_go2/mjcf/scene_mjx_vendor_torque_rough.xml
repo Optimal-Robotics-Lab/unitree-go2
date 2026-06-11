@@ -14,7 +14,7 @@
         <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
             markrgb="0.8 0.8 0.8" width="300" height="300"/>
         <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>
-        <hfield name="hfield" file="../assets/static_hfield.png" size="10 10 .05 0.1"/>
+        <hfield name="hfield" file="../assets/hfield.png" size="10 10 .05 0.1"/>
     </asset>
 
     <worldbody>
@@ -24,7 +24,7 @@
     </worldbody>
 
     <!-- Control Type -->
-    <include file="controllers/position_control.xml"/>
+    <include file="controllers/torque_control.xml"/>
 
     <!-- Add Task Specific Contacts -->
     <include file="contacts/walking_task_contacts.xml"/>
@@ -36,4 +36,5 @@
     <include file="sensors/front_calf_to_floor_collision_sensor.xml"/>
     <include file="sensors/hind_calf_to_floor_collision_sensor.xml"/>
     <!-- include the rangefinders here when needed; for now using native camera tag outputs -->
+    <include file ="sensors/cam_sensors.xml"/>
 </mujoco>

@@ -104,7 +104,9 @@
 			<geom name="right_torso_collision" class="go2/collision/torso/right"/>
 			<site name="imu" pos="-0.02557 0 0.04232"/>
 			<geom type="mesh" mesh="zedm_mesh"  euler="1.5708 0 0" contype="0" conaffinity="0" group="2" material="black"/>
-			<camera name="zedm"  pos="0.329 -0.023 0" xyaxes="0 -1 0 0.5 0 0.866" fovy="53" resolution="6 6"/>
+			<camera name="zedm"  pos="0.329 -0.043 0" xyaxes="0 -1 0 0.5 0 0.866" resolution="10 10" output="depth"/>
+			<site name="zedm_site" pos="0.329 0.023 0" xyaxes="0 -1 0 0.5 0 0.866"/>
+
 			<site name="vicon_marker" pos="0.22 0 0.095" material="black"/>
 			<body name="front_right_hip" pos="0.1934 -0.0465 0">
 				<inertial pos="-0.0054 -0.00194 -0.000105" quat="0.498237 0.505462 0.499245 0.497014"

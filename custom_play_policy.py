@@ -56,7 +56,7 @@ def main(argv=None):
     )
     filter_state = filter_impl.init()
 
-    scene = 'scene_mjx_vendor_torque_rough.xml'
+    scene = 'scene_mjx_vendor_torque_stairs.xml'
     environment_config = config.EnvironmentConfig(
         filename=scene,
         action_scale=None,
@@ -73,7 +73,7 @@ def main(argv=None):
     )
 
     data = mujoco.MjData(env._mj_model)
-    mujoco.mj_resetDataKeyframe(env._mj_model, data, 0)
+    mujoco.mj_resetDataKeyframe(env._mj_model, data, 2)
     control_rate = 0.02
     n_substeps = int(control_rate / env._mj_model.opt.timestep)
 
@@ -223,11 +223,12 @@ def main(argv=None):
             )
 
             utils.live_depth(depth_array, max_visual_depth, control_rate, step_time)
+            hmap = utils.heightmap(env._mj_model, data, depth_array)
+            utils.live_heightmap(hmap, -0.5, 1.0)
+
 
     utils.destroy_depth_windows()
 
 
 if __name__ == '__main__':
     app.run(main)
-
- 

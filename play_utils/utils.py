@@ -134,7 +134,45 @@ def live_depth(depth_array: np.ndarray, max_visual_depth: float, control_rate: f
     else:
         cv2.waitKey(1)
 
+def live_heightmap(heightmap: np.ndarray, min_h: float = -0.5, max_h: float = 1.0) -> None:
+    normalized = np.clip((heightmap - min_h) / (max_h - min_h), 0, 1)
+    colored = cv2.applyColorMap((normalized * 255).astype(np.uint8), cv2.COLORMAP_TURBO)
+    cv2.imshow("ZED - Heightmap", colored)
+    cv2.waitKey(1)
+
 # Utility function to close windows after loop ends.
 def destroy_depth_windows() -> None:
     cv2.destroyAllWindows()
 
+def get_sensor_data(model: mujoco.MjModel, data: mujoco.MjData, sensor_name: str) -> jax.Array:
+        """Gets sensor data given sensor name."""
+        sensor_id = model.sensor(sensor_name).id
+        sensor_adr = model.sensor_adr[sensor_id]
+        sensor_dim = model.sensor_dim[sensor_id]
+        return data.sensordata[sensor_adr: sensor_adr + sensor_dim]    
+
+
+def heightmap(model: mujoco.MjModel, data: mujoco.MjData, depth_array: np.ndarray) -> np.ndarray:
+    cam_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "zedm")
+    H, W = 240, 424
+    intrinsic = model.cam_intrinsic[cam_id]
+
+    if intrinsic.any():
+        fx, fy, cx, cy = intrinsic
+    else:
+        fovy_rad = np.deg2rad(model.cam_fovy[cam_id])
+        fy = (H / 2) / np.tan(fovy_rad / 2)
+        fx = fy
+        cx, cy = W / 2, H / 2
+
+    pos  = data.cam_xpos[cam_id]
+    xmat = data.cam_xmat[cam_id].reshape(3, 3)
+
+    u, v = np.meshgrid(np.arange(W), np.arange(H))
+    X_cam = (u - cx) * depth_array / fx
+    Y_cam = (v - cy) * depth_array / fy
+    Z_cam = -depth_array  # MuJoCo camera looks along -Z
+
+    pts_cam = np.stack([X_cam, Y_cam, Z_cam], axis=-1)           # (H, W, 3)
+    pts_world = pos + (xmat.T @ pts_cam[..., None]).squeeze(-1)   # (H, W, 3)
+    return pts_world[..., 2]                                       # (H, W) heights

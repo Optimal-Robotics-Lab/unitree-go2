@@ -1,5 +1,6 @@
 <mujoco>
     <sensor>
-        <rangefinder name="left_depth_cam" camera="zedm" data="dist point depth"/>        
+        <rangefinder name="zed_rangefinder" camera="zedm" data=" point "/>
+        <!--camprojection name ="zed_cam_projection" camera="zedm" site="zedm_site" -->
     </sensor>
 </mujoco>
