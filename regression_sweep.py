@@ -38,8 +38,8 @@ def generate_experiments(keys, min_size=2, max_size=None):
 
 def main(argv):
     # Create all combinations of the keys:
-    keys = ["dof_frictionloss", "dof_damping", "dof_armature"]
-    experiments = generate_experiments(keys, min_size=1, max_size=len(keys))
+    keys = ["dof_frictionloss", "dof_damping", "dof_armature", "log_cholesky_inertia"]
+    experiments = generate_experiments(keys, min_size=4, max_size=len(keys))
 
 
     datasets = flags.FLAGS.datasets
@@ -53,6 +53,7 @@ def main(argv):
             config = get_default_config()
 
             config.training.seed = flags.FLAGS.seed
+            config.training.num_epochs = 20
 
             config.loss.type = 'mse'
 

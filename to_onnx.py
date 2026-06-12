@@ -15,6 +15,7 @@ from flax import nnx
 
 from training.envs.unitree_go2_backflip import unitree_go2_backflip
 from training.envs.unitree_go2_backflip import config
+from training.envs.utilities.motor_model import PositionControl
 
 import training.envs.utilities.filter as filters
 
@@ -61,6 +62,9 @@ def main(argv=None):
         alpha=alpha,
     )
 
+    motor_config = config.MotorConfig()
+    motor_model = PositionControl(motor_config=motor_config)
+
     environment_config = config.EnvironmentConfig(
         filename=scene,
         action_scale=None,
@@ -80,6 +84,7 @@ def main(argv=None):
 
     env = unitree_go2_backflip.Backflip(
         environment_config=environment_config,
+        motor_model=motor_model,
         filter_impl=filter_impl,
     )
 

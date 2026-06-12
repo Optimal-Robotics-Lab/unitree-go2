@@ -16,6 +16,7 @@ import wandb
 from regression.utilities.constants import JOINT_NAMES
 from regression.utilities.factories import get_objective_fn
 from regression.utilities.mjx_utilities import init_function, step_function
+from regression.utilities.model_utilities import log_cholesky_to_mujoco
 
 
 def _group_joints_by_leg(joint_names: List[str]) -> Dict[str, List[int]]:
@@ -177,10 +178,10 @@ def evaluate(
     optimized_params: Dict[str, jax.Array],
     dataset: Dict[str, jax.Array],
     config: ConfigDict,
+    regression_spec: Dict[str, Any],
     wandb_run: Any,
 ):  
     # Get Config Settings:
-    regression_spec = config.regression.to_dict()
     n_substeps = int(config.physics.control_rate / config.physics.timestep)
     objective_metric = get_objective_fn(config.loss.type)
     objective_weights = config.loss.weights.to_dict()
@@ -206,7 +207,14 @@ def evaluate(
         for name, value in params_dict.items():
             spec = regression_spec[name]
             field = spec['field']
-            if 'column' in spec:
+            if field == 'log_cholesky_inertia':
+                body_ids = spec['body_ids']
+                b_mass, b_ipos, b_inertia, b_iquat = jax.vmap(log_cholesky_to_mujoco)(value)
+                replace_kwargs['body_mass'] = mjx_model_static.body_mass.at[body_ids].set(b_mass)
+                replace_kwargs['body_ipos'] = mjx_model_static.body_ipos.at[body_ids, :].set(b_ipos)
+                replace_kwargs['body_inertia'] = mjx_model_static.body_inertia.at[body_ids, :].set(b_inertia)
+                replace_kwargs['body_iquat'] = mjx_model_static.body_iquat.at[body_ids, :].set(b_iquat)
+            elif 'column' in spec:
                 col_idx = spec['column']
                 original_array = getattr(mjx_model_static, field)
                 new_array = original_array.at[:, col_idx].set(value)

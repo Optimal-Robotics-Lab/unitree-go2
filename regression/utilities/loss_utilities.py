@@ -4,6 +4,7 @@ import jax
 
 from mujoco import mjx
 
+from regression.utilities.model_utilities import log_cholesky_to_mujoco
 from regression.utilities.typedefs import Dataset, ObjectiveFunction
 from regression.utilities.decorators import force_static_args
 
@@ -32,11 +33,20 @@ def loss_function(
     for name, value in params.items():
         spec = regression_spec[name]
         field = spec['field']
-        if 'column' in spec:
+        if field == 'log_cholesky_inertia':
+            body_ids = spec['body_ids']
+            b_mass, b_ipos, b_inertia, b_iquat = jax.vmap(log_cholesky_to_mujoco)(value)
+            replace_kwargs['body_mass'] = model_static.body_mass.at[body_ids].set(b_mass)
+            replace_kwargs['body_ipos'] = model_static.body_ipos.at[body_ids, :].set(b_ipos)
+            replace_kwargs['body_inertia'] = model_static.body_inertia.at[body_ids, :].set(b_inertia)
+            replace_kwargs['body_iquat'] = model_static.body_iquat.at[body_ids, :].set(b_iquat)
+
+        elif 'column' in spec:
             col_idx = spec['column']
             original_array = getattr(model_static, field)
             new_array = original_array.at[:, col_idx].set(value)
             replace_kwargs[field] = new_array
+
         else:
             replace_kwargs[field] = value
 

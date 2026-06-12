@@ -60,6 +60,17 @@ def get_default_config():
         'field': 'dof_armature', 'bounds': (1e-4, 1e2)
     })
 
+    config.regression.log_cholesky_inertia = ConfigDict({
+        'field': 'log_cholesky_inertia',
+        'body_names': [
+            'front_right_hip', 'front_right_thigh', 'front_right_calf',
+            'front_left_hip', 'front_left_thigh', 'front_left_calf',
+            'hind_right_hip', 'hind_right_thigh', 'hind_right_calf',
+            'hind_left_hip', 'hind_left_thigh', 'hind_left_calf',
+        ],
+        'bounds': None
+    })
+
     # Example of possible additional parameters to regress:
     # config.regression.qpos0 = ConfigDict({
     #     'field': 'qpos0', 'bounds': None

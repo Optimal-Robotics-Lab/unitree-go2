@@ -21,6 +21,8 @@ from mujoco import mjx
 
 from ml_collections import config_flags, ConfigDict
 
+from regression.utilities import model_utilities
+
 from regression.utilities.config import get_default_config
 from regression.utilities.typedefs import Dataset, TrainState
 from regression.utilities.constants import JOINT_NAMES
@@ -31,7 +33,6 @@ from regression.utilities.loss_utilities import loss_function
 from regression.utilities.mjx_utilities import init_function, step_function
 from regression.utilities.evaluation import evaluate
 
-jax.config.update('jax_enable_x64', True)
 
 _CONFIG = config_flags.DEFINE_config_dict('config', get_default_config())
 
@@ -108,10 +109,24 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
     regression_spec = config.regression.to_dict()
 
     for name, spec in regression_spec.items():
-        val = getattr(mjx_model_static, spec['field'])
-        if 'column' in spec:
-            val = val[:, spec['column']]
-        params[name] = val
+        if spec['field'] == 'log_cholesky_inertia':
+            body_ids = []
+            thetas = []
+            for b_name in spec['body_names']:
+                b_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, b_name)
+                if b_id == -1:
+                    raise ValueError(f"Body '{b_name}' not found in model.")
+                
+                body_ids.append(b_id)
+                thetas.append(model_utilities.get_nominal_inertia_parameters(mj_model, b_id))
+            
+            params[name] = jnp.array(thetas)
+            spec['body_ids'] = jnp.array(body_ids, dtype=jnp.int32)
+        else:
+            val = getattr(mjx_model_static, spec['field'])
+            if 'column' in spec:
+                val = val[:, spec['column']]
+            params[name] = val
 
     # Initialize Optimizer and State:
     initial_params = params.copy()
@@ -215,27 +230,51 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
             'loss': avg_loss,
             'wall_time': time.time() - wallclock,
         }
+        
+        theta_names = ['alpha', 'd1', 'd2', 'd3', 's12', 's23', 's13', 't1', 't2', 't3']
+
         for k, v in current_params.items():
-            for i, name in enumerate(JOINT_NAMES):
-                log_dict[f'params/{k}/{name}'] = float(v[i])
+            spec = regression_spec[k]
+            
+            if k == 'log_cholesky_inertia':
+                # v has shape (N_bodies, 10)
+                body_names = spec['body_names']
+                for i, b_name in enumerate(body_names):
+                    for j, t_name in enumerate(theta_names):
+                        log_dict[f'params/{k}/{b_name}/{t_name}'] = float(v[i, j])
+            else:
+                # v has shape (N_joints,)
+                for i, name in enumerate(JOINT_NAMES):
+                    if i < len(v):
+                        log_dict[f'params/{k}/{name}'] = float(v[i])
 
         wandb.log(log_dict)
 
     # Save Initial / Regressed Parameters and Loss History:
-    output_params = {}
+    output_params_dict = {}
     for k, v in current_params.items():
-        output_params[f'{k}'] = np.array(v)
+        output_params_dict[f'{k}'] = np.array(v)
 
+    initial_params_dict = {}
     for k, v in initial_params.items():
-        output_params[f'initial_{k}'] = np.array(v)
+        initial_params_dict[f'initial_{k}'] = np.array(v)
 
     loss_history = np.array(loss_history)
 
     # Make Output Directory and Save Regressed Parameters, Loss History, and Config:
     output_directory = directory / 'checkpoints' / wand_run.name
     output_directory.mkdir(parents=True, exist_ok=True)
-    with open(output_directory / 'regressed_params.pkl', 'wb') as file:
-        pickle.dump(output_params, file)
+
+    checkpoint_payload = {
+        'parameters': output_params_dict,
+        'spec': regression_spec
+    }
+
+    with open(output_directory / 'checkpoint.pkl', 'wb') as file:
+        pickle.dump(checkpoint_payload, file)
+
+    with open(output_directory / 'initial_parameters.pkl', 'wb') as file:
+        pickle.dump(initial_params_dict, file)
 
     with open(output_directory / 'loss_history.pkl', 'wb') as file:
         pickle.dump(loss_history, file)
@@ -254,6 +293,7 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
         current_params,
         evaluation_data_dict,
         config,
+        regression_spec,
         wand_run,
     )
 

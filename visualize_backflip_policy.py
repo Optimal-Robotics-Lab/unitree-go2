@@ -46,7 +46,7 @@ logging.set_verbosity(logging.FATAL)
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string(
-    'parameter_checkpoint', None, 'Parameter checkpoint path to load.', short_name='p', required=True,
+    'parameter_checkpoint', None, 'Parameter checkpoint path to load.', short_name='p', required=False,
 )
 flags.DEFINE_string(
     'checkpoint', None, 'Checkpoint path to load.', short_name='c', required=True,
@@ -55,14 +55,14 @@ flags.DEFINE_string(
 
 def main(argv=None):
     # Rehydrate Model from Parameter Checkpoint:
-    model_params = None
+    model_parameters = None
     if FLAGS.parameter_checkpoint is not None:
         parameter_checkpoint_path = Path(FLAGS.parameter_checkpoint) / 'regressed_params.pkl'
         with open(parameter_checkpoint_path, 'rb') as f:
             params = pickle.load(f)
 
         # Get Regressed Parameters:
-        model_params = {
+        model_parameters = {
             k: v
             for k, v in params.items()
             if not k.startswith('initial_')
@@ -104,7 +104,7 @@ def main(argv=None):
         environment_config=environment_config,
         noise_config=noise_config,
         disturbance_config=disturbance_config,
-        model_parameters=model_params,
+        model_parameters=model_parameters,
         motor_model=motor_model,
         filter_impl=filter_impl,
     )
@@ -192,7 +192,13 @@ def main(argv=None):
         else:
             action = jnp.zeros(action_size)
         state = env.step(state, action)
-        return (state, key), ((state.data.qpos, state.data.xpos, state.data.xquat), state)
+        
+        # Get Sensor Data:
+        gyroscope = env.get_gyro(state.data)
+        accelerometer = env.get_accelerometer(state.data)
+        projected_gravity = env.get_gravity(state.data)
+
+        return (state, key), ((state.data.qpos, state.data.xpos, state.data.xquat), (gyroscope, accelerometer, projected_gravity), state)
 
     # Run Stabilization Steps:
     stabilization_steps = 100
@@ -215,7 +221,7 @@ def main(argv=None):
     )
     stable_state.info['phase_step'] = jnp.int32(0)
     
-    (final_state, _), (visualization_states, states) = jax.lax.scan(
+    (final_state, _), (visualization_states, sensor_states, states) = jax.lax.scan(
         policy_loop,
         (stable_state, key),
         None,
@@ -233,6 +239,11 @@ def main(argv=None):
     joint_velocities = states.data.qvel[:, 6:]
     actuator_forces = states.data.actuator_force
 
+    # Extract IMU Data:
+    gyroscope = sensor_states[0]
+    accelerometer = sensor_states[1]
+    projected_gravity = sensor_states[2]
+
     # Extract Bus Data:
     bus_voltage = states.info['motor_metrics']['v_bus']
     bus_current = states.info['motor_metrics']['i_bus']
@@ -242,6 +253,9 @@ def main(argv=None):
     joint_positions = np.asarray(joint_positions)
     joint_velocities = np.asarray(joint_velocities)
     actuator_forces = np.asarray(actuator_forces)
+    gyroscope = np.asarray(gyroscope)
+    accelerometer = np.asarray(accelerometer)
+    projected_gravity = np.asarray(projected_gravity)
     bus_voltage = np.asarray(bus_voltage)
     bus_current = np.asarray(bus_current)
     is_voltage_sag = np.asarray(is_voltage_sag)
@@ -251,6 +265,9 @@ def main(argv=None):
         'joint_positions': joint_positions,
         'joint_velocities': joint_velocities,
         'actuator_forces': actuator_forces,
+        'gyroscope': gyroscope,
+        'accelerometer': accelerometer,
+        'projected_gravity': projected_gravity,
         'bus_voltage': bus_voltage,
         'bus_current': bus_current,
         'is_voltage_sag': is_voltage_sag,
