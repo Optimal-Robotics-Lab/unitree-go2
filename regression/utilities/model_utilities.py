@@ -155,22 +155,23 @@ def log_cholesky_inertia_matrix(theta: jax.Array) -> jax.Array:
     return U @ U.T
 
 
-def log_cholesky_to_mujoco(theta: dict[str, float]) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
+def log_cholesky_to_mujoco(theta: dict[str, float], theta_nominal: dict[str, float] | None = None) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
     """
     Convert a vector of 10 parameters into a log-cholesky inertia matrix representation.
 
     Input:
         theta: [alpha, d1, d2, d3, s12, s23, s13, t1, t2, t3]
+        theta_nominal: Nominal parameters for initialization
 
     Output:
         intertial matrix
     
     """
-
+    
     inertia = log_cholesky_inertia_matrix(theta)
 
     # Extract mass and center of mass:
-    body_mass = inertia[3, 3]
+    body_mass = jnp.maximum(inertia[3, 3], 1e-6)
     h = inertia[0:3, 3]
     body_ipos = h / body_mass
 
@@ -180,7 +181,28 @@ def log_cholesky_to_mujoco(theta: dict[str, float]) -> tuple[jax.Array, jax.Arra
     inertia_com = inertia_origin - body_mass * (jnp.dot(body_ipos, body_ipos) * jnp.eye(3) - jnp.outer(body_ipos, body_ipos))
     
     # Compute body inertia and orientation:
-    body_inertia, rotation_matrix = jnp.linalg.eigh(inertia_com + 1e-6 * jnp.eye(3))
+    if theta_nominal is not None:
+        theta_nominal_frozen = jax.lax.stop_gradient(theta_nominal)
+        inertia_nominal = log_cholesky_inertia_matrix(theta_nominal_frozen)
+        body_mass_nominal = inertia_nominal[3, 3]
+        ipos_nominal = inertia_nominal[0:3, 3] / body_mass_nominal
+        sigma_nominal = inertia_nominal[0:3, 0:3]
+        i_origin_nominal = jnp.linalg.trace(sigma_nominal) * jnp.eye(3) - sigma_nominal
+        i_com_nominal = i_origin_nominal - body_mass_nominal * (jnp.dot(ipos_nominal, ipos_nominal) * jnp.eye(3) - jnp.outer(ipos_nominal, ipos_nominal))
+        regulariziation = 1e-5 * i_com_nominal
+    else:
+        regulariziation = jnp.diag(jnp.array([1e-6, 2e-6, 3e-6]))
+
+    body_inertia, rotation_matrix = jnp.linalg.eigh(inertia_com + regulariziation)
+    
+    # Remap to MuJoCo's convention:
+    body_inertia = body_inertia[::-1]
+    rotation_matrix = rotation_matrix[:, ::-1]
+
+    det = jnp.linalg.det(rotation_matrix)
+    parity = jax.lax.stop_gradient(jnp.where(det < 0.0, -1.0, 1.0))
+    rotation_matrix = rotation_matrix.at[:, 2].multiply(parity)
+    
     body_iquat = matrix_to_quaternion(rotation_matrix)
 
     return body_mass, body_ipos, body_inertia, body_iquat

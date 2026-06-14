@@ -63,7 +63,16 @@ def log_cholesky_to_mujoco(theta: dict[str, float]) -> tuple[jax.Array, jax.Arra
     inertia_com = inertia_origin - body_mass * (jnp.dot(body_ipos, body_ipos) * jnp.eye(3) - jnp.outer(body_ipos, body_ipos))
     
     # Compute body inertia and orientation:
-    body_inertia, rotation_matrix = jnp.linalg.eigh(inertia_com + 1e-6 * jnp.eye(3))
+    asymmetric_noise = jnp.diag(jnp.array([1e-6, 2e-6, 3e-6]))
+    body_inertia, rotation_matrix = jnp.linalg.eigh(inertia_com + asymmetric_noise)
+    
+    # Remap to MuJoCo's convention:
+    # body_inertia = body_inertia[::-1]
+    # rotation_matrix = rotation_matrix[:, ::-1]
+
+    det = jnp.linalg.det(rotation_matrix)
+    rotation_matrix = rotation_matrix.at[:, 2].multiply(det)
+    
     body_iquat = matrix_to_quaternion(rotation_matrix)
 
     return body_mass, body_ipos, body_inertia, body_iquat

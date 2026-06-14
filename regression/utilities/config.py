@@ -1,5 +1,7 @@
 from ml_collections import ConfigDict
 
+import jax.numpy as jnp
+
 
 def get_default_config():
     config = ConfigDict()
@@ -42,6 +44,12 @@ def get_default_config():
         'velocity': 1.0,
         'actuator_force': 1.0,
     })
+    config.loss.regularization_weights = ConfigDict({
+        # 'dof_frictionloss': 0.0,
+        # 'dof_damping': 0.0,
+        # 'dof_armature': 0.0,
+        'log_cholesky_inertia': 1e-3,
+    })
 
     # Loss Function Type: rmse, mse, mae, huber
     config.loss.type = 'mse'
@@ -51,13 +59,13 @@ def get_default_config():
     config.regression = ConfigDict()
 
     config.regression.dof_frictionloss = ConfigDict({
-        'field': 'dof_frictionloss', 'bounds': (1e-4, 1e2)
+        'field': 'dof_frictionloss', 'bounds': (1e-4, 2.0), 'relative_bounds': None,
     })
     config.regression.dof_damping = ConfigDict({
-        'field': 'dof_damping', 'bounds': (1e-4, 1e2)
+        'field': 'dof_damping', 'bounds': (1e-4, 1.0), 'relative_bounds': None,
     })
     config.regression.dof_armature = ConfigDict({
-        'field': 'dof_armature', 'bounds': (1e-4, 1e2)
+        'field': 'dof_armature', 'bounds': (1e-4, 1.0), 'relative_bounds': None,
     })
 
     config.regression.log_cholesky_inertia = ConfigDict({
@@ -68,7 +76,12 @@ def get_default_config():
             'hind_right_hip', 'hind_right_thigh', 'hind_right_calf',
             'hind_left_hip', 'hind_left_thigh', 'hind_left_calf',
         ],
-        'bounds': None
+        'relative_bounds': {
+            'alpha': 0.35,
+            'diagonal': 0.35,
+            'shear': 0.1,
+            'translation': 0.02,
+        }
     })
 
     # Example of possible additional parameters to regress:
@@ -85,3 +98,38 @@ def get_default_config():
     config.wandb.group = None
 
     return config
+
+
+def compute_absolute_bounds(regression_spec: dict, nominal_parameters: dict) -> dict:
+    """
+        Converts relative bounds specified in the regression spec into absolute bounds based on nominal parameters.
+    """
+    updated_spec = {}
+
+    for param_name, spec in regression_spec.items():
+        updated_spec[param_name] = {k: v for k, v in spec.items()}
+        
+        relative_bounds = spec.get('relative_bounds')
+        
+        if relative_bounds is None:
+            continue
+            
+        baseline = nominal_parameters[param_name]
+
+        if param_name == 'log_cholesky_inertia':
+            bound_deltas = jnp.array([
+                relative_bounds['alpha'], 
+                relative_bounds['diagonal'], relative_bounds['diagonal'], relative_bounds['diagonal'],
+                relative_bounds['shear'], relative_bounds['shear'], relative_bounds['shear'],
+                relative_bounds['translation'], relative_bounds['translation'], relative_bounds['translation']
+            ])
+            lower_bounds = baseline - bound_deltas
+            upper_bounds = baseline + bound_deltas
+
+        else:
+            lower_bounds = baseline - relative_bounds
+            upper_bounds = baseline + relative_bounds
+        
+        updated_spec[param_name]['bounds'] = (lower_bounds, upper_bounds)
+
+    return updated_spec

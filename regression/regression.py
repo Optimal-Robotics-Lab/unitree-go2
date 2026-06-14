@@ -23,7 +23,7 @@ from ml_collections import config_flags, ConfigDict
 
 from regression.utilities import model_utilities
 
-from regression.utilities.config import get_default_config
+from regression.utilities.config import get_default_config, compute_absolute_bounds
 from regression.utilities.typedefs import Dataset, TrainState
 from regression.utilities.constants import JOINT_NAMES
 from regression.utilities.data_utilities import chunk_and_flatten_dataset, shuffle_data
@@ -119,7 +119,7 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
                 
                 body_ids.append(b_id)
                 thetas.append(model_utilities.get_nominal_inertia_parameters(mj_model, b_id))
-            
+
             params[name] = jnp.array(thetas)
             spec['body_ids'] = jnp.array(body_ids, dtype=jnp.int32)
         else:
@@ -128,14 +128,19 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
                 val = val[:, spec['column']]
             params[name] = val
 
+    # Create Absolute Bounds from Relative Bounds:
+    regression_spec = compute_absolute_bounds(regression_spec, params) 
+
     # Initialize Optimizer and State:
     initial_params = params.copy()
+    params = {k: jnp.zeros_like(v) for k, v in params.items()}
     optimizer = create_optimizer(config, total_steps)
     opt_state = optimizer.init(params)
 
     # Define Objective Function
     objective_metric = get_objective_fn(config.loss.type)
     objective_weights = config.loss.weights.to_dict()
+    regularization_weights = config.loss.regularization_weights.to_dict()
 
     # Wrap Step Function:
     init_fn = init_function
@@ -152,7 +157,9 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
         step_function=step_fn,
         objective_function=objective_metric,
         objective_weights=objective_weights,
+        regularization_weights=regularization_weights,
         regression_spec=regression_spec,
+        baseline_params=initial_params,
     )
 
     if config.physics.use_reverse_mode:
@@ -173,18 +180,27 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
             params, batch,
         )
 
+        grad_norms = jax.tree.map(jnp.linalg.norm, grads)
+        grad_maxes = jax.tree.map(lambda x: jnp.max(jnp.abs(x)), grads)
+
         updates, opt_state = optimizer.update(grads, opt_state, params)
         params = optax.apply_updates(params, updates)
 
-        clipped_params = {}
-        for name, value in params.items():
-            bounds = regression_spec[name].get('bounds')
-            if bounds is not None:
-                min_val, max_val = bounds
-                value = jnp.clip(value, min_val, max_val)
-            clipped_params[name] = value
+        # clipped_params = {}
+        # for name, value in params.items():
+        #     bounds = regression_spec[name].get('bounds')
+        #     if bounds is not None:
+        #         min_val, max_val = bounds
+        #         value = jnp.clip(value, min_val, max_val)
+        #     clipped_params[name] = value
 
-        return (clipped_params, opt_state), loss
+        metrics = {
+            'loss': loss,
+            'grad_norms': grad_norms,
+            'grad_maxes': grad_maxes
+        }
+
+        return (params, opt_state), metrics
 
     # Initialize Weights and Biases Logging:
     wand_run = wandb.init(
@@ -209,11 +225,17 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
         )
 
         # Train Epoch:
-        state, batch_losses = jax.lax.scan(train_step, state, shuffled_data)
+        state, batch_metrics = jax.lax.scan(train_step, state, shuffled_data)
         elapsed_time = time.time() - start_time
 
         current_params = jax.device_get(state[0])
-        avg_loss = float(jax.device_get(jnp.mean(batch_losses)))
+
+        physical_params = transform_to_physical(THIS_NEEDS_IMPLEMENTATION)
+        
+        epoch_metrics = jax.tree.map(lambda x: jnp.mean(x, axis=0), batch_metrics)
+        
+        epoch_metrics_cpu = jax.device_get(epoch_metrics)
+        avg_loss = float(epoch_metrics_cpu['loss'])
 
         loss_history.append(avg_loss)
 
@@ -231,6 +253,12 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
             'wall_time': time.time() - wallclock,
         }
         
+        for param_name, norm_val in epoch_metrics_cpu['grad_norms'].items():
+            log_dict[f'grads/norm/{param_name}'] = float(norm_val)
+            
+        for param_name, max_val in epoch_metrics_cpu['grad_maxes'].items():
+            log_dict[f'grads/max/{param_name}'] = float(max_val)
+
         theta_names = ['alpha', 'd1', 'd2', 'd3', 's12', 's23', 's13', 't1', 't2', 't3']
 
         for k, v in current_params.items():
@@ -267,7 +295,7 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
 
     checkpoint_payload = {
         'parameters': output_params_dict,
-        'spec': regression_spec
+        'spec': regression_spec,
     }
 
     with open(output_directory / 'checkpoint.pkl', 'wb') as file:

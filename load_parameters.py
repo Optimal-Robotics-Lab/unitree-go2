@@ -3,9 +3,11 @@ from absl import app, flags
 import pathlib
 import pickle
 
+import numpy as np
+
 import mujoco
 
-from regression.utilities.model_utilities import log_cholesky_to_mujoco
+from regression.utilities.model_utilities import log_cholesky_to_mujoco, get_nominal_inertia_parameters
 from training.envs.utilities.model_utilities import rehydrate_model
 
 
@@ -49,10 +51,34 @@ def main(argv=None):
     model_path = pathlib.Path("training/envs/unitree_go2_backflip/mjcf/scene_mjx_vendor_torque.xml")
     mj_model = mujoco.MjModel.from_xml_path(model_path.as_posix())
 
+    # Sanity Check:
+    # params = {}
+    # regression_spec = config['regression']
+
+    # for name, spec in regression_spec.items():
+    #     if spec['field'] == 'log_cholesky_inertia':
+    #         body_ids = []
+    #         thetas = []
+    #         for b_name in spec['body_names']:
+    #             b_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, b_name)
+    #             if b_id == -1:
+    #                 raise ValueError(f"Body '{b_name}' not found in model.")
+                
+    #             body_ids.append(b_id)
+    #             thetas.append(get_nominal_inertia_parameters(mj_model, b_id))
+
+    #         params[name] = np.array(thetas)
+    #         spec['body_ids'] = np.array(body_ids, dtype=np.int32)
+    #     else:
+    #         val = getattr(mj_model, spec['field'])
+    #         if 'column' in spec:
+    #             val = val[:, spec['column']]
+    #         params[name] = val
+
     mj_model = rehydrate_model(
         model=mj_model,
         parameters=model_parameters,
-        regression_spec=spec
+        regression_spec=spec,
     )
 
     # Save Model to XML for Verification:
