@@ -22,8 +22,9 @@ from mujoco import mjx
 from ml_collections import config_flags, ConfigDict
 
 from regression.utilities import model_utilities
+from regression.utilities import transforms
 
-from regression.utilities.config import get_default_config, compute_absolute_bounds
+from regression.utilities.config import get_default_config, process_regression_spec, build_parameter_scale
 from regression.utilities.typedefs import Dataset, TrainState
 from regression.utilities.constants import JOINT_NAMES
 from regression.utilities.data_utilities import chunk_and_flatten_dataset, shuffle_data
@@ -105,8 +106,8 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
     total_steps = steps_per_epoch * config.training.num_epochs
 
     # Initialize Parameters:
-    params, regression_dict = process_regression_spec(mj_model_static, config.regression)
-    parameter_bounds_delta = {k: (v['bounds'][1] - v['bounds'][0]) / 2.0 for k, v in regression_dict.items()}
+    params, regression_dict = process_regression_spec(mj_model, config.regression)
+    parameter_scale = build_parameter_scale(regression_dict)
 
     # Initialize Optimizer and State:
     initial_params = params.copy()
@@ -133,8 +134,9 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
         regression_spec=regression_dict,
     )
     transform_parameters_function = functools.partial(
-        model_utilities.transform_parameters,
-        parameter_bounds_delta=parameter_bounds_delta,
+        transforms.transform_parameters,
+        regression_spec=regression_dict,
+        parameter_scale=parameter_scale,
     )
 
     # Loss Function:

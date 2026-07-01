@@ -1,11 +1,8 @@
-from typing import Dict, Callable, Any
+from typing import Dict, Callable
 
 import jax
 import jax.numpy as jnp
 
-from mujoco import mjx
-
-from regression.utilities.model_utilities import log_cholesky_to_mujoco
 from regression.utilities.typedefs import Dataset, ObjectiveFunction
 from regression.utilities.decorators import force_static_args
 
@@ -82,7 +79,7 @@ def loss_function(
 
     # Regularization Losses:
     regularization_losses = {
-        k: regularization_weights[k] * jnp.mean(opt_params[k] ** 2) 
+        k: regularization_weights[k] * jnp.mean(opt_params[k] ** 2)
         for k in regularization_weights.keys() if k in opt_params
     }
     regularization_loss = sum(regularization_losses.values())
@@ -93,20 +90,3 @@ def loss_function(
     loss = sum(losses.values())
 
     return loss + regularization_loss
-
-
-def transform_parameters(opt_params: dict, nominal_parameters: dict, parameter_bounds_delta: dict) -> dict:
-    """
-        Maps optimizer parameters to the physical parameters.
-    """
-    params = {}
-    
-    for name, theta_opt in opt_params.items():
-        baseline = nominal_parameters[name]
-        delta = parameter_bounds_delta[name]
-
-        squashed_opt = jnp.tanh(theta_opt)
-        
-        params[name] = baseline + (squashed_opt * delta)
-        
-    return params

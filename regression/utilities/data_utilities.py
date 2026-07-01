@@ -17,11 +17,11 @@ def chunk_and_flatten_dataset(
     n_trials, n_time, dims = ctrl.shape
     n_chunks = n_time // window_len
     cutoff = n_chunks * window_len
-    
+
     # Truncate & Reshape: (Trials, Chunks, Window, Dims)
     def reshape_fn(x):
         return x[:, :cutoff, :].reshape(n_trials, n_chunks, window_len, -1)
-    
+
     def flatten_fn(x):
         x_reshaped = reshape_fn(x)
         return x_reshaped.reshape(-1, window_len, x.shape[-1])

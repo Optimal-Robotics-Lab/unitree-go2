@@ -31,7 +31,7 @@ def create_optimizer(
     components = []
     if optimizer_config.grad_clip_norm > 0:
         components.append(optax.clip_by_global_norm(optimizer_config.grad_clip_norm))
-        
+
     # Check for KL-based scheduler:
     if optimizer_config.scheduler_type == "adaptive_kl_schedule":
         try:

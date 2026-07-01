@@ -1,8 +1,24 @@
+from typing import Tuple
+
 from ml_collections import ConfigDict
 
 import jax.numpy as jnp
 
+import mujoco
+
 from regression.utilities import model_utilities
+from regression.utilities import transforms
+
+
+def _affine_scale_log_cholesky(alpha, diagonal, shear, translation):
+    """Expand per-group affine_tanh half-widths to the 10-D log-Cholesky theta
+    layout [alpha, d1, d2, d3, s12, s23, s13, t1, t2, t3]."""
+    return (
+        alpha,
+        diagonal, diagonal, diagonal,
+        shear, shear, shear,
+        translation, translation, translation,
+    )
 
 
 def get_default_config():
@@ -57,42 +73,30 @@ def get_default_config():
     config.loss.type = 'mse'
 
     # Parameters to Regress:
-    # Format: {param_name: {field: mjx_attr, column: optional_int, bounds: (min, max)}}
     config.regression = ConfigDict()
 
     config.regression.dof_frictionloss = ConfigDict({
-        'field': 'dof_frictionloss', 'bounds': (1e-4, 2.0), 'relative_bounds': None,
+        'field': 'dof_frictionloss', 'transform': 'log_exp', 'reference': 0.1,
     })
     config.regression.dof_damping = ConfigDict({
-        'field': 'dof_damping', 'bounds': (1e-4, 1.0), 'relative_bounds': None,
+        'field': 'dof_damping', 'transform': 'log_exp', 'reference': 0.1,
     })
     config.regression.dof_armature = ConfigDict({
-        'field': 'dof_armature', 'bounds': (1e-4, 1.0), 'relative_bounds': None,
+        'field': 'dof_armature', 'transform': 'log_exp', 'reference': 0.01,
     })
-
     config.regression.log_cholesky_inertia = ConfigDict({
         'field': 'log_cholesky_inertia',
+        'transform': 'affine_tanh',
         'body_names': [
             'front_right_hip', 'front_right_thigh', 'front_right_calf',
             'front_left_hip', 'front_left_thigh', 'front_left_calf',
             'hind_right_hip', 'hind_right_thigh', 'hind_right_calf',
             'hind_left_hip', 'hind_left_thigh', 'hind_left_calf',
         ],
-        'relative_bounds': {
-            'alpha': 0.35,
-            'diagonal': 0.35,
-            'shear': 0.1,
-            'translation': 0.02,
-        }
+        'scale': _affine_scale_log_cholesky(
+            alpha=0.35, diagonal=0.35, shear=0.1, translation=0.02,
+        ),
     })
-
-    # Example of possible additional parameters to regress:
-    # config.regression.qpos0 = ConfigDict({
-    #     'field': 'qpos0', 'bounds': None
-    # })
-    # config.regression.actuator_dynprm = ConfigDict({
-    #     'field': 'actuator_dynprm', 'column': 0, 'bounds': (1e-15, 1e2)
-    # })
 
     # WandB
     config.wandb = ConfigDict()
@@ -102,69 +106,70 @@ def get_default_config():
     return config
 
 
-def compute_absolute_bounds(regression_spec: dict, nominal_parameters: dict) -> dict:
-    """
-        Converts relative bounds specified in the regression spec into absolute bounds based on nominal parameters.
-    """
-    updated_spec = {}
+def build_parameter_scale(regression_spec: dict) -> dict:
+    """Per-parameter transform scale in theta space.
 
-    for param_name, spec in regression_spec.items():
-        updated_spec[param_name] = {k: v for k, v in spec.items()}
-        
-        relative_bounds = spec.get('relative_bounds')
-        
-        if relative_bounds is None:
+    Returns the ``scale`` each scale-using transform consumes (e.g. the
+    affine_tanh deviation half-width), or ``None`` for scale-free transforms
+    (e.g. log_exp). Scales are absolute in theta space and independent of the
+    nominal, so no nominal is needed here.
+    """
+    scales: dict[str, jnp.ndarray | None] = {}
+    for name, spec in regression_spec.items():
+        transforms.validate_transform_spec(name, spec)
+        scale = spec.get('scale')
+        if scale is None:
+            scales[name] = None
             continue
-            
-        baseline = nominal_parameters[param_name]
-
-        if param_name == 'log_cholesky_inertia':
-            bound_deltas = jnp.array([
-                relative_bounds['alpha'], 
-                relative_bounds['diagonal'], relative_bounds['diagonal'], relative_bounds['diagonal'],
-                relative_bounds['shear'], relative_bounds['shear'], relative_bounds['shear'],
-                relative_bounds['translation'], relative_bounds['translation'], relative_bounds['translation']
-            ])
-            lower_bounds = baseline - bound_deltas
-            upper_bounds = baseline + bound_deltas
-
-        else:
-            lower_bounds = baseline - relative_bounds
-            upper_bounds = baseline + relative_bounds
-        
-        updated_spec[param_name]['bounds'] = (lower_bounds, upper_bounds)
-
-    return updated_spec
+        scale = jnp.asarray(scale, dtype=jnp.float32)
+        if not bool(jnp.all(jnp.isfinite(scale) & (scale > 0.0))):
+            raise ValueError(
+                f"Parameter '{name}': 'scale' must be finite and strictly positive, "
+                f"got {spec['scale']}."
+            )
+        scales[name] = scale
+    return scales
 
 
-def process_regression_spec(mj_model: mujoco.MjModel, regression_spec: dict) -> dict:
+def process_regression_spec(mj_model: mujoco.MjModel, regression_spec: ConfigDict | dict) -> Tuple[dict, dict]:
     """
         Process the regression spec to get the initial parameter values from the Mujoco model.
     """
-    params = {}
-    regression_dict = regression_spec.to_dict()
+    params: dict[str, jnp.ndarray] = {}
+    regression_dict = regression_spec.to_dict() if isinstance(regression_spec, ConfigDict) else regression_spec
 
     for name, spec in regression_dict.items():
+        transform = transforms.validate_transform_spec(name, spec)
+
         if spec['field'] == 'log_cholesky_inertia':
-            body_ids = []
-            thetas = []
+            body_ids: list[int] = []
+            thetas: list[jnp.ndarray] = []
             for b_name in spec['body_names']:
                 b_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, b_name)
                 if b_id == -1:
                     raise ValueError(f"Body '{b_name}' not found in model.")
-                
+
                 body_ids.append(b_id)
-                thetas.append(model_utilities.get_nominal_inertia_parameters(mj_model, b_id))
+                thetas.append(model_utilities.get_nominal_theta(mj_model, b_id))
 
             params[name] = jnp.array(thetas)
             spec['body_ids'] = jnp.array(body_ids, dtype=jnp.int32)
         else:
-            val = getattr(mjx_model_static, spec['field'])
+            model_val: jnp.ndarray = getattr(mj_model, spec['field'])
             if 'column' in spec:
-                val = val[:, spec['column']]
+                model_val = model_val[:, spec['column']]
+            if 'reference' in spec:
+                val = jnp.full(model_val.shape, spec['reference'], dtype=jnp.float32)
+            else:
+                val = jnp.asarray(model_val)
             params[name] = val
 
-    # Compute absolute bounds based on relative bounds and nominal parameters:
-    regression_dict = compute_absolute_bounds(regression_dict, params)
+        # Multiplicative transforms need a strictly-positive anchor
+        if transform.positive_anchor and not bool(jnp.all(params[name] > 0.0)):
+            raise ValueError(
+                f"Parameter '{name}' uses transform '{spec.get('transform')}', which "
+                f"requires a strictly-positive anchor, but its nominal/reference has "
+                f"non-positive entries. Provide a positive 'reference'."
+            )
 
     return params, regression_dict
