@@ -7,7 +7,7 @@ import numpy as np
 
 import mujoco
 
-from regression.utilities.model_utilities import log_cholesky_to_mujoco, get_nominal_inertia_parameters
+from regression.utilities.model_utilities import log_cholesky_to_mujoco
 from training.envs.utilities.model_utilities import rehydrate_model
 
 

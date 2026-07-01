@@ -284,7 +284,7 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
         key,
         mjx_model_static,
         initial_params,
-        current_params,
+        physical_params,
         evaluation_data_dict,
         config,
         regression_dict,

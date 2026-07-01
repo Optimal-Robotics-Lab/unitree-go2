@@ -24,9 +24,9 @@ def _check_base_type(model: mujoco.MjModel | mjx.Model) -> tuple[int, int]:
 
 def rehydrate_model(
     params: dict,
-    mj_model: mujoco.MjModel | mjx.Model,
-    regression_spec: Dict[str, Dict[str, Any]],
     nominal_parameters: Dict[str, jax.Array],
+    mj_model: mjx.Model,
+    regression_spec: Dict[str, Dict[str, Any]],
 ) -> mujoco.MjModel:
     # Rehydrate the model with new parameters:
     replace_kwargs = {}
