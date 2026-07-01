@@ -60,12 +60,17 @@ def get_default_config():
 
     # Physics Settings
     config.physics = ConfigDict()
-    config.physics.timestep = 0.004
-    config.physics.control_rate = 0.02
+    config.physics.timestep = 0.004        # dt_sim: physics integration step
+    config.physics.control_rate = 0.02     # dt_ctrl: command / ZOH period (50 Hz)
     config.physics.solver = 'newton'    # 'newton', 'cg', 'pgs'
     config.physics.iterations = 5
     config.physics.ls_iterations = 5
     config.physics.use_reverse_mode = False
+
+    # Data Rates (see validate_rates): dt_sim | dt_obs | dt_ctrl, and dt_obs >= state_rate.
+    config.data = ConfigDict()
+    config.data.state_rate = 0.002         # native state-log period (500 Hz)
+    config.data.observation_rate = 0.004   # dt_obs: sim<->data comparison grid (250 Hz)
 
     # Training Hyperparameters
     config.training = ConfigDict()
@@ -73,7 +78,7 @@ def get_default_config():
     config.training.num_epochs = 20
     config.training.batches_per_epoch = 256
     config.training.minibatch_size = 25
-    config.training.window_length = 25
+    config.training.window_seconds = 0.5   # rollout horizon in time (rate-invariant)
 
     # Optimizer Settings
     config.optimizer = ConfigDict()
@@ -135,6 +140,51 @@ def get_default_config():
     config.wandb.group = None
 
     return config
+
+
+def _integer_ratio(coarse_dt: float, fine_dt: float, coarse_name: str,
+                   fine_name: str, tol: float = 1e-9) -> int:
+    """Assert ``coarse_dt`` is an integer multiple of ``fine_dt`` and return the ratio."""
+    ratio = coarse_dt / fine_dt
+    nearest = round(ratio)
+    if nearest < 1 or abs(ratio - nearest) > tol * max(1.0, nearest):
+        raise ValueError(
+            f"{coarse_name} ({coarse_dt}) must be a positive integer multiple of "
+            f"{fine_name} ({fine_dt}); got ratio {ratio:.6f}."
+        )
+    return int(nearest)
+
+
+def validate_rates(
+    sim_dt: float, observation_dt: float, control_dt: float, state_dt: float,
+) -> tuple[int, int]:
+    """Validate the sim / observation / control / state rate hierarchy.
+
+    Enforces ``dt_sim | dt_obs | dt_ctrl`` (each an integer multiple of the finer
+    one) so that comparisons land on sim-step boundaries and control is constant
+    across each observation step, and ``dt_obs >= state_dt`` (can't observe faster
+    than the data was logged).
+
+    Returns:
+        ``(n_sim_per_obs, n_obs_per_ctrl)`` -- the two integer ratios the rollout
+        needs.
+    """
+    for label, value in (
+        ('timestep', sim_dt), ('observation_rate', observation_dt),
+        ('control_rate', control_dt), ('state_rate', state_dt),
+    ):
+        if value <= 0:
+            raise ValueError(f"{label} must be positive, got {value}.")
+
+    if observation_dt < state_dt - 1e-12:
+        raise ValueError(
+            f"observation_rate ({observation_dt}) is finer than the state log rate "
+            f"({state_dt}); you cannot observe faster than the data was logged."
+        )
+
+    n_sim_per_obs = _integer_ratio(observation_dt, sim_dt, 'observation_rate', 'timestep')
+    n_obs_per_ctrl = _integer_ratio(control_dt, observation_dt, 'control_rate', 'observation_rate')
+    return n_sim_per_obs, n_obs_per_ctrl
 
 
 def build_parameter_scale(regression_spec: dict) -> dict:

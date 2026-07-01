@@ -17,6 +17,8 @@ from regression.utilities.constants import JOINT_NAMES
 from regression.utilities.factories import get_objective_fn
 from regression.utilities.mjx_utilities import init_function, step_function
 from regression.utilities.model_utilities import log_cholesky_to_mujoco
+from regression.utilities import resampling
+from regression.utilities.config import validate_rates
 
 
 def _group_joints_by_leg(joint_names: List[str]) -> Dict[str, List[int]]:
@@ -182,19 +184,34 @@ def evaluate(
     wandb_run: Any,
 ):  
     # Get Config Settings:
-    n_substeps = int(config.physics.control_rate / config.physics.timestep)
+    n_sim_per_obs, _n_obs_per_ctrl = validate_rates(
+        sim_dt=config.physics.timestep,
+        observation_dt=config.data.observation_rate,
+        control_dt=config.physics.control_rate,
+        state_dt=config.data.state_rate,
+    )
     objective_metric = get_objective_fn(config.loss.type)
     objective_weights = config.loss.weights.to_dict()
 
-    # Sample a Random Trajectory
-    n_trials, n_time, _ = dataset['ctrl'].shape
-    trial_idx = jax.random.randint(key, (), 0, n_trials)
-    
+    # Resample the eval trajectories onto the observation grid (matching training).
+    state_dt = config.data.state_rate
+    control_dt = config.physics.control_rate
+    obs_dt = config.data.observation_rate
+    n_obs = resampling.num_resampled_steps(dataset['qpos'].shape[1], state_dt, obs_dt)
+    qpos_all = resampling.resample_linear(dataset['qpos'], state_dt, obs_dt, n_obs)
+    qvel_all = resampling.resample_linear(dataset['qvel'], state_dt, obs_dt, n_obs)
+    force_all = resampling.resample_linear(dataset['actuator_force'], state_dt, obs_dt, n_obs)
+    ctrl_all = resampling.resample_zoh(dataset['ctrl'], control_dt, obs_dt, n_obs)
+
+    # Sample a Random Trajectory (concrete index for numpy slicing).
+    n_trials = dataset['ctrl'].shape[0]
+    trial_idx = int(jax.random.randint(key, (), 0, n_trials))
+
     # Set Targets and Initial State:
-    qpos = jnp.array(dataset['qpos'][trial_idx])
-    qvel = jnp.array(dataset['qvel'][trial_idx])
-    actuator_force = jnp.array(dataset['actuator_force'][trial_idx])
-    ctrl_setpoints = jnp.array(dataset['ctrl'][trial_idx])[:-1]
+    qpos = jnp.asarray(qpos_all[trial_idx])
+    qvel = jnp.asarray(qvel_all[trial_idx])
+    actuator_force = jnp.asarray(force_all[trial_idx])
+    ctrl_setpoints = jnp.asarray(ctrl_all[trial_idx])[:-1]
 
     qpos_init, qvel_init = qpos[0], qvel[0]
     qpos_target = qpos[1:]
@@ -230,7 +247,7 @@ def evaluate(
             )
 
             def step(carry, xs):
-                d = step_function(model_dynamic, carry, xs, n_substeps)
+                d = step_function(model_dynamic, carry, xs, n_sim_per_obs)
                 return d, (d.qpos, d.qvel, d.actuator_force)
 
             _, (qpos, qvel, actuator_force) = jax.lax.scan(step, d, setpoints)
@@ -268,7 +285,7 @@ def evaluate(
         "eval/optimized_loss": opt_loss,
     }
     
-    t = np.arange(1, n_time) * config.physics.control_rate
+    t = np.arange(1, n_obs) * config.data.observation_rate
     
     def to_np(x): return np.array(x)
 

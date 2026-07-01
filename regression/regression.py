@@ -25,10 +25,15 @@ from regression.utilities import model_utilities
 from regression.utilities import transforms
 from regression.utilities import logging_utils
 
-from regression.utilities.config import get_default_config, process_regression_spec, build_parameter_scale
+from regression.utilities.config import (
+    get_default_config,
+    process_regression_spec,
+    build_parameter_scale,
+    validate_rates,
+)
 from regression.utilities.typedefs import Dataset, TrainState
 from regression.utilities.constants import JOINT_NAMES
-from regression.utilities.data_utilities import chunk_and_flatten_dataset, shuffle_data
+from regression.utilities.data_utilities import build_dataset, shuffle_data
 from regression.utilities.factories import create_optimizer, get_objective_fn
 from regression.utilities.autodiff import forward_mode_value_and_grad
 from regression.utilities.loss_utilities import loss_function
@@ -59,7 +64,18 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
 
     # Create Static MJX Model:
     mjx_model_static = mjx.put_model(mj_model, impl="jax")
-    n_substeps = int(config.physics.control_rate / mj_model.opt.timestep)
+
+    # Rate hierarchy (dt_sim | dt_obs | dt_ctrl); n_sim_per_obs sim steps per
+    # comparison, replacing the old control-rate-locked n_substeps.
+    n_sim_per_obs, _n_obs_per_ctrl = validate_rates(
+        sim_dt=config.physics.timestep,
+        observation_dt=config.data.observation_rate,
+        control_dt=config.physics.control_rate,
+        state_dt=config.data.state_rate,
+    )
+    # Chunk length in observation steps (+1 for the initial state).
+    window_length = round(config.training.window_seconds / config.data.observation_rate)
+    effective_window = window_length + 1
 
     # Dataset Directories:
     datasets = []
@@ -77,13 +93,16 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
         with open(data_path, 'rb') as f:
             data_dict = pickle.load(f)
 
-        effective_window = config.training.window_length + 1
-        ds_chunked = chunk_and_flatten_dataset(
-            jnp.array(data_dict['qpos']),
-            jnp.array(data_dict['qvel']),
-            jnp.array(data_dict['actuator_force']),
-            jnp.array(data_dict['ctrl']),
-            effective_window,
+        # Resample native-rate states/control onto the observation grid, then chunk.
+        ds_chunked = build_dataset(
+            data_dict['qpos'],
+            data_dict['qvel'],
+            data_dict['actuator_force'],
+            data_dict['ctrl'],
+            state_dt=config.data.state_rate,
+            control_dt=config.physics.control_rate,
+            observation_dt=config.data.observation_rate,
+            window_length=effective_window,
         )
         datasets.append(ds_chunked)
 
@@ -125,7 +144,7 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
     init_fn = init_function
     step_fn = functools.partial(
         step_function,
-        n_substeps=n_substeps,
+        n_substeps=n_sim_per_obs,
     )
 
     # Wrap Rehydrate Model Function and Transform Parameters Function:
