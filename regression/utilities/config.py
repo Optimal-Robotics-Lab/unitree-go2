@@ -10,14 +10,43 @@ from regression.utilities import model_utilities
 from regression.utilities import transforms
 
 
-def _affine_scale_log_cholesky(alpha, diagonal, shear, translation):
-    """Expand per-group affine_tanh half-widths to the 10-D log-Cholesky theta
-    layout [alpha, d1, d2, d3, s12, s23, s13, t1, t2, t3]."""
+def log_cholesky_affine_scale(
+    mass_cv: float = 0.2,
+    inertia_cv: float = 0.3,
+    shear_std: float = 0.1,
+    com_std: float = 0.01,
+) -> tuple:
+    """Principled ``affine`` scale for the log-Cholesky theta, from physical priors.
+
+    Under the ``affine`` transform ``physical = nominal + theta * scale`` with an
+    L2 term on ``theta``, ``scale`` is the per-component 1-sigma prior width. Each
+    entry is derived from a stated physical uncertainty via the correct functional
+    relationship rather than guessed, and returned in the theta layout
+    ``[alpha, d1, d2, d3, s12, s23, s13, t1, t2, t3]``:
+
+      alpha : mass ~ exp(2*alpha)          -> scale = mass_cv / 2
+      d1-d3 : principal 2nd moment ~ exp(2*d) -> scale = inertia_cv / 2
+      s     : dimensionless shear (linear)  -> scale = shear_std (direct)
+      t     : center of mass, meters        -> scale = com_std (absolute length)
+
+    Args:
+        mass_cv: relative (1-sigma) mass uncertainty, e.g. 0.2 for +/-20%.
+        inertia_cv: relative (1-sigma) uncertainty in the principal moments.
+        shear_std: prior std on the dimensionless shear terms (products of inertia
+            relative to the principal moments).
+        com_std: center-of-mass position std in meters.
+
+    Note: because ``affine`` is unbounded, these are soft prior widths, not limits
+    -- the optimizer can still reach a value many sigma from nominal if the data
+    demands it.
+    """
+    scale_alpha = mass_cv / 2.0
+    scale_d = inertia_cv / 2.0
     return (
-        alpha,
-        diagonal, diagonal, diagonal,
-        shear, shear, shear,
-        translation, translation, translation,
+        scale_alpha,
+        scale_d, scale_d, scale_d,
+        shear_std, shear_std, shear_std,
+        com_std, com_std, com_std,
     )
 
 
@@ -84,17 +113,19 @@ def get_default_config():
     config.regression.dof_armature = ConfigDict({
         'field': 'dof_armature', 'transform': 'log_exp', 'reference': 0.01,
     })
+    # Unbounded affine keeps the log-Cholesky search unconstrained; 'scale' is a
+    # physical-prior width (see log_cholesky_affine_scale), not a box.
     config.regression.log_cholesky_inertia = ConfigDict({
         'field': 'log_cholesky_inertia',
-        'transform': 'affine_tanh',
+        'transform': 'affine',
         'body_names': [
             'front_right_hip', 'front_right_thigh', 'front_right_calf',
             'front_left_hip', 'front_left_thigh', 'front_left_calf',
             'hind_right_hip', 'hind_right_thigh', 'hind_right_calf',
             'hind_left_hip', 'hind_left_thigh', 'hind_left_calf',
         ],
-        'scale': _affine_scale_log_cholesky(
-            alpha=0.35, diagonal=0.35, shear=0.1, translation=0.02,
+        'scale': log_cholesky_affine_scale(
+            mass_cv=0.2, inertia_cv=0.3, shear_std=0.1, com_std=0.01,
         ),
     })
 

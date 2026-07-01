@@ -8,6 +8,7 @@ physical values (the nominal-centered additive transform could go negative).
 from pathlib import Path
 
 import numpy as np
+import jax
 import jax.numpy as jnp
 import mujoco
 import pytest
@@ -17,6 +18,7 @@ from regression.utilities.config import (
     get_default_config,
     process_regression_spec,
     build_parameter_scale,
+    log_cholesky_affine_scale,
 )
 
 
@@ -50,6 +52,35 @@ def test_roundtrip(name):
     theta = jnp.array([-1.2, 0.3, 1.1])
     recovered = t.inverse(t.forward(theta, nominal, scale), nominal, scale)
     np.testing.assert_allclose(np.asarray(recovered), np.asarray(theta), atol=1e-5)
+
+
+def test_affine_is_unbounded():
+    """affine keeps a nonzero, non-saturating gradient far from nominal, unlike
+    affine_tanh (whose gradient dies)."""
+    affine = transforms.get_transform("affine")
+    tanh = transforms.get_transform("affine_tanh")
+    nominal, scale = jnp.array([0.0]), jnp.array([1.0])
+
+    # Physical value grows without bound and linearly.
+    far = affine.forward(jnp.array([50.0]), nominal, scale)
+    assert float(far[0]) == pytest.approx(50.0)
+
+    d_affine = jax.grad(lambda t: affine.forward(t, nominal, scale)[0])(jnp.array([50.0]))
+    d_tanh = jax.grad(lambda t: tanh.forward(t, nominal, scale)[0])(jnp.array([50.0]))
+    assert float(d_affine[0]) == pytest.approx(1.0)      # constant, healthy
+    assert abs(float(d_tanh[0])) < 1e-10                 # saturated to ~0
+
+
+def test_log_cholesky_affine_scale_derivation():
+    """Scale entries are derived from physical priors via the correct relations."""
+    scale = np.array(
+        log_cholesky_affine_scale(mass_cv=0.2, inertia_cv=0.3, shear_std=0.1, com_std=0.01)
+    )
+    assert scale.shape == (10,)
+    assert scale[0] == pytest.approx(0.1)                 # alpha = mass_cv / 2
+    np.testing.assert_allclose(scale[1:4], 0.15)          # d = inertia_cv / 2
+    np.testing.assert_allclose(scale[4:7], 0.1)           # shear (direct)
+    np.testing.assert_allclose(scale[7:10], 0.01)         # com (meters, direct)
 
 
 def test_log_exp_is_strictly_positive():

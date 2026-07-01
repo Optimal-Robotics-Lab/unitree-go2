@@ -23,6 +23,7 @@ from ml_collections import config_flags, ConfigDict
 
 from regression.utilities import model_utilities
 from regression.utilities import transforms
+from regression.utilities import logging_utils
 
 from regression.utilities.config import get_default_config, process_regression_spec, build_parameter_scale
 from regression.utilities.typedefs import Dataset, TrainState
@@ -214,48 +215,31 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
 
         # Transform Optimizer Parameters to Physical Parameters:
         physical_params = transform_parameters_function(current_params, initial_params)
-        
-        epoch_metrics = jax.tree.map(lambda x: jnp.mean(x, axis=0), batch_metrics)
-        
-        epoch_metrics_cpu = jax.device_get(epoch_metrics)
-        avg_loss = float(epoch_metrics_cpu['loss'])
 
+        epoch_metrics_cpu = jax.device_get(
+            jax.tree.map(lambda x: jnp.mean(x, axis=0), batch_metrics)
+        )
+        avg_loss = float(epoch_metrics_cpu['loss'])
         loss_history.append(avg_loss)
 
-        print(
-            f"Epoch {epoch} | "
-            f"Loss: {avg_loss:.6f} | "
-            f"Time: {elapsed_time:.2f}s"
-        )
-        with jnp.printoptions(precision=4, suppress=True, linewidth=200):
-            for k, v in current_params.items():
-                print(f"\t {k}:\t {v}")
+        # Console: loss + physical-space parameter table (decoded from theta).
+        print(f"Epoch {epoch} | Loss: {avg_loss:.6f} | Time: {elapsed_time:.2f}s")
+        print(logging_utils.format_param_summary(
+            physical_params, initial_params, regression_dict, JOINT_NAMES,
+        ))
 
+        # wandb: loss, gradient norms, and physical-space parameters + diagnostics.
         log_dict = {
             'loss': avg_loss,
             'wall_time': time.time() - wallclock,
         }
-        
         for param_name, norm_val in epoch_metrics_cpu['grad_norms'].items():
             log_dict[f'grads/norm/{param_name}'] = float(norm_val)
-            
         for param_name, max_val in epoch_metrics_cpu['grad_maxes'].items():
             log_dict[f'grads/max/{param_name}'] = float(max_val)
-
-        theta_names = ['alpha', 'd1', 'd2', 'd3', 's12', 's23', 's13', 't1', 't2', 't3']
-
-        for k, v in physical_params.items():
-            spec = regression_dict[k]
-            
-            if k == 'log_cholesky_inertia':
-                body_names = spec['body_names']
-                for i, b_name in enumerate(body_names):
-                    for j, t_name in enumerate(theta_names):
-                        log_dict[f'params/{k}/{b_name}/{t_name}'] = float(v[i, j])
-            else:
-                for i, name in enumerate(JOINT_NAMES):
-                    if i < len(v):
-                        log_dict[f'params/{k}/{name}'] = float(v[i])
+        log_dict.update(
+            logging_utils.build_param_log(physical_params, regression_dict, JOINT_NAMES)
+        )
 
         wandb.log(log_dict)
 

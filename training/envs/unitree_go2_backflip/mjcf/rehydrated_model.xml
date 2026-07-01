@@ -117,20 +117,20 @@
       <site name="imu" pos="-0.02557 0 0.04232"/>
       <site name="vicon_marker" pos="0.22 0 0.095" material="black"/>
       <body name="front_right_hip" pos="0.1934 -0.0465 0">
-        <inertial pos="0.0892014 -0.113647 -0.11845" quat="-0.0014142 -0.0388011 0.0185535 0.706452" mass="0.385513" diaginertia="0.000405406 0.0502116 0.0506152"/>
-        <joint name="front_right_hip_joint" class="go2/abduction" pos="0 0 0" axis="1 0 0" armature="0.00509203" damping="0.268692" frictionloss="0.214159"/>
+        <inertial pos="-0.00539934 -0.00369438 -0.0146272" quat="0.652304 0.757943 -0.000250035 -0.00473542" mass="0.896166" diaginertia="0.000639701 0.000790221 0.00117533"/>
+        <joint name="front_right_hip_joint" class="go2/abduction" pos="0 0 0" axis="1 0 0" armature="0.00910746" damping="0.270714" frictionloss="0.216254"/>
         <geom quat="4.63268e-05 1 0 0" material="metal" mesh="hip_0"/>
         <geom quat="4.63268e-05 1 0 0" material="gray" mesh="hip_1"/>
         <geom name="front_right_hip_collision" class="go2/collision/hip/right" pos="0 -0.045 0" quat="0.707107 0.707107 0 0"/>
         <body name="front_right_thigh" pos="0 -0.0955 0">
-          <inertial pos="-0.0297339 0.0330423 -0.015879" quat="-0.0208841 0.671223 -0.189918 0.260472" mass="0.776111" diaginertia="0.00242653 0.00329552 0.00568814"/>
-          <joint name="front_right_thigh_joint" class="go2/front_hip" pos="0 0 0" axis="0 1 0" armature="0.0121844" damping="0.276616" frictionloss="0.212486"/>
+          <inertial pos="-0.0077965 0.020955 -0.037099" quat="-0.269165 0.525084 0.457867 0.664978" mass="1.32264" diaginertia="0.00195671 0.00772085 0.00943882"/>
+          <joint name="front_right_thigh_joint" class="go2/front_hip" pos="0 0 0" axis="0 1 0" armature="0.00944763" damping="0.273372" frictionloss="0.219098"/>
           <geom material="metal" mesh="thigh_mirror_0"/>
           <geom material="gray" mesh="thigh_mirror_1"/>
           <geom name="front_right_thigh_collision" class="go2/collision/thigh" size="0.02 0.100125" pos="-0.015 0 -0.1" quat="0.999688 0 -0.0249766 0"/>
           <body name="front_right_calf" pos="0 0 -0.213">
-            <inertial pos="-0.0126153 0.00137949 -0.0948021" quat="0.676715 0.194677 -0.110581 -0.194545" mass="0.323165" diaginertia="7.64117e-05 0.000499022 0.000559451"/>
-            <joint name="front_right_calf_joint" class="go2/knee" pos="0 0 0" axis="0 1 0" armature="0.027737" damping="0.267883" frictionloss="1.01922"/>
+            <inertial pos="0.0200777 0.00316725 -0.132711" quat="0.584047 -0.363584 -0.481282 -0.543197" mass="0.221304" diaginertia="4.24299e-05 0.00101406 0.00103264"/>
+            <joint name="front_right_calf_joint" class="go2/knee" pos="0 0 0" axis="0 1 0" armature="0.0253927" damping="0.265172" frictionloss="1.04524"/>
             <geom material="gray" mesh="calf_mirror_0"/>
             <geom material="black" mesh="calf_mirror_1"/>
             <geom pos="0 0 -0.213" quat="1 0 0 0" material="black" mesh="foot"/>
@@ -142,20 +142,20 @@
         </body>
       </body>
       <body name="front_left_hip" pos="0.1934 0.0465 0">
-        <inertial pos="0.0925253 0.0569731 -0.0723663" quat="-0.00169375 -0.037796 0.016053 0.70651" mass="0.279632" diaginertia="0.000513134 0.0229418 0.0234538"/>
-        <joint name="front_left_hip_joint" class="go2/abduction" pos="0 0 0" axis="1 0 0" armature="0.00952897" damping="0.300542" frictionloss="0.202525"/>
+        <inertial pos="-0.00539985 0.00478473 -0.0145007" quat="0.707268 0.706925 0.0054264 -0.000184268" mass="0.908383" diaginertia="0.000618211 0.000800816 0.00116128"/>
+        <joint name="front_left_hip_joint" class="go2/abduction" pos="0 0 0" axis="1 0 0" armature="0.00789953" damping="0.2854" frictionloss="0.223184"/>
         <geom material="metal" mesh="hip_0"/>
         <geom material="gray" mesh="hip_1"/>
         <geom name="front_left_hip_collision" class="go2/collision/hip/left" pos="0 0.045 0" quat="0.707107 0.707107 0 0"/>
         <body name="front_left_thigh" pos="0 0.0955 0">
-          <inertial pos="-0.017694 -0.00101983 -0.0278265" quat="-0.260265 0.631641 0.273287 0.677205" mass="0.867669" diaginertia="0.000630672 0.00224864 0.00259278"/>
-          <joint name="front_left_thigh_joint" class="go2/front_hip" pos="0 0 0" axis="0 1 0" armature="0.0153919" damping="0.265091" frictionloss="0.265542"/>
+          <inertial pos="-0.0104391 -0.0211764 -0.0336497" quat="0.537102 -0.250813 -0.652196 -0.472498" mass="1.29635" diaginertia="0.00244782 0.0075514 0.00976798"/>
+          <joint name="front_left_thigh_joint" class="go2/front_hip" pos="0 0 0" axis="0 1 0" armature="0.0096434" damping="0.260494" frictionloss="0.271937"/>
           <geom material="metal" mesh="thigh_0"/>
           <geom material="gray" mesh="thigh_1"/>
           <geom name="front_left_thigh_collision" class="go2/collision/thigh" size="0.02 0.100125" pos="-0.015 0 -0.1" quat="0.999688 0 -0.0249766 0"/>
           <body name="front_left_calf" pos="0 0 -0.213">
-            <inertial pos="0.00456951 -0.0188206 -0.106139" quat="0.660241 0.248423 -0.111493 -0.251871" mass="0.315337" diaginertia="7.92757e-05 0.000705453 0.000770098"/>
-            <joint name="front_left_calf_joint" class="go2/knee" pos="0 0 0" axis="0 1 0" armature="0.0266535" damping="0.280596" frictionloss="0.949907"/>
+            <inertial pos="0.0226964 -0.00622566 -0.130423" quat="-0.337126 0.591642 0.58326 0.442847" mass="0.236783" diaginertia="4.0687e-05 0.00106389 0.00108081"/>
+            <joint name="front_left_calf_joint" class="go2/knee" pos="0 0 0" axis="0 1 0" armature="0.0249642" damping="0.279515" frictionloss="0.956898"/>
             <geom material="gray" mesh="calf_0"/>
             <geom material="black" mesh="calf_1"/>
             <geom pos="0 0 -0.213" quat="1 0 0 0" material="black" mesh="foot"/>
@@ -167,20 +167,20 @@
         </body>
       </body>
       <body name="hind_right_hip" pos="-0.1934 -0.0465 0">
-        <inertial pos="0.018465 -0.033377 -0.0615659" quat="-0.00292544 0.704803 0.025944 -0.0764451" mass="0.624915" diaginertia="0.000329471 0.0104343 0.0107538"/>
-        <joint name="hind_right_hip_joint" class="go2/abduction" pos="0 0 0" axis="1 0 0" armature="0.00959419" damping="0.26166" frictionloss="0.212592"/>
+        <inertial pos="0.0053983 -0.000794107 -0.0156519" quat="0.709601 0.704582 -0.000243458 0.00552458" mass="0.962727" diaginertia="0.000657409 0.000849232 0.00123222"/>
+        <joint name="hind_right_hip_joint" class="go2/abduction" pos="0 0 0" axis="1 0 0" armature="0.00840646" damping="0.261687" frictionloss="0.206357"/>
         <geom quat="2.14617e-09 4.63268e-05 4.63268e-05 -1" material="metal" mesh="hip_0"/>
         <geom quat="2.14617e-09 4.63268e-05 4.63268e-05 -1" material="gray" mesh="hip_1"/>
         <geom name="hind_right_hip_collision" class="go2/collision/hip/right" pos="0 -0.045 0" quat="0.707107 0.707107 0 0"/>
         <body name="hind_right_thigh" pos="0 -0.0955 0">
-          <inertial pos="-0.0202138 0.017243 -0.0178254" quat="-0.0963999 0.187028 0.679325 -0.189678" mass="0.778917" diaginertia="0.000757685 0.00263032 0.00307153"/>
-          <joint name="hind_right_thigh_joint" class="go2/back_hip" pos="0 0 0" axis="0 1 0" armature="0.0115706" damping="0.268653" frictionloss="0.223643"/>
+          <inertial pos="-0.00754304 0.0260281 -0.0379962" quat="-0.233649 0.517115 0.487949 0.663253" mass="1.29961" diaginertia="0.00221666 0.00803447 0.0100498"/>
+          <joint name="hind_right_thigh_joint" class="go2/back_hip" pos="0 0 0" axis="0 1 0" armature="0.008151" damping="0.265207" frictionloss="0.223405"/>
           <geom material="metal" mesh="thigh_mirror_0"/>
           <geom material="gray" mesh="thigh_mirror_1"/>
           <geom name="hind_right_thigh_collision" class="go2/collision/thigh" size="0.02 0.100125" pos="-0.015 0 -0.1" quat="0.999688 0 -0.0249766 0"/>
           <body name="hind_right_calf" pos="0 0 -0.213">
-            <inertial pos="-0.00737781 0.0104574 -0.0945144" quat="0.667331 0.202794 -0.19869 -0.188272" mass="0.363044" diaginertia="6.90766e-05 0.000752243 0.00081396"/>
-            <joint name="hind_right_calf_joint" class="go2/knee" pos="0 0 0" axis="0 1 0" armature="0.029473" damping="0.284739" frictionloss="0.673096"/>
+            <inertial pos="0.0219837 0.00504751 -0.133754" quat="0.574574 -0.386995 -0.512572 -0.507315" mass="0.234172" diaginertia="4.58495e-05 0.00103262 0.00105183"/>
+            <joint name="hind_right_calf_joint" class="go2/knee" pos="0 0 0" axis="0 1 0" armature="0.0273122" damping="0.289014" frictionloss="0.649131"/>
             <geom material="gray" mesh="calf_mirror_0"/>
             <geom material="black" mesh="calf_mirror_1"/>
             <geom pos="0 0 -0.213" quat="1 0 0 0" material="black" mesh="foot"/>
@@ -192,20 +192,20 @@
         </body>
       </body>
       <body name="hind_left_hip" pos="-0.1934 0.0465 0">
-        <inertial pos="0.0394651 0.124268 -0.126649" quat="0.988623 -0.127354 0.0798769 0.00501689" mass="0.379978" diaginertia="8.59232e-05 0.00595046 0.00602744"/>
-        <joint name="hind_left_hip_joint" class="go2/abduction" pos="0 0 0" axis="1 0 0" armature="0.00327231" damping="0.281038" frictionloss="0.334167"/>
+        <inertial pos="0.00539392 0.00294626 -0.016466" quat="0.707341 0.706849 -0.00571927 0.000429558" mass="1.0893" diaginertia="0.000759138 0.000961581 0.0014083"/>
+        <joint name="hind_left_hip_joint" class="go2/abduction" pos="0 0 0" axis="1 0 0" armature="0.00868621" damping="0.282618" frictionloss="0.326957"/>
         <geom quat="4.63268e-05 0 1 0" material="metal" mesh="hip_0"/>
         <geom quat="4.63268e-05 0 1 0" material="gray" mesh="hip_1"/>
         <geom name="hind_left_hip_collision" class="go2/collision/hip/left" pos="0 0.045 0" quat="0.707107 0.707107 0 0"/>
         <body name="hind_left_thigh" pos="0 0.0955 0">
-          <inertial pos="-0.0327609 -0.0455231 0.00617032" quat="0.860296 -0.27471 -0.414226 -0.113319" mass="0.698637" diaginertia="0.000590215 0.00345663 0.00384613"/>
-          <joint name="hind_left_thigh_joint" class="go2/back_hip" pos="0 0 0" axis="0 1 0" armature="0.00768149" damping="0.258369" frictionloss="0.2118"/>
+          <inertial pos="-0.00809521 -0.0225609 -0.0353698" quat="-0.508699 0.204645 0.683513 0.481825" mass="1.28748" diaginertia="0.00143015 0.00863016 0.00974732"/>
+          <joint name="hind_left_thigh_joint" class="go2/back_hip" pos="0 0 0" axis="0 1 0" armature="0.0102371" damping="0.255986" frictionloss="0.20425"/>
           <geom material="metal" mesh="thigh_0"/>
           <geom material="gray" mesh="thigh_1"/>
           <geom name="hind_left_thigh_collision" class="go2/collision/thigh" size="0.02 0.100125" pos="-0.015 0 -0.1" quat="0.999688 0 -0.0249766 0"/>
           <body name="hind_left_calf" pos="0 0 -0.213">
-            <inertial pos="-0.0153546 -0.00140617 -0.0815712" quat="-0.109526 -0.265543 0.654114 0.271885" mass="0.373947" diaginertia="0.000124938 0.000631226 0.000734274"/>
-            <joint name="hind_left_calf_joint" class="go2/knee" pos="0 0 0" axis="0 1 0" armature="0.0278765" damping="0.241302" frictionloss="1.01308"/>
+            <inertial pos="0.0203853 -0.00380292 -0.133739" quat="-0.384706 0.56922 0.539655 0.486582" mass="0.214171" diaginertia="4.21565e-05 0.00100456 0.00102274"/>
+            <joint name="hind_left_calf_joint" class="go2/knee" pos="0 0 0" axis="0 1 0" armature="0.025363" damping="0.242981" frictionloss="1.01078"/>
             <geom material="gray" mesh="calf_0"/>
             <geom material="black" mesh="calf_1"/>
             <geom pos="0 0 -0.213" quat="1 0 0 0" material="black" mesh="foot"/>

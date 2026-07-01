@@ -44,6 +44,7 @@ Array = jax.Array
 TransformFn = Callable[[Array, Array, Optional[Array]], Array]
 
 _ATANH_EPS = 1e-6
+_LOG_EXP_CLIP = 12.0  # NaN guard on the exponent (exp(12) ~ 1.6e5); not a constraint
 
 
 @dataclass(frozen=True)
@@ -78,7 +79,7 @@ def _affine_tanh_inverse(value, nominal, scale):
 
 
 def _log_exp_forward(theta, nominal, scale):
-    safe_theta = jnp.clip(theta, min=-12.0, max=12.0)
+    safe_theta = jnp.clip(theta, min=-_LOG_EXP_CLIP, max=_LOG_EXP_CLIP)
     return nominal * jnp.exp(safe_theta)
 
 
@@ -87,7 +88,7 @@ def _log_exp_inverse(value, nominal, scale):
 
 
 def _log_exp_tanh_forward(theta, nominal, scale):
-    safe_theta_scale = jnp.clip(jnp.tanh(theta) * scale, min=-12.0, max=12.0)
+    safe_theta_scale = jnp.clip(jnp.tanh(theta) * scale, min=-_LOG_EXP_CLIP, max=_LOG_EXP_CLIP)
     return nominal * jnp.exp(safe_theta_scale)
 
 
@@ -115,7 +116,7 @@ TRANSFORMS: Dict[str, ParameterTransform] = {
     ),
 }
 
-DEFAULT_TRANSFORM = "affine_tanh"
+DEFAULT_TRANSFORM = "affine"
 
 
 def get_transform(name: str) -> ParameterTransform:
