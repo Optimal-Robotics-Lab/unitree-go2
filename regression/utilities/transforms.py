@@ -44,7 +44,7 @@ Array = jax.Array
 TransformFn = Callable[[Array, Array, Optional[Array]], Array]
 
 _ATANH_EPS = 1e-6
-_LOG_EXP_CLIP = 12.0  # NaN guard on the exponent (exp(12) ~ 1.6e5); not a constraint
+_LOG_EXP_CLIP = 12.0
 
 
 @dataclass(frozen=True)
