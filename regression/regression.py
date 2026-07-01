@@ -105,31 +105,8 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
     total_steps = steps_per_epoch * config.training.num_epochs
 
     # Initialize Parameters:
-    params = {}
-    regression_spec = config.regression.to_dict()
-
-    for name, spec in regression_spec.items():
-        if spec['field'] == 'log_cholesky_inertia':
-            body_ids = []
-            thetas = []
-            for b_name in spec['body_names']:
-                b_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, b_name)
-                if b_id == -1:
-                    raise ValueError(f"Body '{b_name}' not found in model.")
-                
-                body_ids.append(b_id)
-                thetas.append(model_utilities.get_nominal_inertia_parameters(mj_model, b_id))
-
-            params[name] = jnp.array(thetas)
-            spec['body_ids'] = jnp.array(body_ids, dtype=jnp.int32)
-        else:
-            val = getattr(mjx_model_static, spec['field'])
-            if 'column' in spec:
-                val = val[:, spec['column']]
-            params[name] = val
-
-    # Create Absolute Bounds from Relative Bounds:
-    regression_spec = compute_absolute_bounds(regression_spec, params) 
+    params, regression_dict = process_regression_spec(mj_model_static, config.regression)
+    parameter_bounds_delta = {k: (v['bounds'][1] - v['bounds'][0]) / 2.0 for k, v in regression_dict.items()}
 
     # Initialize Optimizer and State:
     initial_params = params.copy()
@@ -149,17 +126,28 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
         n_substeps=n_substeps,
     )
 
+    # Wrap Rehydrate Model Function and Transform Parameters Function:
+    rehydrate_model_function = functools.partial(
+        model_utilities.rehydrate_model,
+        mj_model=mjx_model_static,
+        regression_spec=regression_dict,
+    )
+    transform_parameters_function = functools.partial(
+        model_utilities.transform_parameters,
+        parameter_bounds_delta=parameter_bounds_delta,
+    )
+
     # Loss Function:
     loss_fn = functools.partial(
         loss_function,
-        model_static=mjx_model_static,
         init_function=init_fn,
         step_function=step_fn,
+        rehydrate_model_function=rehydrate_model_function,
+        transform_parameters_function=transform_parameters_function,
         objective_function=objective_metric,
         objective_weights=objective_weights,
         regularization_weights=regularization_weights,
-        regression_spec=regression_spec,
-        baseline_params=initial_params,
+        nominal_params=initial_params,
     )
 
     if config.physics.use_reverse_mode:
@@ -185,14 +173,6 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
 
         updates, opt_state = optimizer.update(grads, opt_state, params)
         params = optax.apply_updates(params, updates)
-
-        # clipped_params = {}
-        # for name, value in params.items():
-        #     bounds = regression_spec[name].get('bounds')
-        #     if bounds is not None:
-        #         min_val, max_val = bounds
-        #         value = jnp.clip(value, min_val, max_val)
-        #     clipped_params[name] = value
 
         metrics = {
             'loss': loss,
@@ -230,7 +210,8 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
 
         current_params = jax.device_get(state[0])
 
-        physical_params = transform_to_physical(THIS_NEEDS_IMPLEMENTATION)
+        # Transform Optimizer Parameters to Physical Parameters:
+        physical_params = transform_parameters_function(current_params, initial_params)
         
         epoch_metrics = jax.tree.map(lambda x: jnp.mean(x, axis=0), batch_metrics)
         
@@ -261,17 +242,15 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
 
         theta_names = ['alpha', 'd1', 'd2', 'd3', 's12', 's23', 's13', 't1', 't2', 't3']
 
-        for k, v in current_params.items():
-            spec = regression_spec[k]
+        for k, v in physical_params.items():
+            spec = regression_dict[k]
             
             if k == 'log_cholesky_inertia':
-                # v has shape (N_bodies, 10)
                 body_names = spec['body_names']
                 for i, b_name in enumerate(body_names):
                     for j, t_name in enumerate(theta_names):
                         log_dict[f'params/{k}/{b_name}/{t_name}'] = float(v[i, j])
             else:
-                # v has shape (N_joints,)
                 for i, name in enumerate(JOINT_NAMES):
                     if i < len(v):
                         log_dict[f'params/{k}/{name}'] = float(v[i])
@@ -280,7 +259,7 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
 
     # Save Initial / Regressed Parameters and Loss History:
     output_params_dict = {}
-    for k, v in current_params.items():
+    for k, v in physical_params.items():
         output_params_dict[f'{k}'] = np.array(v)
 
     initial_params_dict = {}
@@ -295,7 +274,7 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
 
     checkpoint_payload = {
         'parameters': output_params_dict,
-        'spec': regression_spec,
+        'spec': regression_dict,
     }
 
     with open(output_directory / 'checkpoint.pkl', 'wb') as file:
@@ -313,6 +292,7 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
     with open(output_directory / 'config.yaml', 'w') as file:
         file.write(config.to_yaml())
 
+    # TODO: Pass Physical or Opt Parameters to Evaluation Function?
     # Evaluate and Plot Trajectory Comparison:
     evaluate(
         key,
@@ -321,7 +301,7 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
         current_params,
         evaluation_data_dict,
         config,
-        regression_spec,
+        regression_dict,
         wand_run,
     )
 

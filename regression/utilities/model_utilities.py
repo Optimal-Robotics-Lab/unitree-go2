@@ -21,6 +21,39 @@ def _check_base_type(model: mujoco.MjModel | mjx.Model) -> tuple[int, int]:
         return (0, 0)
 
 
+def rehydrate_model(
+    params: dict,
+    mj_model: mujoco.MjModel | mjx.Model,
+    regression_spec: Dict[str, Dict[str, Any]],
+    nominal_opt_parameters: Dict[str, jax.Array],
+) -> mujoco.MjModel:
+    # Rehydrate the model with new parameters:
+    replace_kwargs = {}
+    for name, value in params.items():
+        spec = regression_spec[name]
+        field = spec['field']
+        if field == 'log_cholesky_inertia':
+            body_ids = spec['body_ids']
+            b_mass, b_ipos, b_inertia, b_iquat = jax.vmap(log_cholesky_to_mujoco)(value, nominal_opt_parameters['log_cholesky_inertia'])
+            replace_kwargs['body_mass'] = mj_model.body_mass.at[body_ids].set(b_mass)
+            replace_kwargs['body_ipos'] = mj_model.body_ipos.at[body_ids, :].set(b_ipos)
+            replace_kwargs['body_inertia'] = mj_model.body_inertia.at[body_ids, :].set(b_inertia)
+            replace_kwargs['body_iquat'] = mj_model.body_iquat.at[body_ids, :].set(b_iquat)
+
+        elif 'column' in spec:
+            col_idx = spec['column']
+            original_array = getattr(mj_model, field)
+            new_array = original_array.at[:, col_idx].set(value)
+            replace_kwargs[field] = new_array
+
+        else:
+            replace_kwargs[field] = value
+
+    hydrated_model = mj_model.replace(**replace_kwargs)
+
+    return hydrated_model
+
+# TODO: Create unified hydrate function. Should not be needed...
 def hydrate_model(
     params: dict,
     mj_model: mujoco.MjModel,
@@ -198,6 +231,121 @@ def log_cholesky_to_mujoco(theta: dict[str, float], theta_nominal: dict[str, flo
     # Remap to MuJoCo's convention:
     body_inertia = body_inertia[::-1]
     rotation_matrix = rotation_matrix[:, ::-1]
+
+    det = jnp.linalg.det(rotation_matrix)
+    parity = jax.lax.stop_gradient(jnp.where(det < 0.0, -1.0, 1.0))
+    rotation_matrix = rotation_matrix.at[:, 2].multiply(parity)
+    
+    body_iquat = matrix_to_quaternion(rotation_matrix)
+
+    return body_mass, body_ipos, body_inertia, body_iquat
+
+
+def theta_to_pi(theta: jax.Array) -> jax.Array:
+    """
+    Convert a vector of 10 parameters into a log-cholesky inertia matrix representation.
+
+    Input:
+        theta: [alpha, d1, d2, d3, s12, s23, s13, t1, t2, t3]
+
+    Output:
+        pi: [m, hx, hy, hz, Ixx, Iyy, Izz, Ixy, Iyz, Ixz]
+
+    """
+    alpha = theta[0]
+    d1 = theta[1]
+    d2 = theta[2]
+    d3 = theta[3]
+    s12 = theta[4]
+    s23 = theta[5]
+    s13 = theta[6]
+    t1 = theta[7]
+    t2 = theta[8]
+    t3 = theta[9]
+
+    pi = jnp.exp(2 * theta[0]) * jnp.array([
+        t1 ** 2 + t2 ** 2 + t3 ** 2 + 1,
+        t1 * jnp.exp(d1),
+        t1 * s12 + t2 * jnp.exp(d2),
+        t1 * s13 + t2 * s23 + t3 * jnp.exp(d3),
+        s12 ** 2 + s13 ** 2 + s23 ** 2 + jnp.exp(2 * d2) + jnp.exp(2 * d3),
+        s13 ** 2 + s23 ** 2 + jnp.exp(2 * d1) + jnp.exp(2 * d3),
+        s12 ** 2 + jnp.exp(2 * d1) + jnp.exp(2 * d2),
+        -s12 * jnp.exp(d1),
+        -s12 * s13 - s23 * jnp.exp(d2),
+        -s13 * jnp.exp(d1),
+    ])
+
+    return pi
+
+
+def get_icom_from_pi(pi: jax.Array) -> tuple[jax.Array, jax.Array, jax.Array]:
+    """
+        Extract mass, center of mass (ipos), and the inertia tensor at the center of mass.
+    """
+
+    # Extract Mass and Center of Mass
+    body_mass = jnp.maximum(pi[0], 1e-6)
+    h = pi[1:4]
+    body_ipos = h / body_mass
+    
+    # Inertia at Origin
+    Ixx, Iyy, Izz = pi[4], pi[5], pi[6]
+    Ixy, Iyz, Ixz = pi[7], pi[8], pi[9]
+    
+    I_origin = jnp.array([
+        [Ixx, Ixy, Ixz],
+        [Ixy, Iyy, Iyz],
+        [Ixz, Iyz, Izz]
+    ])
+    
+    # Shift to Center of Mass:
+    cx, cy, cz = body_ipos[0], body_ipos[1], body_ipos[2]
+    
+    # (c.c)*I - outer(c, c)
+    c_cross_square = jnp.array([
+        [cy**2 + cz**2, -cx*cy, -cx*cz],
+        [-cx*cy, cx**2 + cz**2, -cy*cz],
+        [-cx*cz, -cy*cz, cx**2 + cy**2]
+    ])
+    
+    I_com = I_origin - body_mass * c_cross_square
+    
+    return body_mass, body_ipos, I_com
+
+
+def log_cholesky_to_mujoco(theta: jax.Array, theta_nominal: jax.Array | None = None) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
+    """
+    Convert a vector of 10 parameters into a log-cholesky inertia matrix representation.
+
+    Input:
+        theta: [alpha, d1, d2, d3, s12, s23, s13, t1, t2, t3]
+        theta_nominal: Nominal parameters for initialization
+
+    Output:
+        body_mass, body_ipos, body_inertia, body_iquat
+    
+    """
+
+    # pi: [m, hx, hy, hz, Ixx, Iyy, Izz, Ixy, Iyz, Ixz]
+    pi = theta_to_pi(theta)
+
+    # Extract mass and center of mass:
+    body_mass, body_ipos, inertia_com = get_icom_from_pi(pi)
+    
+    # Nominal Regularization:
+    if theta_nominal is not None:
+        theta_nominal_frozen = jax.lax.stop_gradient(theta_nominal)
+        pi_nominal = theta_to_pi(theta_nominal_frozen)
+        _, _, inertia_com_nominal = get_icom_from_pi(pi_nominal)
+        regularization = 1e-5 * inertia_com_nominal
+    else:
+        regularization = jnp.diag(jnp.array([1e-6, 2e-6, 3e-6]))
+
+    eps_safeguard = jnp.diag(jnp.array([1e-9, 2e-9, 3e-9]))
+
+    # Compute body inertia and orientation:
+    body_inertia, rotation_matrix = jnp.linalg.eigh(inertia_com + regularization + eps_safeguard)
 
     det = jnp.linalg.det(rotation_matrix)
     parity = jax.lax.stop_gradient(jnp.where(det < 0.0, -1.0, 1.0))

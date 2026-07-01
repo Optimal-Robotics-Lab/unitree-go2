@@ -11,55 +11,33 @@ from regression.utilities.decorators import force_static_args
 
 
 @force_static_args(
-    "model_static",
     "init_function",
     "step_function",
+    "rehydrate_model_function",
+    "transform_parameters_function",
     "objective_function",
     "objective_weights",
     "regularization_weights",
-    "regression_spec",
-    "baseline_params"
+    "nominal_params"
 )
 def loss_function(
     opt_params: Dict[str, jax.Array],
     batch: Dataset,
     *,
-    model_static: mjx.Model,
     init_function: Callable,
     step_function: Callable,
+    rehydrate_model_function: Callable,
+    transform_parameters_function: Callable,
     objective_function: ObjectiveFunction,
     objective_weights: Dict[str, float],
     regularization_weights: Dict[str, float],
-    regression_spec: Dict[str, Dict[str, Any]],
-    baseline_params: Dict[str, jax.Array],
+    nominal_params: Dict[str, jax.Array],
 ) -> jax.Array:
-    # Map optimizer parameters to physical parameters and update the model:
-    bound_deltas = {k: (v['bounds'][1] - v['bounds'][0]) / 2.0 for k, v in regression_spec.items()}
-    params = transform_to_physical(opt_params, baseline_params, bound_deltas)
+    # Transform Optimizer Parameters to Physical Parameters:
+    params = transform_parameters_function(opt_params, nominal_params)
 
-    # Rehydrate the model with new parameters:
-    replace_kwargs = {}
-    for name, value in params.items():
-        spec = regression_spec[name]
-        field = spec['field']
-        if field == 'log_cholesky_inertia':
-            body_ids = spec['body_ids']
-            b_mass, b_ipos, b_inertia, b_iquat = jax.vmap(log_cholesky_to_mujoco)(value, baseline_params['log_cholesky_inertia'])
-            replace_kwargs['body_mass'] = model_static.body_mass.at[body_ids].set(b_mass)
-            replace_kwargs['body_ipos'] = model_static.body_ipos.at[body_ids, :].set(b_ipos)
-            replace_kwargs['body_inertia'] = model_static.body_inertia.at[body_ids, :].set(b_inertia)
-            replace_kwargs['body_iquat'] = model_static.body_iquat.at[body_ids, :].set(b_iquat)
-
-        elif 'column' in spec:
-            col_idx = spec['column']
-            original_array = getattr(model_static, field)
-            new_array = original_array.at[:, col_idx].set(value)
-            replace_kwargs[field] = new_array
-
-        else:
-            replace_kwargs[field] = value
-
-    model_dynamic = model_static.replace(**replace_kwargs)
+    # Rehydrate Model with Parameters:
+    model_dynamic = rehydrate_model_function(params, nominal_params)
 
     # Rollout Trajectory:
     def rollout(setpoints, qpos_init, qvel_init):
@@ -117,7 +95,7 @@ def loss_function(
     return loss + regularization_loss
 
 
-def transform_to_physical(opt_params: dict, nominal_parameters: dict, bound_deltas: dict) -> dict:
+def transform_parameters(opt_params: dict, nominal_parameters: dict, parameter_bounds_delta: dict) -> dict:
     """
         Maps optimizer parameters to the physical parameters.
     """
@@ -125,7 +103,7 @@ def transform_to_physical(opt_params: dict, nominal_parameters: dict, bound_delt
     
     for name, theta_opt in opt_params.items():
         baseline = nominal_parameters[name]
-        delta = bound_deltas[name]
+        delta = parameter_bounds_delta[name]
 
         squashed_opt = jnp.tanh(theta_opt)
         

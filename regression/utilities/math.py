@@ -82,4 +82,6 @@ def matrix_to_quaternion(matrix: jax.Array) -> jax.Array:
             jnp.where(cond2[..., None], case2_q, case3_q),
         )
 
-        return q * 0.5 / jnp.sqrt(t[..., None])
+        t_safe = jnp.maximum(t, 1e-8)
+
+        return q * 0.5 / jnp.sqrt(t_safe[..., None])

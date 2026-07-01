@@ -2,6 +2,8 @@ from ml_collections import ConfigDict
 
 import jax.numpy as jnp
 
+from regression.utilities import model_utilities
+
 
 def get_default_config():
     config = ConfigDict()
@@ -133,3 +135,36 @@ def compute_absolute_bounds(regression_spec: dict, nominal_parameters: dict) -> 
         updated_spec[param_name]['bounds'] = (lower_bounds, upper_bounds)
 
     return updated_spec
+
+
+def process_regression_spec(mj_model: mujoco.MjModel, regression_spec: dict) -> dict:
+    """
+        Process the regression spec to get the initial parameter values from the Mujoco model.
+    """
+    params = {}
+    regression_dict = regression_spec.to_dict()
+
+    for name, spec in regression_dict.items():
+        if spec['field'] == 'log_cholesky_inertia':
+            body_ids = []
+            thetas = []
+            for b_name in spec['body_names']:
+                b_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, b_name)
+                if b_id == -1:
+                    raise ValueError(f"Body '{b_name}' not found in model.")
+                
+                body_ids.append(b_id)
+                thetas.append(model_utilities.get_nominal_inertia_parameters(mj_model, b_id))
+
+            params[name] = jnp.array(thetas)
+            spec['body_ids'] = jnp.array(body_ids, dtype=jnp.int32)
+        else:
+            val = getattr(mjx_model_static, spec['field'])
+            if 'column' in spec:
+                val = val[:, spec['column']]
+            params[name] = val
+
+    # Compute absolute bounds based on relative bounds and nominal parameters:
+    regression_dict = compute_absolute_bounds(regression_dict, params)
+
+    return params, regression_dict
