@@ -80,6 +80,7 @@ def resample_from_timestamps(
     data: np.ndarray,
     target_dt: float,
     t0: float | None = None,
+    t_end: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Regularize a non-uniformly sampled signal onto a uniform grid.
 
@@ -93,10 +94,11 @@ def resample_from_timestamps(
         data: ``(n, dims)`` samples aligned to ``times``.
         target_dt: uniform output period (seconds).
         t0: grid start time; defaults to ``times[0]``.
+        t_end: grid end (inclusive bound); defaults to ``times[-1]``. Keep within
+            ``[times[0], times[-1]]`` to avoid clamped extrapolation.
 
     Returns:
-        ``(grid_times (n_dst,), resampled (n_dst, dims))``. The grid never
-        extrapolates past ``times[-1]``.
+        ``(grid_times (n_dst,), resampled (n_dst, dims))``.
     """
     times = np.asarray(times, dtype=np.float64)
     data = np.asarray(data, dtype=np.float64)
@@ -113,7 +115,12 @@ def resample_from_timestamps(
 
     if t0 is None:
         t0 = float(times[0])
-    duration = float(times[-1]) - t0
+    if t_end is None:
+        t_end = float(times[-1])
+    if t_end <= t0:
+        raise ValueError(f"t_end ({t_end}) must be greater than t0 ({t0})")
+
+    duration = t_end - t0
     n_dst = int(np.floor(duration / target_dt + 1e-9)) + 1
     grid = t0 + np.arange(n_dst) * target_dt
 

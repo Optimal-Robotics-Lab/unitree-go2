@@ -44,6 +44,34 @@ from regression.utilities.evaluation import evaluate
 _CONFIG = config_flags.DEFINE_config_dict('config', get_default_config())
 
 
+def _check_pickle_rates(data_dict: dict, config: ConfigDict, name: str) -> None:
+    """Fail fast if a pickle's native rates disagree with the config.
+
+    A mismatch would make ``build_dataset`` silently mis-resample (e.g. treat a
+    50 Hz log as 500 Hz). Pickles produced before rates were stored are allowed
+    with a warning.
+    """
+    pkl_state = data_dict.get('state_rate')
+    pkl_control = data_dict.get('control_rate')
+    if pkl_state is None or pkl_control is None:
+        print(
+            f"WARNING: {name}/processed_data.pkl has no stored rates; assuming "
+            f"config state_rate={config.data.state_rate}, "
+            f"control_rate={config.physics.control_rate}."
+        )
+        return
+    if abs(pkl_state - config.data.state_rate) > 1e-12:
+        raise ValueError(
+            f"{name}: pickle state_rate ({pkl_state}) != config.data.state_rate "
+            f"({config.data.state_rate})."
+        )
+    if abs(pkl_control - config.physics.control_rate) > 1e-12:
+        raise ValueError(
+            f"{name}: pickle control_rate ({pkl_control}) != "
+            f"config.physics.control_rate ({config.physics.control_rate})."
+        )
+
+
 def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
     # Load MuJoCo Model
     directory = Path(__file__).resolve().parent
@@ -92,6 +120,8 @@ def train(config: ConfigDict) -> Tuple[TrainState, np.ndarray]:
         print(f"Loading dataset: {directory_name}")
         with open(data_path, 'rb') as f:
             data_dict = pickle.load(f)
+
+        _check_pickle_rates(data_dict, config, directory_name)
 
         # Resample native-rate states/control onto the observation grid, then chunk.
         ds_chunked = build_dataset(
