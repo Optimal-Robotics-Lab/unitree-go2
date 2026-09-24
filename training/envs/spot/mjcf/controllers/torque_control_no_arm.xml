@@ -1,0 +1,42 @@
+<mujoco>
+	<!-- Diagnostic variant of torque_control.xml with the 7 arm actuators
+	removed, paired with models/spot_no_arm.xml, to isolate the arm's
+	contribution to per-step compute cost from everything else. -->
+
+	<default>
+		<default class="spot/abduction/motor">
+			<motor forcerange="-45 45"/>
+		</default>
+		<default class="spot/hip/motor">
+			<motor forcerange="-45 45"/>
+		</default>
+		<default class="spot/knee/motor">
+			<!-- Peak output torque from Boston Dynamics' knee torque/angle table (varies -->
+			<!-- 30.6-113.24 Nm over the joint range due to the knee linkage); ceiling only. -->
+			<motor forcerange="-113 113"/>
+		</default>
+	</default>
+
+	<actuator>
+        <motor class="spot/abduction/motor" name="front_left_hip" joint="front_left_hip_joint"/>
+        <motor class="spot/hip/motor" name="front_left_thigh" joint="front_left_thigh_joint"/>
+        <motor class="spot/knee/motor" name="front_left_calf" joint="front_left_calf_joint"/>
+        <motor class="spot/abduction/motor" name="front_right_hip" joint="front_right_hip_joint"/>
+        <motor class="spot/hip/motor" name="front_right_thigh" joint="front_right_thigh_joint"/>
+        <motor class="spot/knee/motor" name="front_right_calf" joint="front_right_calf_joint"/>
+        <motor class="spot/abduction/motor" name="rear_left_hip" joint="rear_left_hip_joint"/>
+        <motor class="spot/hip/motor" name="rear_left_thigh" joint="rear_left_thigh_joint"/>
+        <motor class="spot/knee/motor" name="rear_left_calf" joint="rear_left_calf_joint"/>
+        <motor class="spot/abduction/motor" name="rear_right_hip" joint="rear_right_hip_joint"/>
+        <motor class="spot/hip/motor" name="rear_right_thigh" joint="rear_right_thigh_joint"/>
+        <motor class="spot/knee/motor" name="rear_right_calf" joint="rear_right_calf_joint"/>
+	</actuator>
+
+	<keyframe>
+		<key name="home"
+			qpos="0 0 0.46 1 0 0 0 0 1.04 -1.8 0 1.04 -1.8 0 1.04 -1.8 0 1.04 -1.8"
+			ctrl="0 0 0 0 0 0 0 0 0 0 0 0"
+		/>
+  	</keyframe>
+
+</mujoco>

@@ -1,0 +1,5 @@
+{
+  "action_rate": -0.5,
+  "torque": -0.001,
+  "acceleration": -0.001
+}

@@ -1,0 +1,20 @@
+<mujoco>
+    <contact>
+        <pair name="arm_el1_torso_upper_left_contact" geom1="arm_link_el1_collision" geom2="torso_upper_left_collision" condim="1" friction="0.8"/>
+        <pair name="arm_el1_torso_upper_right_contact" geom1="arm_link_el1_collision" geom2="torso_upper_right_collision" condim="1" friction="0.8"/>
+        <pair name="arm_el1_torso_lower_left_contact" geom1="arm_link_el1_collision" geom2="torso_lower_left_collision" condim="1" friction="0.8"/>
+        <pair name="arm_el1_torso_lower_right_contact" geom1="arm_link_el1_collision" geom2="torso_lower_right_collision" condim="1" friction="0.8"/>
+        <pair name="arm_wr1_torso_upper_left_contact" geom1="arm_link_wr1_collision" geom2="torso_upper_left_collision" condim="1" friction="0.8"/>
+        <pair name="arm_wr1_torso_upper_right_contact" geom1="arm_link_wr1_collision" geom2="torso_upper_right_collision" condim="1" friction="0.8"/>
+        <pair name="arm_wr1_torso_lower_left_contact" geom1="arm_link_wr1_collision" geom2="torso_lower_left_collision" condim="1" friction="0.8"/>
+        <pair name="arm_wr1_torso_lower_right_contact" geom1="arm_link_wr1_collision" geom2="torso_lower_right_collision" condim="1" friction="0.8"/>
+        <pair name="left_finger_torso_upper_left_contact" geom1="left_finger_collision" geom2="torso_upper_left_collision" condim="1" friction="0.8"/>
+        <pair name="left_finger_torso_upper_right_contact" geom1="left_finger_collision" geom2="torso_upper_right_collision" condim="1" friction="0.8"/>
+        <pair name="left_finger_torso_lower_left_contact" geom1="left_finger_collision" geom2="torso_lower_left_collision" condim="1" friction="0.8"/>
+        <pair name="left_finger_torso_lower_right_contact" geom1="left_finger_collision" geom2="torso_lower_right_collision" condim="1" friction="0.8"/>
+        <pair name="right_finger_torso_upper_left_contact" geom1="right_finger_collision" geom2="torso_upper_left_collision" condim="1" friction="0.8"/>
+        <pair name="right_finger_torso_upper_right_contact" geom1="right_finger_collision" geom2="torso_upper_right_collision" condim="1" friction="0.8"/>
+        <pair name="right_finger_torso_lower_left_contact" geom1="right_finger_collision" geom2="torso_lower_left_collision" condim="1" friction="0.8"/>
+        <pair name="right_finger_torso_lower_right_contact" geom1="right_finger_collision" geom2="torso_lower_right_collision" condim="1" friction="0.8"/>
+    </contact>
+</mujoco>

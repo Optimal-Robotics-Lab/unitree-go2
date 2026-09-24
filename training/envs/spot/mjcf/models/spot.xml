@@ -1,0 +1,178 @@
+<mujoco model="spot">
+  <compiler angle="radian" meshdir="../assets" autolimits="true"/>
+
+  <option iterations="5" ls_iterations="8" timestep="0.001" integrator="Euler">
+    <flag eulerdamp="disable"/>
+  </option>
+
+  <include file="default.xml"/>
+
+  <asset>
+    <model name="arm" file="arm.xml"/>
+    <material name="BlackAbs" rgba="0.1 0.1 0.1 1"/>
+    <material name="wrap" rgba="0.878431 0.666666 0.227450 1"/>
+
+    <mesh file="body_0.obj"/>
+    <mesh file="body_1.obj"/>
+    <mesh file="front_left_hip.obj"/>
+    <mesh file="front_left_upper_leg_0.obj"/>
+    <mesh file="front_left_upper_leg_1.obj"/>
+    <mesh file="front_left_lower_leg.obj"/>
+    <mesh file="front_right_hip.obj"/>
+    <mesh file="front_right_upper_leg_0.obj"/>
+    <mesh file="front_right_upper_leg_1.obj"/>
+    <mesh file="front_right_lower_leg.obj"/>
+    <mesh file="rear_left_hip.obj"/>
+    <mesh file="rear_left_upper_leg_0.obj"/>
+    <mesh file="rear_left_upper_leg_1.obj"/>
+    <mesh file="rear_left_lower_leg.obj"/>
+    <mesh file="rear_right_hip.obj"/>
+    <mesh file="rear_right_upper_leg_0.obj"/>
+    <mesh file="rear_right_upper_leg_1.obj"/>
+    <mesh file="rear_right_lower_leg.obj"/>
+    <mesh file="body_collision.obj"/>
+    <mesh file="left_upper_leg_collision.obj"/>
+    <mesh file="left_lower_leg_collision.obj"/>
+    <mesh file="right_upper_leg_collision.obj"/>
+    <mesh file="right_lower_leg_collision.obj"/>
+    <mesh file="arm_link_hr0.obj"/>
+  </asset>
+
+  <worldbody>
+    <light name="spotlight" mode="targetbodycom" target="body" pos="3 0 4" cutoff="30"/>
+    <body name="body" childclass="spot" pos="0 0 .75">
+      <light name="tracking" mode="trackcom" pos="0 0 2"/>
+      <freejoint name="freejoint"/>
+      <inertial pos="0 0 -0.00496172" mass="16.70765207" diaginertia="0.081543792 0.549231154 0.569454373"/>
+      <geom mesh="body_0" material="BlackAbs" class="spot/visual"/>
+      <geom mesh="body_1" material="wrap" class="spot/visual"/>
+      <geom name="torso_collision" mesh="body_collision" class="spot/collision"/>
+      <site name="imu"/>
+      <body name="front_left_hip" pos="0.29785 0.055 0">
+        <inertial pos="-0.01586739 0.00855842 9.03e-06" quat="0.981631 0.00442154 0.00104843 0.190735" mass="1.1368834"
+          diaginertia="0.00114996 0.00166127 0.00172904"/>
+        <joint name="front_left_hip_joint" class="spot/abduction"/>
+        <geom material="BlackAbs" mesh="front_left_hip" class="spot/visual"/>
+        <body name="front_left_thigh" pos="0 0.110945 0">
+          <inertial pos="0.00214442 -0.01110184 -0.07881204" quat="0.698663 0.0171175 -0.713689 -0.0471657" mass="2.2562036" diaginertia="0.00298666 0.0260254 0.0269394"/>
+          <joint name="front_left_thigh_joint" class="spot/hip"/>
+          <geom mesh="front_left_upper_leg_0" material="wrap" class="spot/visual"/>
+          <geom mesh="front_left_upper_leg_1" material="BlackAbs" class="spot/visual"/>
+          <geom name="front_left_thigh_collision" mesh="left_upper_leg_collision" class="spot/collision"/>
+          <body name="front_left_calf" pos="0.025 0 -0.3205">
+            <inertial pos="0.0059736 0 -0.17466427" quat="-0.497592 -0.497592 0.502396 -0.502396" mass="0.33"
+              diaginertia="0.000144656 0.00701419 0.00709946"/>
+            <joint name="front_left_calf_joint" class="spot/knee"/>
+            <geom material="BlackAbs" mesh="front_left_lower_leg" class="spot/visual"/>
+            <geom name="front_left_calf_collision" mesh="left_lower_leg_collision" class="spot/collision"/>
+            <geom name="front_left_foot_collision" class="spot/collision/foot"/>
+            <site name="front_left_foot" class="spot/foot"/>
+          </body>
+        </body>
+      </body>
+      <body name="front_right_hip" pos="0.29785 -0.055 0">
+        <inertial pos="-0.01586739 -0.00855842 9.03e-06" quat="0.981631 -0.00442154 0.00104843 -0.190735" mass="1.1368834"
+          diaginertia="0.00114996 0.00166127 0.00172904"/>
+        <joint name="front_right_hip_joint" class="spot/abduction"/>
+        <geom material="BlackAbs" mesh="front_right_hip" class="spot/visual"/>
+        <body name="front_right_thigh" pos="0 -0.110945 0">
+          <inertial pos="0.00214442 0.01110184 -0.07881204" quat="0.0171175 0.698663 0.0471657 0.713689" mass="2.2562036" diaginertia="0.00298666 0.0260254 0.0269394"/>
+          <joint name="front_right_thigh_joint" class="spot/hip"/>
+          <geom mesh="front_right_upper_leg_0" material="wrap" class="spot/visual"/>
+          <geom mesh="front_right_upper_leg_1" material="BlackAbs" class="spot/visual"/>
+          <geom name="front_right_thigh_collision" mesh="right_upper_leg_collision" class="spot/collision"/>
+          <body name="front_right_calf" pos="0.025 0 -0.3205">
+            <inertial pos="0.0059736 0 -0.17466427" quat="-0.497592 -0.497592 0.502396 -0.502396" mass="0.33"
+              diaginertia="0.000144656 0.00701419 0.00709946"/>
+            <joint name="front_right_calf_joint" class="spot/knee"/>
+            <geom material="BlackAbs" mesh="front_right_lower_leg" class="spot/visual"/>
+            <geom name="front_right_calf_collision" mesh="right_lower_leg_collision" class="spot/collision"/>
+            <geom name="front_right_foot_collision" class="spot/collision/foot"/>
+            <site name="front_right_foot" class="spot/foot"/>
+          </body>
+        </body>
+      </body>
+      <body name="rear_left_hip" pos="-0.29785 0.055 0">
+        <inertial pos="0.01586739 0.00855842 9.03e-06" quat="0.981631 0.00442154 -0.00104843 -0.190735" mass="1.1368834"
+          diaginertia="0.00114996 0.00166127 0.00172904"/>
+        <joint name="rear_left_hip_joint" class="spot/abduction"/>
+        <geom material="BlackAbs" mesh="rear_left_hip" class="spot/visual"/>
+        <body name="rear_left_thigh" pos="0 0.110945 0">
+          <inertial pos="0.00214442 -0.01110184 -0.07881204" quat="0.698663 0.0171175 -0.713689 -0.0471657" mass="2.2562036" diaginertia="0.00298666 0.0260254 0.0269394"/>
+          <joint name="rear_left_thigh_joint" class="spot/hip"/>
+          <geom mesh="rear_left_upper_leg_0" material="wrap" class="spot/visual"/>
+          <geom mesh="rear_left_upper_leg_1" material="BlackAbs" class="spot/visual"/>
+          <geom name="rear_left_thigh_collision" mesh="left_upper_leg_collision" class="spot/collision"/>
+          <body name="rear_left_calf" pos="0.025 0 -0.3205">
+            <inertial pos="0.0059736 0 -0.17466427" quat="-0.497592 -0.497592 0.502396 -0.502396" mass="0.33"
+              diaginertia="0.000144656 0.00701419 0.00709946"/>
+            <joint name="rear_left_calf_joint" class="spot/knee"/>
+            <geom material="BlackAbs" mesh="rear_left_lower_leg" class="spot/visual"/>
+            <geom name="rear_left_calf_collision" mesh="left_lower_leg_collision" class="spot/collision"/>
+            <geom name="rear_left_foot_collision" class="spot/collision/foot"/>
+            <site name="rear_left_foot" class="spot/foot"/>
+          </body>
+        </body>
+      </body>
+      <body name="rear_right_hip" pos="-0.29785 -0.055 0">
+        <inertial pos="0.01586739 -0.00855842 9.03e-06" quat="0.981631 -0.00442154 -0.00104843 0.190735" mass="1.1368834"
+          diaginertia="0.00114996 0.00166127 0.00172904"/>
+        <joint name="rear_right_hip_joint" class="spot/abduction"/>
+        <geom material="BlackAbs" mesh="rear_right_hip" class="spot/visual"/>
+        <body name="rear_right_thigh" pos="0 -0.110945 0">
+          <inertial pos="0.00214442 0.01110184 -0.07881204" quat="0.0171175 0.698663 0.0471657 0.713689" mass="2.2562036" diaginertia="0.00298666 0.0260254 0.0269394"/>
+          <joint name="rear_right_thigh_joint" class="spot/hip"/>
+          <geom mesh="rear_right_upper_leg_0" material="wrap" class="spot/visual"/>
+          <geom mesh="rear_right_upper_leg_1" material="BlackAbs" class="spot/visual"/>
+          <geom name="rear_right_thigh_collision" mesh="right_upper_leg_collision" class="spot/collision"/>
+          <body name="rear_right_calf" pos="0.025 0 -0.3205">
+            <inertial pos="0.0059736 0 -0.17466427" quat="-0.497592 -0.497592 0.502396 -0.502396" mass="0.33"
+              diaginertia="0.000144656 0.00701419 0.00709946"/>
+            <joint name="rear_right_calf_joint" class="spot/knee"/>
+            <geom material="BlackAbs" mesh="rear_right_lower_leg" class="spot/visual"/>
+            <geom name="rear_right_calf_collision" mesh="right_lower_leg_collision" class="spot/collision"/>
+            <geom name="rear_right_foot_collision" class="spot/collision/foot"/>
+            <site name="rear_right_foot" class="spot/foot"/>
+          </body>
+        </body>
+      </body>
+      <!-- Arm composed from arm.xml; the mount transform lives here. -->
+      <frame pos="0.292 0 0.188">
+        <attach model="arm" body="arm_link_sh0" prefix=""/>
+      </frame>
+    </body>
+  </worldbody>
+
+  <contact>
+    <pair name="front_left_foot_floor_contact" geom1="front_left_foot_collision" geom2="floor" solimp="0.9 .95 0.023" condim="3" friction="1.0"/>
+    <pair name="front_right_foot_floor_contact" geom1="front_right_foot_collision" geom2="floor" solimp="0.9 .95 0.023" condim="3" friction="1.0"/>
+    <pair name="rear_left_foot_floor_contact" geom1="rear_left_foot_collision" geom2="floor" solimp="0.9 .95 0.023" condim="3" friction="1.0"/>
+    <pair name="rear_right_foot_floor_contact" geom1="rear_right_foot_collision" geom2="floor" solimp="0.9 .95 0.023" condim="3" friction="1.0"/>
+  </contact>
+
+  <sensor>
+    <!-- IMU: -->
+    <gyro name="imu_gyro" site="imu"/>
+    <framequat name="imu_orientation" objtype="site" objname="imu"/>
+    <accelerometer name="imu_acceleration" site="imu"/>
+
+    <!-- State Estimator: -->
+    <velocimeter name="local_linear_velocity" site="imu"/>
+    <framepos name="imu_position" objtype="site" objname="imu"/>
+    <framelinvel name="front_left_global_linear_velocity" objtype="site" objname="front_left_foot"/>
+    <framelinvel name="front_right_global_linear_velocity" objtype="site" objname="front_right_foot"/>
+    <framelinvel name="rear_left_global_linear_velocity" objtype="site" objname="rear_left_foot"/>
+    <framelinvel name="rear_right_global_linear_velocity" objtype="site" objname="rear_right_foot"/>
+    <framepos name="front_left_foot_position" objtype="site" objname="front_left_foot" reftype="site" refname="imu"/>
+    <framepos name="front_right_foot_position" objtype="site" objname="front_right_foot" reftype="site" refname="imu"/>
+    <framepos name="rear_left_foot_position" objtype="site" objname="rear_left_foot" reftype="site" refname="imu"/>
+    <framepos name="rear_right_foot_position" objtype="site" objname="rear_right_foot" reftype="site" refname="imu"/>
+
+    <!-- Globals: -->
+    <framezaxis name="upvector" objtype="site" objname="imu"/>
+    <framexaxis name="forwardvector" objtype="site" objname="imu"/>
+    <framelinvel name="global_linear_velocity" objtype="site" objname="imu"/>
+    <frameangvel name="global_angular_velocity" objtype="site" objname="imu"/>
+  </sensor>
+
+</mujoco>

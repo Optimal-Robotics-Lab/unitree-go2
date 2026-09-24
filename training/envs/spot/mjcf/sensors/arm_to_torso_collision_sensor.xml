@@ -1,0 +1,20 @@
+<mujoco>
+  <sensor>
+    <contact name="arm_el1_to_torso_upper_left" geom1="arm_link_el1_collision" geom2="torso_upper_left_collision" reduce="mindist" num="1" data="found"/>
+    <contact name="arm_el1_to_torso_upper_right" geom1="arm_link_el1_collision" geom2="torso_upper_right_collision" reduce="mindist" num="1" data="found"/>
+    <contact name="arm_el1_to_torso_lower_left" geom1="arm_link_el1_collision" geom2="torso_lower_left_collision" reduce="mindist" num="1" data="found"/>
+    <contact name="arm_el1_to_torso_lower_right" geom1="arm_link_el1_collision" geom2="torso_lower_right_collision" reduce="mindist" num="1" data="found"/>
+    <contact name="arm_wr1_to_torso_upper_left" geom1="arm_link_wr1_collision" geom2="torso_upper_left_collision" reduce="mindist" num="1" data="found"/>
+    <contact name="arm_wr1_to_torso_upper_right" geom1="arm_link_wr1_collision" geom2="torso_upper_right_collision" reduce="mindist" num="1" data="found"/>
+    <contact name="arm_wr1_to_torso_lower_left" geom1="arm_link_wr1_collision" geom2="torso_lower_left_collision" reduce="mindist" num="1" data="found"/>
+    <contact name="arm_wr1_to_torso_lower_right" geom1="arm_link_wr1_collision" geom2="torso_lower_right_collision" reduce="mindist" num="1" data="found"/>
+    <contact name="left_finger_to_torso_upper_left" geom1="left_finger_collision" geom2="torso_upper_left_collision" reduce="mindist" num="1" data="found"/>
+    <contact name="left_finger_to_torso_upper_right" geom1="left_finger_collision" geom2="torso_upper_right_collision" reduce="mindist" num="1" data="found"/>
+    <contact name="left_finger_to_torso_lower_left" geom1="left_finger_collision" geom2="torso_lower_left_collision" reduce="mindist" num="1" data="found"/>
+    <contact name="left_finger_to_torso_lower_right" geom1="left_finger_collision" geom2="torso_lower_right_collision" reduce="mindist" num="1" data="found"/>
+    <contact name="right_finger_to_torso_upper_left" geom1="right_finger_collision" geom2="torso_upper_left_collision" reduce="mindist" num="1" data="found"/>
+    <contact name="right_finger_to_torso_upper_right" geom1="right_finger_collision" geom2="torso_upper_right_collision" reduce="mindist" num="1" data="found"/>
+    <contact name="right_finger_to_torso_lower_left" geom1="right_finger_collision" geom2="torso_lower_left_collision" reduce="mindist" num="1" data="found"/>
+    <contact name="right_finger_to_torso_lower_right" geom1="right_finger_collision" geom2="torso_lower_right_collision" reduce="mindist" num="1" data="found"/>
+  </sensor>
+</mujoco>

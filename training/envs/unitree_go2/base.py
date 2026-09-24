@@ -90,25 +90,22 @@ class UnitreeGo2Env(mjx_env.MjxEnv):
         # Wrap Step Function:
         self._step = functools.partial(self._simulation_step, n_substeps=self._n_substeps)
 
-        # Parse Configs:
-        self.kernel_sigma = reward_config.kernel_sigma
-        self.target_air_time = reward_config.target_air_time
-        self.mode_time = reward_config.mode_time
-        self.command_threshold = reward_config.command_threshold
-        self.velocity_threshold = reward_config.velocity_threshold
-        self.target_foot_height = reward_config.target_foot_height
-        self.foot_clearance_velocity_scale = reward_config.foot_clearance_velocity_scale
-        self.foot_clearance_sigma = reward_config.foot_clearance_sigma
-        reward_config_dict = flax.serialization.to_state_dict(reward_config)
-        del reward_config_dict['kernel_sigma']
-        del reward_config_dict['target_air_time']
-        del reward_config_dict['mode_time']
-        del reward_config_dict['command_threshold']
-        del reward_config_dict['velocity_threshold']
-        del reward_config_dict['target_foot_height']
-        del reward_config_dict['foot_clearance_velocity_scale']
-        del reward_config_dict['foot_clearance_sigma']
-        self.reward_config = reward_config_dict
+        # Parse Configs: weights and hyperparameters are separate dataclasses
+        # (RewardConfig.weights / .hyperparameters), so there's no manual
+        # key-deletion list to keep in sync -- self.reward_config is exactly
+        # the per-term weight dict `step()` looks up, no more no less.
+        hyperparameters = reward_config.hyperparameters
+        self.kernel_sigma = hyperparameters.kernel_sigma
+        self.target_air_time = hyperparameters.target_air_time
+        self.mode_time = hyperparameters.mode_time
+        self.command_threshold = hyperparameters.command_threshold
+        self.velocity_threshold = hyperparameters.velocity_threshold
+        self.target_foot_height = hyperparameters.target_foot_height
+        self.foot_clearance_velocity_scale = hyperparameters.foot_clearance_velocity_scale
+        self.foot_clearance_sigma = hyperparameters.foot_clearance_sigma
+        self.stand_still_scale = hyperparameters.stand_still_scale
+        self.window_steps = hyperparameters.window_steps
+        self.reward_config = flax.serialization.to_state_dict(reward_config.weights)
 
         self.environment_config = environment_config
         self.noise_config = noise_config

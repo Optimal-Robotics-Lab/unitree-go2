@@ -1,0 +1,14 @@
+<mujoco>
+    <contact>
+        <pair name="front_left_foot_rear_left_foot_contact" geom1="front_left_foot_collision" geom2="rear_left_foot_collision" condim="1" friction="0.8"/>
+        <pair name="front_left_foot_rear_left_calf_upper_contact" geom1="front_left_foot_collision" geom2="rear_left_calf_upper_collision" condim="1" friction="0.8"/>
+        <pair name="rear_left_foot_front_left_calf_upper_contact" geom1="rear_left_foot_collision" geom2="front_left_calf_upper_collision" condim="1" friction="0.8"/>
+        <pair name="front_left_foot_rear_left_calf_lower_contact" geom1="front_left_foot_collision" geom2="rear_left_calf_lower_collision" condim="1" friction="0.8"/>
+        <pair name="rear_left_foot_front_left_calf_lower_contact" geom1="rear_left_foot_collision" geom2="front_left_calf_lower_collision" condim="1" friction="0.8"/>
+        <pair name="front_right_foot_rear_right_foot_contact" geom1="front_right_foot_collision" geom2="rear_right_foot_collision" condim="1" friction="0.8"/>
+        <pair name="front_right_foot_rear_right_calf_upper_contact" geom1="front_right_foot_collision" geom2="rear_right_calf_upper_collision" condim="1" friction="0.8"/>
+        <pair name="rear_right_foot_front_right_calf_upper_contact" geom1="rear_right_foot_collision" geom2="front_right_calf_upper_collision" condim="1" friction="0.8"/>
+        <pair name="front_right_foot_rear_right_calf_lower_contact" geom1="front_right_foot_collision" geom2="rear_right_calf_lower_collision" condim="1" friction="0.8"/>
+        <pair name="rear_right_foot_front_right_calf_lower_contact" geom1="rear_right_foot_collision" geom2="front_right_calf_lower_collision" condim="1" friction="0.8"/>
+    </contact>
+</mujoco>

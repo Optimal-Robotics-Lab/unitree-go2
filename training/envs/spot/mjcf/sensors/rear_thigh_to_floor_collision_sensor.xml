@@ -1,0 +1,6 @@
+<mujoco>
+  <sensor>
+    <contact name="rear_left_thigh_to_floor" geom1="rear_left_thigh_upper_collision" geom2="floor" reduce="mindist" num="1" data="found"/>
+    <contact name="rear_right_thigh_to_floor" geom1="rear_right_thigh_upper_collision" geom2="floor" reduce="mindist" num="1" data="found"/>
+  </sensor>
+</mujoco>

@@ -1,0 +1,116 @@
+<mujoco model="arm">
+  <!-- Spot arm with the original mesh collision geoms.
+  Composed into a Spot model with <attach>; the mount transform lives in the
+  parent's <frame>, not here. meshdir is relative to this file.
+  The materials (BlackAbs, wrap) are deliberately not declared here: they are
+  global names, so a second copy would collide on attach, and the parent stays
+  the single place to restyle them. So this file only loads attached to Spot. -->
+  <compiler angle="radian" meshdir="../../assets" autolimits="true"/>
+
+  <include file="default.xml"/>
+
+  <asset>
+    <mesh name="arm_link_sh0_base_coll" file="arm_link_sh0_base.obj"/>
+    <mesh name="arm_link_sh0_left_motor_coll" file="arm_link_sh0_left_motor.obj"/>
+    <mesh name="arm_link_sh0_right_motor_coll" file="arm_link_sh0_right_motor.obj"/>
+    <mesh name="arm_link_hr0_coll" file="arm_link_hr0_coll.obj"/>
+    <mesh name="arm_link_el0_coll" file="arm_link_el0_coll.obj"/>
+    <mesh name="arm_link_el1_main_coll" file="arm_link_el1_main.obj"/>
+    <mesh name="arm_link_el1_lip_coll" file="arm_link_el1_lip.obj"/>
+    <mesh name="arm_link_wr0_coll" file="arm_link_wr0.obj"/>
+    <mesh name="arm_link_wr1_coll" file="arm_link_wr1.obj"/>
+    <mesh name="front_jaw_coll" file="front_jaw.obj"/>
+    <mesh name="middle_jaw_coll" file="middle_jaw.obj"/>
+    <mesh name="jaw_tooth_coll" file="jaw_tooth.obj"/>
+    <mesh name="left_hinge_coll" file="left_hinge.obj"/>
+    <mesh name="left_finger_coll" file="left_finger.obj"/>
+    <mesh name="left_tooth_coll" file="left_tooth.obj"/>
+    <mesh name="right_hinge_coll" file="right_hinge.obj"/>
+    <mesh name="right_finger_coll" file="right_finger.obj"/>
+    <mesh name="right_tooth_coll" file="right_tooth.obj"/>
+    <mesh file="arm_link_sh0.obj"/>
+    <mesh file="arm_link_sh1_0.obj"/>
+    <mesh file="arm_link_sh1_1.obj"/>
+    <mesh file="arm_link_el0.obj"/>
+    <mesh file="arm_link_el1_0.obj"/>
+    <mesh file="arm_link_el1_1.obj"/>
+    <mesh file="arm_link_wr0_0.obj"/>
+    <mesh file="arm_link_wr0_1.obj"/>
+    <mesh file="arm_link_wr1_0.obj"/>
+    <mesh file="arm_link_wr1_1.obj"/>
+    <mesh file="arm_link_fngr_0.obj"/>
+    <mesh file="arm_link_fngr_1.obj"/>
+  </asset>
+
+  <worldbody>
+    <body name="arm_link_sh0" childclass="spot">
+      <inertial pos="-0.008399 0.000272 -0.024603" quat="0.524999 -0.472659 -0.466159 0.532602" mass="1.904699"
+        diaginertia="0.00492153 0.00728042 0.00891905"/>
+      <joint name="arm_sh0" class="spot/arm" axis="0 0 1" range="-2.61799 3.14159"/>
+      <geom material="BlackAbs" mesh="arm_link_sh0" class="spot/visual" rgba=".1 .1 .1 1"/>
+      <geom name="arm_link_sh0_base_collision" class="spot/collision" mesh="arm_link_sh0_base_coll"/>
+      <geom name="arm_link_sh0_left_motor_collision" class="spot/collision" mesh="arm_link_sh0_left_motor_coll"/>
+      <geom name="arm_link_sh0_right_motor_collision" class="spot/collision" mesh="arm_link_sh0_right_motor_coll"/>
+      <body name="arm_link_sh1">
+        <inertial pos="0.08084909 -0.00167243 0.00045644" quat="0.999963 -0.00166746 0.00194528 0.00827238" mass="1.8570194"
+          diaginertia="0.00260818 0.0270454 0.0281997"/>
+        <joint name="arm_sh1" class="spot/arm" axis="0 1 0" range="-3.14159 0.523599"/>
+        <geom mesh="arm_link_sh1_0" material="wrap" class="spot/visual"/>
+        <geom mesh="arm_link_sh1_1" material="BlackAbs" class="spot/visual"/>
+        <body name="arm_link_hr0">
+          <inertial pos="0.17047 -0.0019251 4.48389e-05" quat="0 1 0 1" mass="1e-06"
+            diaginertia="1.16111e-08 1.14871e-08 6.31263e-10"/>
+          <geom name="arm_link_hr0_collision" class="spot/collision" mesh="arm_link_hr0_coll"/>
+          <body name="arm_link_el0" pos="0.3385 0 0">
+            <inertial pos="0.04476621 -0.0027113 0.04991363" quat="0.915058 -0.202387 0.341411 0.0717441" mass="0.94831958"
+              diaginertia="0.000960161 0.00265579 0.00286401"/>
+            <joint name="arm_el0" class="spot/arm" axis="0 1 0" range="0 3.14159"/>
+            <geom material="BlackAbs" mesh="arm_link_el0" class="spot/visual"/>
+            <geom name="arm_link_el0_collision" mesh="arm_link_el0_coll" class="spot/collision"/>
+            <body name="arm_link_el1" pos="0.4033 0 0.075">
+              <inertial pos="-0.16867073 -0.01616121 1.149e-05" quat="0.662426 -0.744638 -0.0611623 0.0544542" mass="1.0175482"
+                diaginertia="0.000746021 0.0168986 0.0169253"/>
+              <joint name="arm_el1" class="spot/arm" axis="1 0 0" range="-2.79253 2.79253"/>
+              <geom mesh="arm_link_el1_0" material="wrap" class="spot/visual"/>
+              <geom mesh="arm_link_el1_1" material="BlackAbs" class="spot/visual"/>
+              <geom name="arm_link_el1_main_collision" class="spot/collision" mesh="arm_link_el1_main_coll"/>
+              <geom name="arm_link_el1_lip_collision" class="spot/collision" mesh="arm_link_el1_lip_coll"/>
+              <body name="arm_link_wr0">
+                <inertial pos="0.00952465 -0.01144406 1.86e-06" quat="0.910989 -0.0243632 0.0115425 -0.411549" mass="0.5826374"
+                  diaginertia="0.000388399 0.000528639 0.000536182"/>
+                <joint name="arm_wr0" class="spot/arm" axis="0 1 0" range="-1.8326 1.8326"/>
+                <geom mesh="arm_link_wr0_0" material="wrap" class="spot/visual"/>
+                <geom mesh="arm_link_wr0_1" material="BlackAbs" class="spot/visual"/>
+                <geom name="arm_link_wr0_collision" class="spot/collision" mesh="arm_link_wr0_coll"/>
+                <body name="arm_link_wr1">
+                  <inertial pos="0.09751283 9.265e-05 -0.01120523" quat="0.692262 0.691304 -0.146052 0.146765" mass="0.93335298"
+                    diaginertia="0.00082476 0.00182151 0.00197018"/>
+                  <joint name="arm_wr1" class="spot/arm" axis="1 0 0" range="-2.87989 2.87979"/>
+                  <geom mesh="arm_link_wr1_0" material="wrap" class="spot/visual"/>
+                  <geom mesh="arm_link_wr1_1" material="BlackAbs" class="spot/visual"/>
+                  <geom name="arm_link_wr1_collision" class="spot/collision" mesh="arm_link_wr1_coll"/>
+                  <geom name="front_jaw_collision" class="spot/collision" mesh="front_jaw_coll"/>
+                  <geom name="middle_jaw_collision" class="spot/collision" mesh="middle_jaw_coll"/>
+                  <geom name="jaw_tooth_collision" class="spot/collision" mesh="jaw_tooth_coll"/>
+                  <body name="arm_link_fngr" pos="0.11745 0 0.01482">
+                    <inertial pos="0.03565178 0.000672 -0.01227516" quat="0.983465 -0.01221 -0.180604 0.0054061" mass="0.22383315"
+                      diaginertia="0.000194933 0.000484516 0.000648792"/>
+                    <joint name="arm_f1x" class="spot/arm" axis="0 1 0" range="-1.5708 0"/>
+                    <geom mesh="arm_link_fngr_0" material="wrap" class="spot/visual"/>
+                    <geom mesh="arm_link_fngr_1" material="BlackAbs" class="spot/visual"/>
+                    <geom name="left_hinge_collision" class="spot/collision" mesh="left_hinge_coll"/>
+                    <geom name="left_finger_collision" class="spot/collision" mesh="left_finger_coll"/>
+                    <geom name="left_tooth_collision" class="spot/collision" mesh="left_tooth_coll"/>
+                    <geom name="right_hinge_collision" class="spot/collision" mesh="right_hinge_coll"/>
+                    <geom name="right_finger_collision" class="spot/collision" mesh="right_finger_coll"/>
+                    <geom name="right_tooth_collision" class="spot/collision" mesh="right_tooth_coll"/>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+</mujoco>

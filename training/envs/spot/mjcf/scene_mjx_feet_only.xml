@@ -1,0 +1,47 @@
+<mujoco model="spot-mjx scene (feet-only collision, diagnostic)">
+    <!-- Diagnostic variant of scene_mjx.xml: every explicit contact <pair>
+    except foot-to-floor (already baked into models/spot.xml, not a
+    separate include here) is left out, to isolate how much of the
+    contact-solver cost/memory at a given num_envs comes from the extra
+    torso/thigh/calf/leg-self/arm-to-torso pairs vs. the model's base
+    kinematic state. Sensor includes are kept unchanged -- SpotEnv._sensor_ids
+    looks them up unconditionally and a missing one raises, and contact
+    sensors don't require an explicit <pair> to detect real contact, so
+    they're harmless (just always "not found") with their pairs removed. -->
+    <include file="models/spot.xml"/>
+
+    <visual>
+      <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+      <rgba haze="0.15 0.25 0.35 1"/>
+      <global azimuth="120" elevation="-20"/>
+    </visual>
+
+    <asset>
+        <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
+        <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
+            markrgb="0.8 0.8 0.8" width="300" height="300"/>
+        <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>
+    </asset>
+
+    <worldbody>
+        <light pos="0 0 1.5" dir="0 0 -1" directional="true"/>
+        <camera name="default" pos="0.846 -1.465 0.916" xyaxes="0.866 0.500 0.000 -0.171 0.296 0.940"/>
+        <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
+    </worldbody>
+
+    <!-- Control Type -->
+    <include file="controllers/torque_control.xml"/>
+
+    <!-- Task Specific Sensors (kept -- see note above) -->
+    <include file="sensors/torso_to_floor_collision_sensor.xml"/>
+    <include file="sensors/front_thigh_to_floor_collision_sensor.xml"/>
+    <include file="sensors/rear_thigh_to_floor_collision_sensor.xml"/>
+    <include file="sensors/front_calf_to_floor_collision_sensor.xml"/>
+    <include file="sensors/rear_calf_to_floor_collision_sensor.xml"/>
+    <include file="sensors/foot_to_floor_collision_sensor.xml"/>
+    <include file="sensors/front_leg_self_collision_sensor.xml"/>
+    <include file="sensors/rear_leg_self_collision_sensor.xml"/>
+    <include file="sensors/front_leg_to_rear_leg_collision_sensor.xml"/>
+    <include file="sensors/arm_to_torso_collision_sensor.xml"/>
+
+</mujoco>

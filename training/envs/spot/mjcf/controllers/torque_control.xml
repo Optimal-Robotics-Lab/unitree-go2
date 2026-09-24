@@ -1,0 +1,60 @@
+<mujoco>
+
+	<default>
+		<default class="spot/abduction/motor">
+			<motor forcerange="-45 45"/>
+		</default>
+		<default class="spot/hip/motor">
+			<motor forcerange="-45 45"/>
+		</default>
+		<default class="spot/knee/motor">
+			<!-- Peak output torque from Boston Dynamics' knee torque/angle table (varies -->
+			<!-- 30.6-113.24 Nm over the joint range due to the knee linkage); ceiling only. -->
+			<motor forcerange="-113 113"/>
+		</default>
+		<!-- The arm now goes through the same explicit torque control as the
+		legs (see motor.py's MotorModel/ActuationPipeline) -- forcerange
+		below is the only thing MuJoCo needs from it. The kp/kv this used to
+		carry as a <position> actuator move to transmission_constants.py as
+		MotorModel.kp/kv: still Boston Dynamics' own published default
+		position-control gains, not derived/tuned by us, just applied
+		externally instead of by MuJoCo. Delay defaults to zero -- unlike
+		the legs' sourced friction, we have no measured arm actuation delay
+		yet. -->
+		<default class="spot/arm/motor">
+			<motor/>
+		</default>
+	</default>
+
+	<actuator>
+        <motor class="spot/abduction/motor" name="front_left_hip" joint="front_left_hip_joint"/>
+        <motor class="spot/hip/motor" name="front_left_thigh" joint="front_left_thigh_joint"/>
+        <motor class="spot/knee/motor" name="front_left_calf" joint="front_left_calf_joint"/>
+        <motor class="spot/abduction/motor" name="front_right_hip" joint="front_right_hip_joint"/>
+        <motor class="spot/hip/motor" name="front_right_thigh" joint="front_right_thigh_joint"/>
+        <motor class="spot/knee/motor" name="front_right_calf" joint="front_right_calf_joint"/>
+        <motor class="spot/abduction/motor" name="rear_left_hip" joint="rear_left_hip_joint"/>
+        <motor class="spot/hip/motor" name="rear_left_thigh" joint="rear_left_thigh_joint"/>
+        <motor class="spot/knee/motor" name="rear_left_calf" joint="rear_left_calf_joint"/>
+        <motor class="spot/abduction/motor" name="rear_right_hip" joint="rear_right_hip_joint"/>
+        <motor class="spot/hip/motor" name="rear_right_thigh" joint="rear_right_thigh_joint"/>
+        <motor class="spot/knee/motor" name="rear_right_calf" joint="rear_right_calf_joint"/>
+        <motor class="spot/arm/motor" name="arm_sh0" joint="arm_sh0" forcerange="-90.9 90.9"/>
+        <motor class="spot/arm/motor" name="arm_sh1" joint="arm_sh1" forcerange="-181.8 181.8"/>
+        <motor class="spot/arm/motor" name="arm_el0" joint="arm_el0" forcerange="-90.9 90.9"/>
+        <motor class="spot/arm/motor" name="arm_el1" joint="arm_el1" forcerange="-30.3 30.3"/>
+        <motor class="spot/arm/motor" name="arm_wr0" joint="arm_wr0" forcerange="-30.3 30.3"/>
+        <motor class="spot/arm/motor" name="arm_wr1" joint="arm_wr1" forcerange="-30.3 30.3"/>
+        <motor class="spot/arm/motor" name="arm_f1x" joint="arm_f1x" forcerange="-15.32 15.32"/>
+	</actuator>
+
+	<!-- Arm joints (last 7) match spot-drivers' util::default_arm_position, the pose the
+	hardware holds, so the policy sees the same arm offsets in training and on the robot. -->
+	<keyframe>
+		<key name="home"
+			qpos="0 0 0.46 1 0 0 0 0 1.04 -1.8 0 1.04 -1.8 0 1.04 -1.8 0 1.04 -1.8 0 -3.14159265 3.14159265 1.57079633 0 -1.57079633 0"
+			ctrl="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0"
+		/>
+  	</keyframe>
+
+</mujoco>

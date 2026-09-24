@@ -1,0 +1,37 @@
+[project]
+name = "unitree-go2"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "jeh15", email = "jeh15@fsu.edu" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "jax[cuda13]",
+    "warp-lang",
+    "mujoco",
+    "mujoco-mjx[warp]",
+    "playground",
+    "brax",
+    "numpy",
+    "optax",
+    "distrax",
+    "orbax-checkpoint",
+    "flax",
+    "scipy",
+    "matplotlib",
+    "plotly",
+    "wandb",
+    "absl-py",
+    "ml_collections",
+    "jax2onnx @ git+https://github.com/enpasos/jax2onnx.git",
+    "onnxsim",
+]
+
+[project.scripts]
+unitree-go2 = "unitree_go2:main"
+
+[build-system]
+requires = ["uv_build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"

@@ -1,0 +1,6 @@
+<mujoco>
+    <contact>
+        <pair name="front_left_thigh_foot_contact" geom1="front_left_thigh_upper_collision" geom2="front_left_foot_collision" condim="1" friction="0.8"/>
+        <pair name="front_right_thigh_foot_contact" geom1="front_right_thigh_upper_collision" geom2="front_right_foot_collision" condim="1" friction="0.8"/>
+    </contact>
+</mujoco>

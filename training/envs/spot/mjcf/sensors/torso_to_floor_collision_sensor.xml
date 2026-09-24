@@ -1,0 +1,8 @@
+<mujoco>
+  <sensor>
+    <contact name="torso_upper_left_to_floor" geom1="torso_upper_left_collision" geom2="floor" reduce="mindist" num="1" data="found"/>
+    <contact name="torso_upper_right_to_floor" geom1="torso_upper_right_collision" geom2="floor" reduce="mindist" num="1" data="found"/>
+    <contact name="torso_lower_left_to_floor" geom1="torso_lower_left_collision" geom2="floor" reduce="mindist" num="1" data="found"/>
+    <contact name="torso_lower_right_to_floor" geom1="torso_lower_right_collision" geom2="floor" reduce="mindist" num="1" data="found"/>
+  </sensor>
+</mujoco>

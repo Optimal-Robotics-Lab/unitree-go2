@@ -1,0 +1,14 @@
+<mujoco>
+  <sensor>
+    <contact name="front_left_foot_to_rear_left_foot" geom1="front_left_foot_collision" geom2="rear_left_foot_collision" reduce="mindist" num="1" data="found"/>
+    <contact name="front_left_foot_to_rear_left_calf_upper" geom1="front_left_foot_collision" geom2="rear_left_calf_upper_collision" reduce="mindist" num="1" data="found"/>
+    <contact name="rear_left_foot_to_front_left_calf_upper" geom1="rear_left_foot_collision" geom2="front_left_calf_upper_collision" reduce="mindist" num="1" data="found"/>
+    <contact name="front_left_foot_to_rear_left_calf_lower" geom1="front_left_foot_collision" geom2="rear_left_calf_lower_collision" reduce="mindist" num="1" data="found"/>
+    <contact name="rear_left_foot_to_front_left_calf_lower" geom1="rear_left_foot_collision" geom2="front_left_calf_lower_collision" reduce="mindist" num="1" data="found"/>
+    <contact name="front_right_foot_to_rear_right_foot" geom1="front_right_foot_collision" geom2="rear_right_foot_collision" reduce="mindist" num="1" data="found"/>
+    <contact name="front_right_foot_to_rear_right_calf_upper" geom1="front_right_foot_collision" geom2="rear_right_calf_upper_collision" reduce="mindist" num="1" data="found"/>
+    <contact name="rear_right_foot_to_front_right_calf_upper" geom1="rear_right_foot_collision" geom2="front_right_calf_upper_collision" reduce="mindist" num="1" data="found"/>
+    <contact name="front_right_foot_to_rear_right_calf_lower" geom1="front_right_foot_collision" geom2="rear_right_calf_lower_collision" reduce="mindist" num="1" data="found"/>
+    <contact name="rear_right_foot_to_front_right_calf_lower" geom1="rear_right_foot_collision" geom2="front_right_calf_lower_collision" reduce="mindist" num="1" data="found"/>
+  </sensor>
+</mujoco>

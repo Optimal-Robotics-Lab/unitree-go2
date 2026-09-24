@@ -1,0 +1,52 @@
+<mujoco model="spot-mjx scene (no arm, diagnostic)">
+    <!-- Diagnostic variant of scene_mjx.xml with the arm physically removed
+    (models/spot_no_arm.xml, controllers/torque_control_no_arm.xml), to
+    isolate the arm/gripper's contribution to per-step compute cost from
+    the legs-only kinematic tree. arm_to_torso contacts/sensor are dropped
+    since they reference now-nonexistent arm geoms. -->
+    <include file="models/spot_no_arm.xml"/>
+
+    <visual>
+      <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+      <rgba haze="0.15 0.25 0.35 1"/>
+      <global azimuth="120" elevation="-20"/>
+    </visual>
+
+    <asset>
+        <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
+        <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
+            markrgb="0.8 0.8 0.8" width="300" height="300"/>
+        <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>
+    </asset>
+
+    <worldbody>
+        <light pos="0 0 1.5" dir="0 0 -1" directional="true"/>
+        <camera name="default" pos="0.846 -1.465 0.916" xyaxes="0.866 0.500 0.000 -0.171 0.296 0.940"/>
+        <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
+    </worldbody>
+
+    <!-- Control Type -->
+    <include file="controllers/torque_control_no_arm.xml"/>
+
+    <!-- Add Task Specific Contacts (legs only -- no arm_to_torso) -->
+    <include file="contacts/torso_to_floor_contacts.xml"/>
+    <include file="contacts/front_thigh_to_floor_contacts.xml"/>
+    <include file="contacts/rear_thigh_to_floor_contacts.xml"/>
+    <include file="contacts/front_calf_to_floor_contacts.xml"/>
+    <include file="contacts/rear_calf_to_floor_contacts.xml"/>
+    <include file="contacts/front_leg_self_contacts.xml"/>
+    <include file="contacts/rear_leg_self_contacts.xml"/>
+    <include file="contacts/front_leg_to_rear_leg_contacts.xml"/>
+
+    <!-- Add Task Specific Sensors (legs only -- no arm_to_torso) -->
+    <include file="sensors/torso_to_floor_collision_sensor.xml"/>
+    <include file="sensors/front_thigh_to_floor_collision_sensor.xml"/>
+    <include file="sensors/rear_thigh_to_floor_collision_sensor.xml"/>
+    <include file="sensors/front_calf_to_floor_collision_sensor.xml"/>
+    <include file="sensors/rear_calf_to_floor_collision_sensor.xml"/>
+    <include file="sensors/foot_to_floor_collision_sensor.xml"/>
+    <include file="sensors/front_leg_self_collision_sensor.xml"/>
+    <include file="sensors/rear_leg_self_collision_sensor.xml"/>
+    <include file="sensors/front_leg_to_rear_leg_collision_sensor.xml"/>
+
+</mujoco>

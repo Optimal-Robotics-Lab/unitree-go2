@@ -15,9 +15,9 @@ import optax
 
 import wandb
 
-from training.envs.unitree_go2_handstand import unitree_go2_handstand
-from training.envs.unitree_go2_handstand import config
-from training.envs.unitree_go2_handstand import randomize
+from training.envs.unitree_go2 import unitree_go2_joystick
+from training.envs.unitree_go2 import config
+from training.envs.unitree_go2 import randomize
 import training.envs.utilities.filter as filters
 
 import training.statistics as statistics
@@ -49,7 +49,7 @@ flags.DEFINE_string(
 
 def main(argv=None):
     # Training Types:
-    training_types = ['baseline', 'command', 'finetune']
+    training_types = ['baseline', 'finetune']
 
     previous_run = None
     for training_type in training_types:
@@ -57,15 +57,12 @@ def main(argv=None):
         if training_type == 'baseline':
             reward_config = config.RewardConfig(
                 # Rewards:
-                tracking_height=1.0,
-                tracking_orientation=1.0,
-                tracking_heading=1.0,
-                tracking_linear_velocity=0.5,
-                tracking_angular_velocity=0.5,
+                tracking_linear_velocity=1.5,
+                tracking_angular_velocity=0.75,
                 # Orientation Regularization Terms:
-                pose_regularization=-0.1,
-                orientation_regularization=-1.0,
-                vertical_velocity=-0.1,
+                orientation_regularization=-5.0,
+                linear_z_velocity=-2.0,
+                angular_xy_velocity=-0.05,
                 # Energy Regularization Terms:
                 torque=-2e-4,
                 action_rate=-0.01,
@@ -75,30 +72,33 @@ def main(argv=None):
                 termination=-1.0,
                 unwanted_contact=-1.0,
                 # Gait Reward Terms:
-                feet_contact=-0.5,
                 foot_slip=-1.0,
+                air_time=0.75,
+                foot_clearance=0.25,
+                gait_variance=-1.0,
+                # Gait Hyperparameters:
+                target_air_time=0.25,
+                mode_time=0.2,
+                command_threshold=0.0,
+                velocity_threshold=0.5,
+                # Foot Clearance Reward Terms:
+                target_foot_height=0.125,
+                foot_clearance_velocity_scale=2.0,
+                foot_clearance_sigma=0.05,
                 # Hyperparameter for exponential kernel:
-                velocity_sigma=0.25,
-                height_sigma=1.0,
+                kernel_sigma=0.25,
             )
-            command_config = config.CommandConfig(
-                command_range=jax.numpy.array([0.0, 0.0, 0.0]),
-                command_mask_probability=0.9,
-                command_frequency=[10.0, 10.0],
-            )
-            num_epochs = 35
-        elif training_type == 'command':
+            command_config = config.CommandConfig()
+            num_epochs = 20
+        elif training_type == 'finetune' or training_type == 'rough':
             reward_config = config.RewardConfig(
                 # Rewards:
-                tracking_height=1.0,
-                tracking_orientation=1.0,
-                tracking_heading=1.0,
-                tracking_linear_velocity=0.5,
-                tracking_angular_velocity=0.5,
+                tracking_linear_velocity=1.5,
+                tracking_angular_velocity=0.75,
                 # Orientation Regularization Terms:
-                pose_regularization=-0.1,
-                orientation_regularization=-1.0,
-                vertical_velocity=-1.0,
+                orientation_regularization=-5.0,
+                linear_z_velocity=-2.0,
+                angular_xy_velocity=-0.05,
                 # Energy Regularization Terms:
                 torque=-2e-4,
                 action_rate=-0.1,
@@ -108,57 +108,32 @@ def main(argv=None):
                 termination=-1.0,
                 unwanted_contact=-1.0,
                 # Gait Reward Terms:
-                feet_contact=-0.5,
                 foot_slip=-1.0,
+                air_time=0.75,
+                foot_clearance=0.25,
+                gait_variance=-1.0,
+                # Gait Hyperparameters:
+                target_air_time=0.25,
+                mode_time=0.2,
+                command_threshold=0.0,
+                velocity_threshold=0.5,
+                # Foot Clearance Reward Terms:
+                target_foot_height=0.125,
+                foot_clearance_velocity_scale=2.0,
+                foot_clearance_sigma=0.05,
                 # Hyperparameter for exponential kernel:
-                velocity_sigma=0.25,
-                height_sigma=1.0,
+                kernel_sigma=0.25,
             )
             command_config = config.CommandConfig(
-                command_range=jax.numpy.array([0.5, 0.5, 0.5]),
-                command_mask_probability=0.9,
-                command_frequency=[2.0, 5.0],
-            )
-            num_epochs = 35
-        elif training_type == 'finetune' or training_type == 'rough':
-            reward_config = config.RewardConfig(
-                # Rewards:
-                tracking_height=1.0,
-                tracking_orientation=1.0,
-                tracking_heading=1.0,
-                tracking_linear_velocity=1.0,
-                tracking_angular_velocity=1.0,
-                # Orientation Regularization Terms:
-                pose_regularization=-0.1,
-                orientation_regularization=-1.0,
-                vertical_velocity=-1.0,
-                # Energy Regularization Terms:
-                torque=-2e-3,
-                action_rate=-0.5,
-                acceleration=-2.5e-3,
-                # Auxilary Terms:
-                stand_still=-1.0,
-                termination=-1.0,
-                unwanted_contact=-1.0,
-                # Gait Reward Terms:
-                feet_contact=-0.5,
-                foot_slip=-1.0,
-                # Hyperparameter for exponential kernel:
-                velocity_sigma=0.25,
-                height_sigma=1.0,
-            )
-            command_config = config.CommandConfig(
-                command_range=jax.numpy.array([0.5, 0.5, 0.5]),
+                command_range=jax.numpy.array([1.5, 1.0, 3.14]),
                 command_mask_probability=0.9,
                 command_frequency=[0.5, 2.0],
             )
-            num_epochs = 35
+            num_epochs = 10
 
         # Configs:
         noise_config = config.NoiseConfig()
-        disturbance_config = config.DisturbanceConfig(
-            magnitudes=[0.0, 0.0],
-        )
+        disturbance_config = config.DisturbanceConfig()
 
         scene = 'scene_compiled.xml'
         motor_config = config.MotorConfig()
@@ -167,7 +142,6 @@ def main(argv=None):
         control_timestep = 0.02
 
         # First Order Filter:
-        action_scale = None
         cutoff_frequency = 4.0
         tau = 1 / (2 * jnp.pi * cutoff_frequency)
         alpha = control_timestep / (tau + control_timestep)
@@ -176,24 +150,27 @@ def main(argv=None):
             alpha=alpha,
         )
 
-        # No Filter:
-        # filter_impl = filters.NoFilter()
-        # action_scale = jnp.array([
-        #     0.5, 0.5, 0.5,
-        #     0.5, 0.5, 0.5,
-        #     0.5, 2.0, 1.0,
-        #     0.5, 2.0, 1.0,
-        # ])
+        # Second Order Filter:
+        # b0, b1, b2 = 0.04613, 0.09227, 0.04613
+        # a1, a2 = -1.30728, 0.49181
+        # filter_impl = filters.SecondOrderFilter(
+        #     action_dim=12,
+        #     b0=b0,
+        #     b1=b1,
+        #     b2=b2,
+        #     a1=a1,
+        #     a2=a2,
+        # )
 
         environment_config = config.EnvironmentConfig(
             filename=scene,
-            action_scale=action_scale,
+            action_scale=None,
             control_timestep=control_timestep,
             optimizer_timestep=0.004,
             impl="warp",
         )
 
-        env = unitree_go2_handstand.Handstand(
+        env = unitree_go2_joystick.UnitreeGo2Env(
             environment_config=environment_config,
             reward_config=reward_config,
             noise_config=noise_config,
@@ -202,7 +179,7 @@ def main(argv=None):
             motor_config=motor_config,
             filter_impl=filter_impl,
         )
-        eval_env = unitree_go2_handstand.Handstand(
+        eval_env = unitree_go2_joystick.UnitreeGo2Env(
             environment_config=environment_config,
             reward_config=reward_config,
             noise_config=noise_config,
@@ -217,7 +194,6 @@ def main(argv=None):
         reference_observation = {
             key: jnp.zeros(value) for key, value in observation_size.items()
         }
-        print(f'Observation Size: {observation_size}')
 
         # Setup agent:
         policy_layer_size = [512, 256, 128,]
@@ -313,7 +289,7 @@ def main(argv=None):
 
         # Start Wandb and save metadata:
         run = wandb.init(
-            project='UnitreeGo2-Handstand',
+            project='UnitreeGo2-Compiled',
             tags=[FLAGS.tag],
             config={
                 'reward_config': reward_config,

@@ -1,0 +1,34 @@
+<mujoco>
+  <!-- Shared default classes: spot.xml, spot_simplified.xml, arm.xml and arm_simplified.xml
+  all <include> this file, so edit them here and the models cannot drift apart. -->
+  <default>
+    <default class="spot">
+      <geom type="mesh" friction="0.6" condim="1"/>
+      <joint axis="0 1 0" damping="0.1" armature="0.1"/>
+      <default class="spot/abduction">
+        <joint axis="1 0 0" range="-0.785398 0.785398" frictionloss="0.008"/>
+      </default>
+      <default class="spot/hip">
+        <joint range="-0.898845 2.295108" frictionloss="0.008"/>
+      </default>
+      <default class="spot/knee">
+        <joint range="-2.7929 -0.2471" frictionloss="0.18"/>
+      </default>
+      <default class="spot/arm">
+        <joint frictionloss="10"/>
+      </default>
+      <default class="spot/foot">
+        <site size="0.036" group="5" pos="0 0 -0.3365"/>
+      </default>
+      <default class="spot/visual">
+        <geom group="2" contype="0" conaffinity="0"/>
+      </default>
+      <default class="spot/collision">
+        <geom group="3" contype="0" conaffinity="2"/>
+        <default class="spot/collision/foot">
+          <geom type="sphere" size="0.036" pos="0 0 -0.3365" solimp="0.9 .95 0.023" condim="3" friction="1.0"/>
+        </default>
+      </default>
+    </default>
+  </default>
+</mujoco>

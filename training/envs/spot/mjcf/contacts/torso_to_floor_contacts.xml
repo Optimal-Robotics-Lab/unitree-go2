@@ -1,0 +1,8 @@
+<mujoco>
+    <contact>
+        <pair name="torso_upper_left_floor_contact" geom1="torso_upper_left_collision" geom2="floor" condim="1" friction="0.8"/>
+        <pair name="torso_upper_right_floor_contact" geom1="torso_upper_right_collision" geom2="floor" condim="1" friction="0.8"/>
+        <pair name="torso_lower_left_floor_contact" geom1="torso_lower_left_collision" geom2="floor" condim="1" friction="0.8"/>
+        <pair name="torso_lower_right_floor_contact" geom1="torso_lower_right_collision" geom2="floor" condim="1" friction="0.8"/>
+    </contact>
+</mujoco>

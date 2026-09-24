@@ -1,25 +1,24 @@
 """
-    Unitree Go2 Environment:
+    Spot Environment: Joystick Locomotion Task
 """
 
 from typing import Any, Dict, TypeAlias
-from absl import app
-import os
 
 import jax
+import numpy as np
 import jax.numpy as jnp
 
-import numpy as np
+import flax
+import flax.serialization
 
-import mujoco
 from mujoco import mjx
 from mujoco.mjx._src import math as mjx_math
 from mujoco_playground._src import mjx_env
 
-from brax.io import html
-
-from training.envs.unitree_go2 import base
-from training.envs.unitree_go2.config import (
+from training.envs.spot import base
+from training.envs.spot import diagnostics
+from training.envs.spot import randomize
+from training.envs.spot.config import (
     RewardConfig,
     NoiseConfig,
     DisturbanceConfig,
@@ -31,13 +30,13 @@ from training.envs.unitree_go2.config import (
 PRNGKey: TypeAlias = jax.Array
 
 
-class UnitreeGo2Env(base.UnitreeGo2Env):
-    """Environment for training the Unitree Go2 quadruped joystick policy in MJX."""
+class SpotJoystickEnv(base.SpotEnv):
+    """Environment for training the Spot quadruped joystick policy in MJX."""
 
     def __init__(
         self,
-        environment_config: EnvironmentConfig = EnvironmentConfig(),
         reward_config: RewardConfig = RewardConfig(),
+        environment_config: EnvironmentConfig = EnvironmentConfig(),
         noise_config: NoiseConfig = NoiseConfig(),
         disturbance_config: DisturbanceConfig = DisturbanceConfig(),
         command_config: CommandConfig = CommandConfig(),
@@ -45,12 +44,112 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
     ) -> None:
         super().__init__(
             environment_config=environment_config,
-            reward_config=reward_config,
             noise_config=noise_config,
             disturbance_config=disturbance_config,
             command_config=command_config,
             **kwargs,
         )
+
+        # The policy only controls the 12 leg joints (self.num_leg_joints,
+        # set in base.py); the arm is not policy-controlled and holds its
+        # default pose -- see base.py's _simulation_step.
+
+        # Task Specific Reward Implementation: weights and hyperparameters
+        # are separate dataclasses (RewardConfig.weights / .hyperparameters),
+        # so there's no manual key-deletion list to keep in sync --
+        # self.reward_config is exactly the per-term weight dict `step()`
+        # looks up, no more no less.
+        hyperparameters = reward_config.hyperparameters
+        self.kernel_sigma = hyperparameters.kernel_sigma
+        self.target_air_time = hyperparameters.target_air_time
+        self.mode_time = hyperparameters.mode_time
+        self.command_threshold = hyperparameters.command_threshold
+        self.velocity_threshold = hyperparameters.velocity_threshold
+        self.ramp_at_vel = hyperparameters.ramp_at_vel
+        self.ramp_rate = hyperparameters.ramp_rate
+        self.target_foot_height = hyperparameters.target_foot_height
+        self.foot_clearance_velocity_scale = hyperparameters.foot_clearance_velocity_scale
+        self.foot_clearance_sigma = hyperparameters.foot_clearance_sigma
+        self.stand_still_scale = hyperparameters.stand_still_scale
+        self.window_steps = hyperparameters.window_steps
+        self.reward_config = flax.serialization.to_state_dict(reward_config.weights)
+
+        # Task Specific Observation Details:
+        # State: linvel(3) + angvel(3) + gravity(3) + joint_pos(n) + joint_vel(n)
+        #        + previous_action(num_leg_joints) + command(3) + filter.
+        self.num_observations = (
+            3 + 3 + 3 + self.num_joints + self.num_joints + self.num_leg_joints + 3
+            + self.filter.observation_size
+        )
+        # Privileged: state + accelerometer(3) + raw angvel/gravity/linvel(3 each)
+        #             + global_angvel(3) + raw joint_pos/vel(n each) + actuator_force(nu)
+        #             + feet_velocity(12) + previous_contact/gait timers(4*6)
+        #             + xfrc_applied(3) + disturbance_flag(1).
+        self.num_privileged_observations = (
+            self.num_observations
+            + 3 + 3 + 3 + 3 + 3
+            + self.num_joints + self.num_joints
+            + self.nu
+            + 12
+            + 4 + 4 + 4 + 4 + 4 + 4
+            + 3 + 1
+        )
+
+        # State Observation Mask: True marks a continuous signal that should
+        # be normalized (e.g. via running mean/std); False marks scripted or
+        # boolean signals that shouldn't be.
+        state_mask = jnp.concatenate([
+            jnp.ones(3, dtype=bool),                       # linear velocity
+            jnp.ones(3, dtype=bool),                       # angular velocity
+            jnp.ones(3, dtype=bool),                       # projected gravity
+            jnp.ones(self.num_joints, dtype=bool),         # joint position - default
+            jnp.ones(self.num_joints, dtype=bool),         # joint velocity
+            jnp.ones(self.num_leg_joints, dtype=bool),     # previous action
+            jnp.zeros(3, dtype=bool),                      # command (scripted)
+            jnp.ones(self.filter.observation_size, dtype=bool),
+        ])
+
+        # Privileged Observation Mask:
+        privileged_mask = jnp.concatenate([
+            state_mask,
+            jnp.ones(3, dtype=bool),                       # accelerometer
+            jnp.ones(3, dtype=bool),                       # angular velocity (raw)
+            jnp.ones(3, dtype=bool),                       # projected gravity (raw)
+            jnp.ones(3, dtype=bool),                       # linear velocity (raw)
+            jnp.ones(3, dtype=bool),                       # global angular velocity
+            jnp.ones(self.num_joints, dtype=bool),         # joint position - default (raw)
+            jnp.ones(self.num_joints, dtype=bool),         # joint velocity (raw)
+            jnp.ones(self.nu, dtype=bool),                 # actuator force
+            jnp.ones(12, dtype=bool),                      # feet velocity
+            jnp.zeros(4, dtype=bool),                      # previous contact (boolean)
+            jnp.ones(4, dtype=bool),                       # feet air time
+            jnp.ones(4, dtype=bool),                       # feet contact time
+            jnp.ones(4, dtype=bool),                       # previous air time
+            jnp.ones(4, dtype=bool),                       # previous contact time
+            jnp.ones(4, dtype=bool),                       # swing peak
+            jnp.ones(3, dtype=bool),                       # xfrc applied
+            jnp.zeros(1, dtype=bool),                      # disturbance active flag
+        ])
+
+        assert state_mask.shape[0] == self.num_observations, (
+            f"State mask length {state_mask.shape[0]} does not match "
+            f"number of observations {self.num_observations}."
+        )
+        assert privileged_mask.shape[0] == self.num_privileged_observations, (
+            f"Privileged mask length {privileged_mask.shape[0]} does not "
+            f"match number of privileged observations {self.num_privileged_observations}."
+        )
+
+        self.observation_mask = {
+            'state': state_mask,
+            'privileged_state': privileged_mask,
+        }
+
+    @property
+    def action_size(self) -> int:
+        # Overrides base.SpotEnv.action_size (= total actuator count): the
+        # policy only controls the 12 leg joints, not the arm.
+        return self.num_leg_joints
 
     def sample_command(
         self,
@@ -112,23 +211,24 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
             jax.random.uniform(key, (6,), minval=-0.5, maxval=0.5)
         )
 
-        # Small Joint Perturbation:
+        # Small Joint Perturbation: leg joints only -- the arm starts exactly
+        # at its default pose, since it isn't part of the task.
         rng, key = jax.random.split(rng)
         delta = jax.random.uniform(
             key,
-            shape=(self.num_joints,),
+            shape=(self.num_leg_joints,),
             minval=-0.1,
             maxval=0.1,
         )
-        qpos = qpos.at[7:].set(qpos[7:] + delta)
-
-        # Initialize State:
-        ctrl = jnp.pad(
-            qpos[7:],
-            (0, self.nu - qpos[7:].shape[0]),
-            mode='constant',
-            constant_values=0,
+        qpos = qpos.at[7:7 + self.num_leg_joints].set(
+            qpos[7:7 + self.num_leg_joints] + delta
         )
+
+        # Initialize State: every actuator is direct-torque now, so zero
+        # ctrl means zero commanded torque everywhere (the arm's PD law
+        # brings it to its default pose over the first few steps, rather
+        # than a MuJoCo position servo holding it there from the start).
+        ctrl = jnp.zeros(self.nu)
 
         data = mjx_env.make_data(
             self._mj_model,
@@ -181,15 +281,22 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         ).astype(jnp.int32)
         command = self.sample_command(command_sample_key)
 
+        # Actuation Delay: domain-randomized per channel, resampled each
+        # reset like command/disturbance_magnitude above (see
+        # randomize.sample_actuation_delay for why this isn't in
+        # domain_randomize itself).
+        rng, delay_key = jax.random.split(rng)
+        actuation_delay = randomize.sample_actuation_delay(delay_key, self.nu)
+
         # Foot Contacts:
         feet_contacts = jnp.array([
             data.sensordata[self._mj_model.sensor_adr[sensor_id]] > 0
-            for sensor_id in self.feet_contact_sensor
+            for sensor_id in self.foot_to_floor_sensor
         ])
 
         state_info = {
             'rng': rng,
-            'previous_action': jnp.zeros(self.nu),
+            'previous_action': jnp.zeros(self.num_leg_joints),
             'previous_joint_positions': jnp.zeros(self.num_joints),
             'previous_velocity': jnp.zeros(self.num_joints),
             'command': command,
@@ -211,6 +318,8 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
             'disturbance_magnitude': disturbance_magnitude,
             'disturbance_direction': jnp.array([0.0, 0.0, 0.0]),
             'filter_state': filter_state,
+            'delay_state': self.delay_line.init(),
+            'actuation_delay': actuation_delay,
         }
 
         # Observation Initialization:
@@ -225,6 +334,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         for k in state_info['rewards']:
             metrics[k] = state_info['rewards'][k]
         metrics['total_distance'] = 0.0
+        metrics.update({name: 0.0 for name in diagnostics.DIAGNOSTIC_NAMES})
         metrics['swing_peak'] = jnp.zeros(())
 
         state = mjx_env.State(
@@ -250,21 +360,50 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         )
         state.info['filter_state'] = filter_state
 
-        # Physics step:
-        data = self._step(state.data, filtered_action)
+        # Physics step: `filtered_action` is the raw per-leg-joint action;
+        # base.py's _simulation_step turns it into a qpos setpoint
+        # (default_pose + action_scale * action) and runs the actuation
+        # pipeline (delay -> PD law -> knee limit) to get torque.
+        # `delay_state` must be threaded back out, same as `filter_state`
+        # above; `actuation_delay` is this env's fixed-for-the-episode
+        # domain-randomized sample from reset().
+        data, delay_state = self._step(
+            state.data,
+            filtered_action,
+            state.info['delay_state'],
+            state.info['actuation_delay'],
+        )
+        state.info['delay_state'] = delay_state
 
-        imu_height = data.site_xpos[self.imu_site_idx][2]
         joint_angles = data.qpos[7:]
         joint_velocities = data.qvel[6:]
 
         # Sensor Contacts:
         feet_contacts = jnp.array([
             data.sensordata[self._mj_model.sensor_adr[sensor_id]] > 0
-            for sensor_id in self.feet_contact_sensor
+            for sensor_id in self.foot_to_floor_sensor
         ])
-        unwanted_contacts = jnp.array([
-            data.sensordata[self._mj_model.sensor_adr[sensor_id]] > 0
-            for sensor_id in self.unwanted_contact_sensor
+        unwanted_contacts = jnp.concatenate([
+            jnp.array([
+                data.sensordata[self._mj_model.sensor_adr[sensor_id]] > 0
+                for sensor_id in self.thigh_to_floor_sensor
+            ]),
+            jnp.array([
+                data.sensordata[self._mj_model.sensor_adr[sensor_id]] > 0
+                for sensor_id in self.calf_to_floor_sensor
+            ]),
+            jnp.array([
+                data.sensordata[self._mj_model.sensor_adr[sensor_id]] > 0
+                for sensor_id in self.leg_self_collision_sensor
+            ]),
+            jnp.array([
+                data.sensordata[self._mj_model.sensor_adr[sensor_id]] > 0
+                for sensor_id in self.leg_to_leg_collision_sensor
+            ]),
+            jnp.array([
+                data.sensordata[self._mj_model.sensor_adr[sensor_id]] > 0
+                for sensor_id in self.arm_to_torso_collision_sensor
+            ]),
         ])
 
         # Feet Air and Contact Time:
@@ -336,10 +475,14 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
             'orientation_regularization': self._cost_orientation_regularization(
                 self.get_upvector(data),
             ),
-            'torque': self._cost_torques(data.actuator_force),
+            # Leg joints only: the arm isn't policy-controlled, so its
+            # gravity-hold torque/pose shouldn't be penalized.
+            'torque': self._cost_torques(
+                data.actuator_force[:self.num_leg_joints],
+            ),
             'action_rate': self._cost_action_rate(action, state.info['previous_action']),
             'acceleration': self._cost_acceleration(
-                data.qacc,
+                data.qacc[6:6 + self.num_leg_joints],
             ),
             'stand_still': self._cost_stand_still(
                 state.info['command'],
@@ -360,7 +503,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
                 self.command_threshold,
                 self.velocity_threshold,
             ),
-            'leg_fairness': self._cost_leg_fairness(
+            'gait_timing_variance': self._cost_gait_timing_variance(
                 state.info['previous_air_time'],
                 state.info['previous_contact_time'],
             ),
@@ -386,6 +529,26 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
             k: v * self.reward_config[k] for k, v in rewards.items()
         }
         reward = jnp.clip(sum(rewards.values()) * self.dt, 0.0, 10000.0)
+
+        # Weight-independent diagnostics (see diagnostics.py); must run
+        # before swing_peak is cleared and previous_action is overwritten.
+        diagnostic_values = self._diagnostics(
+            command=state.info['command'],
+            local_velocity=local_body_velocity,
+            gyro=self.get_gyro(data),
+            action=action,
+            previous_action=state.info['previous_action'],
+            feet_contacts=feet_contacts,
+            touchdown=touchdown,
+            touchdown_window=state.info['touchdown_window'],
+            swing_peak=state.info['swing_peak'],
+            foot_velocity=self.get_feet_velocity(data),
+            unwanted_contacts=unwanted_contacts,
+            data=data,
+            joint_velocities=joint_velocities,
+            upvector=self.get_upvector(data),
+            done=done,
+        )
 
         # State management
         state.info['previous_action'] = action
@@ -426,6 +589,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
             state.info['swing_peak']
         )
         state.metrics.update(state.info['rewards'])
+        state.metrics.update(diagnostic_values)
 
         done = jnp.float64(done) if jax.config.x64_enabled else jnp.float32(done)
 
@@ -438,18 +602,17 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         return state
 
     def get_termination(self, data: mjx.Data) -> jax.Array:
-        joint_angles = data.qpos[7:]
-
+        """Terminates when the torso, a thigh or an upper calf (knee) touches the floor."""
+        termination_sensors = np.concatenate([
+            self.torso_to_floor_sensor,
+            self.thigh_to_floor_sensor,
+            self.calf_upper_to_floor_sensor,
+        ])
         termination_contacts = jnp.array([
             data.sensordata[self._mj_model.sensor_adr[sensor_id]] > 0
-            for sensor_id in self.termination_contact_sensor
+            for sensor_id in termination_sensors
         ])
-
-        done = self.get_upvector(data)[-1] < -0.25
-        done |= jnp.any(joint_angles < self.joint_lb)
-        done |= jnp.any(joint_angles > self.joint_ub)
-        done |= jnp.any(termination_contacts)
-        return done
+        return jnp.any(termination_contacts)
 
     def get_observation(
         self,
@@ -459,10 +622,11 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
     ) -> Dict[str, jax.Array]:
         """
             Observation: [
-                gyroscope,
+                linear_velocity,
+                angular_velocity,
                 projected_gravity,
-                relative_motor_positions,
-                motor_velocities,
+                relative_joint_positions,
+                joint_velocities,
                 previous_action,
                 command,
                 filter_observation,
@@ -471,7 +635,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         q = data.qpos[7:]
         qd = data.qvel[6:]
 
-        # Linear Velocity:
+        # Linear Velocity Noise:
         linear_velocity = self.get_local_linear_velocity(data)
         state_info['rng'], noise_key = jax.random.split(state_info['rng'])
         linear_velocity_noise = jax.random.uniform(
@@ -482,16 +646,16 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         )
         noisy_linear_velocity = linear_velocity + linear_velocity_noise
 
-        # Gyroscope Noise:
-        gyroscope = self.get_gyro(data)
+        # Angular Velocity Noise:
+        angular_velocity = self.get_gyro(data)
         state_info['rng'], noise_key = jax.random.split(state_info['rng'])
-        gyroscope_noise = jax.random.uniform(
+        angular_velocity_noise = jax.random.uniform(
             noise_key,
-            shape=gyroscope.shape,
-            minval=-self.noise_config.gyroscope,
-            maxval=self.noise_config.gyroscope,
+            shape=angular_velocity.shape,
+            minval=-self.noise_config.angular_velocity,
+            maxval=self.noise_config.angular_velocity,
         )
-        noisy_angular_rate = gyroscope + gyroscope_noise
+        noisy_angular_velocity = angular_velocity + angular_velocity_noise
 
         # Gravity noise:
         projected_gravity = self.get_gravity(data)
@@ -524,26 +688,18 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         )
         noisy_joint_velocities = qd + joint_velocity_noise
 
-        # Feet Contacts:
-        # state_info['rng'], noise_key = jax.random.split(state_info['rng'])
-        # dropout_mask = jax.random.bernoulli(
-        #     noise_key,
-        #     p=self.noise_config.contact_dropout,
-        #     shape=(4,)
-        # )
-        # noisy_feet_contacts = contacts * dropout_mask
-
         # Filter State:
         filter_observation = self.filter.get_observation(state_info['filter_state'])
 
         observation = jnp.concatenate([
-            noisy_angular_rate,                         # 3
-            noisy_projected_gravity,                    # 3
-            noisy_joint_positions - self.default_pose,  # 12
-            noisy_joint_velocities,                     # 12
-            state_info['previous_action'],              # 12 or 24
-            state_info['command'],                      # 3
-            filter_observation,                         # Dynamic based on filter
+            noisy_linear_velocity,                        # 3
+            noisy_angular_velocity,                       # 3
+            noisy_projected_gravity,                      # 3
+            noisy_joint_positions - self.default_pose,    # num_joints
+            noisy_joint_velocities,                       # num_joints
+            state_info['previous_action'],                # nu
+            state_info['command'],                        # 3
+            filter_observation,                           # Dynamic based on filter
         ])
 
         accelerometer = self.get_accelerometer(data)
@@ -552,28 +708,27 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         feet_velocity = self.get_feet_velocity(data).ravel()
 
         privileged_observation = jnp.concatenate([
-            observation,                                                                                # 45 or 57
+            observation,                                                                                # state size
             accelerometer,                                                                              # 3
-            gyroscope,                                                                                  # 3
-            projected_gravity,                                                                          # 3
-            linear_velocity,                                                                            # 3
-            global_angular_velocity,                                                                    # 3
-            q - self.default_pose,                                                                      # 12
-            qd,                                                                                         # 12
-            actuator_force,                                                                             # 12 or 24
-            feet_velocity,                                                                              # 12
-            state_info['previous_contact'],                                                             # 4
-            state_info['feet_air_time'],                                                                # 4
-            state_info['feet_contact_time'],                                                            # 4
-            state_info['previous_air_time'],                                                            # 4
-            state_info['previous_contact_time'],                                                        # 4
-            state_info['swing_peak'],                                                                   # 4
-            data.xfrc_applied[self.base_idx, :3],                                             # 3
+            angular_velocity,                                                                           # 3
+            projected_gravity,                                                                           # 3
+            linear_velocity,                                                                             # 3
+            global_angular_velocity,                                                                     # 3
+            q - self.default_pose,                                                                       # num_joints
+            qd,                                                                                          # num_joints
+            actuator_force,                                                                              # nu
+            feet_velocity,                                                                               # 12
+            state_info['previous_contact'],                                                              # 4
+            state_info['feet_air_time'],                                                                 # 4
+            state_info['feet_contact_time'],                                                             # 4
+            state_info['previous_air_time'],                                                             # 4
+            state_info['previous_contact_time'],                                                         # 4
+            state_info['swing_peak'],                                                                    # 4
+            data.xfrc_applied[self.base_idx, :3],                                                        # 3
             jnp.asarray([
                 state_info['steps_since_previous_disturbance'] >= state_info['steps_until_next_disturbance']
-            ]),                                                                                         # 1
+            ]),                                                                                          # 1
         ])
-        # Size: 91 or 115
 
         return {
             'state': observation,
@@ -585,7 +740,14 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
     ) -> jax.Array:
         # Tracking of linear velocity commands (xy axes)
         error = jnp.sum(jnp.square(commands[:2] - local_velocity[:2]))
-        return jnp.exp(-error / self.kernel_sigma)
+        # Ramp: above ramp_at_vel commanded speed, scale the reward up by
+        # ramp_rate per additional m/s, so tracking fast commands isn't
+        # worth the same as tracking slow/stationary ones.
+        command_magnitude = jnp.linalg.norm(commands[:2])
+        ramp = jnp.maximum(
+            1.0 + self.ramp_rate * (command_magnitude - self.ramp_at_vel), 1.0,
+        )
+        return jnp.exp(-error / self.kernel_sigma) * ramp
 
     def _reward_tracking_yaw_rate(
         self, commands: jax.Array, x: jax.Array
@@ -609,8 +771,12 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
     def _cost_orientation_regularization(
         self, base_z_axis: jax.Array,
     ) -> jax.Array:
-        # Penalize non flat base orientation
-        return jnp.sum(jnp.square(base_z_axis[:2]))
+        # Penalize non flat base orientation. L2 norm (~sin(tilt), closer to
+        # linear) rather than sum-of-squares (~sin^2(tilt)) -- matches
+        # IsaacLab's Spot `base_orientation_penalty` shape. Note this is a
+        # steeper penalty than the old quadratic form at small tilts, so the
+        # weight will likely need retuning.
+        return jnp.linalg.norm(base_z_axis[:2])
 
     def _cost_torques(self, torques: jax.Array) -> jax.Array:
         # Penalize torques
@@ -636,15 +802,16 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         stand_still_scale: float = 2.0,
         velocity_threshold: float = 0.5,
     ) -> jax.Array:
-        # Regularizes pose toward default at all times; amplified at rest so
-        # the robot settles to a neutral stance rather than idling wherever
-        # it happens to be. Gates on actual body velocity too (not just
+        # Regularizes leg pose toward default only when told to stand still, so
+        # the robot settles to a neutral stance without the penalty fighting
+        # leg swing while walking. Gates on actual body velocity too (not just
         # command) so recovering from a push isn't mistaken for "at rest".
         command_norm = jnp.linalg.norm(commands)
         body_velocity_norm = jnp.linalg.norm(body_velocity)
-        deviation = jnp.sum(jnp.abs(joint_angles - self.default_pose))
-        is_moving = (command_norm > 0.0) | (body_velocity_norm > velocity_threshold)
-        return jnp.where(is_moving, deviation, stand_still_scale * deviation)
+        n = self.num_leg_joints
+        deviation = jnp.sum(jnp.abs(joint_angles[:n] - self.default_pose[:n]))
+        is_still = (command_norm < 1e-3) & (body_velocity_norm <= velocity_threshold)
+        return jnp.where(is_still, stand_still_scale * deviation, 0.0)
 
     def _reward_air_time(
         self,
@@ -671,7 +838,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         )
         return jnp.sum(reward)
 
-    def _cost_leg_fairness(
+    def _cost_gait_timing_variance(
         self,
         previous_air_time: jax.Array,
         previous_contact_time: jax.Array,
@@ -722,6 +889,99 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         error = jnp.sum(foot_error * foot_velocity_tanh)
         return jnp.exp(-error / sigma)
 
+    def _diagnostics(
+        self,
+        command: jax.Array,
+        local_velocity: jax.Array,
+        gyro: jax.Array,
+        action: jax.Array,
+        previous_action: jax.Array,
+        feet_contacts: jax.Array,
+        touchdown: jax.Array,
+        touchdown_window: jax.Array,
+        swing_peak: jax.Array,
+        foot_velocity: jax.Array,
+        unwanted_contacts: jax.Array,
+        data: mjx.Data,
+        joint_velocities: jax.Array,
+        upvector: jax.Array,
+        done: jax.Array,
+    ) -> dict[str, jax.Array]:
+        """Raw per-step quantities for scorecard.compute_scorecard.
+
+        Unlike `rewards`, none of these are scaled by reward weights, so
+        they stay meaningful when a tuner changes (or zeroes) a weight.
+        """
+        n = self.num_leg_joints
+        moving = (jnp.linalg.norm(command) >= 1e-3).astype(jnp.float32)
+        still = 1.0 - moving
+        contacts = feet_contacts.astype(jnp.float32)
+        num_contacts = jnp.sum(contacts)
+        action_delta_sq = jnp.mean(jnp.square(action - previous_action))
+        body_speed = jnp.linalg.norm(local_velocity[:2])
+        # Steps with exactly two feet down, classified by which pair (feet
+        # order: front_left, front_right, rear_left, rear_right): a trot is
+        # diagonal, a pace is same-side, a bound is the front or rear axle.
+        two_contact = num_contacts == 2
+        fl, fr, rl, rr = feet_contacts
+        diagonal_pair = (fl & rr & ~fr & ~rl) | (fr & rl & ~fl & ~rr)
+        same_side_pair = (fl & rl & ~fr & ~rr) | (fr & rr & ~fl & ~rl)
+        axle_pair = (fl & fr & ~rl & ~rr) | (rl & rr & ~fl & ~fr)
+        diagonal_agreement = (
+            (feet_contacts[0] == feet_contacts[3])
+            & (feet_contacts[1] == feet_contacts[2])
+        )
+        diagnostic_values = {
+            'diag_moving_steps': moving,
+            'diag_still_steps': still,
+            'diag_linear_velocity_error_sq': moving * jnp.sum(
+                jnp.square(command[:2] - local_velocity[:2]),
+            ),
+            'diag_yaw_rate_error_sq': moving * jnp.square(command[2] - gyro[2]),
+            'diag_body_speed': moving * body_speed,
+            'diag_foot_clearance_sum': moving * jnp.sum(swing_peak * touchdown),
+            'diag_touchdown_count': moving * jnp.sum(touchdown),
+            'diag_foot_slip_speed_sum': jnp.sum(
+                jnp.linalg.norm(foot_velocity[..., :2], axis=-1) * contacts,
+            ),
+            'diag_foot_contact_count': num_contacts,
+            'diag_flight_steps': moving * (num_contacts == 0),
+            'diag_synchronized_touchdown_steps': moving * (
+                jnp.sum(touchdown_window > 0) >= 3
+            ),
+            'diag_diagonal_agreement_steps': moving * diagonal_agreement,
+            'diag_moving_contact_count': moving * num_contacts,
+            'diag_two_contact_steps': moving * two_contact,
+            'diag_two_contact_diagonal_steps': moving * diagonal_pair,
+            'diag_two_contact_same_side_steps': moving * same_side_pair,
+            'diag_two_contact_axle_steps': moving * axle_pair,
+            'diag_moving_action_delta_sq': moving * action_delta_sq,
+            'diag_still_action_delta_sq': still * action_delta_sq,
+            'diag_still_joint_velocity_sq': still * jnp.mean(
+                jnp.square(joint_velocities[:n]),
+            ),
+            'diag_still_body_speed': still * body_speed,
+            'diag_mechanical_power': jnp.sum(
+                jnp.abs(data.actuator_force[:n] * joint_velocities[:n]),
+            ),
+            # Fraction of leg joints commanding ~full range / ~full torque:
+            # action saturation without torque saturation means the action
+            # scale is too small; torque saturation means bang-bang or a
+            # scale that reaches the limit.
+            'diag_action_saturation': jnp.mean(jnp.abs(action) >= 0.95),
+            'diag_torque_saturation': jnp.mean(
+                jnp.abs(data.actuator_force[:n]) >= 0.95 * self.leg_torque_limit,
+            ),
+            'diag_unwanted_contacts': jnp.sum(unwanted_contacts),
+            'diag_tilt': 1.0 - upvector[-1],
+            'diag_terminated': done,
+        }
+        # Float32 throughout so the metrics keep a fixed dtype in scan carries.
+        return {
+            k: jnp.asarray(v, dtype=jnp.float32)
+            for k, v in diagnostic_values.items()
+        }
+
     def _cost_foot_slip(
         self,
         data: mjx.Data,
@@ -733,31 +993,6 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
         foot_velocity_xy = foot_velocity[..., :2]
         velocity_xy_sq = jnp.sum(jnp.square(foot_velocity_xy), axis=-1)
         return jnp.sum(velocity_xy_sq * contact)
-
-    # def _cost_foot_slip(
-    #     self,
-    #     data: mjx.Data,
-    #     target_foot_height: float = 0.1,
-    #     decay_rate: float = 0.95,
-    # ) -> jax.Array:
-    #     # Penalizes foot slip velocity at contact to encourage ground speed matching.
-    #     if not (0.0 < decay_rate <= 1.0):
-    #         raise ValueError("Decay rate must be between 0 and 1.")
-
-    #     # Foot velocities and foot heights
-    #     foot_velocity = self.get_feet_velocity(data)
-    #     foot_velocity_xy = foot_velocity[..., :2]
-    #     foot_position = data.site_xpos[self.feet_site_idx]
-    #     foot_height = foot_position[..., -1]
-
-    #     # Calculate velocity of each foot relative to the base
-    #     velocity_xy_sq = jnp.sum(jnp.square(foot_velocity_xy), axis=-1)
-
-    #     # Calculate scale factor to smoothly increase penalty as foot approaches target height
-    #     scale_factor = -target_foot_height / jnp.log(1.0 - decay_rate)
-    #     height_gate = jnp.exp(-foot_height / scale_factor)
-
-    #     return jnp.sum(velocity_xy_sq * height_gate)
 
     def _cost_unwanted_contact(
         self,
@@ -781,7 +1016,7 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
             # kg * m/s * 1/s = m/s^2 = kg * m/s^2 (N).
             force = (
                 u_t  # (unitless)
-                * self.base_link_mass  # kg
+                * self.robot_mass  # kg
                 * state.info["disturbance_magnitude"]  # m/s
                 / state.info["disturbance_duration"]  # 1/s
             )
@@ -825,110 +1060,3 @@ class UnitreeGo2Env(base.UnitreeGo2Env):
             wait,
             state,
         )
-
-    def np_observation(
-        self,
-        mj_data: mujoco.MjData,
-        command: np.ndarray,
-        previous_action: np.ndarray,
-        add_noise: bool = True,
-    ) -> Dict[str, np.ndarray]:
-        # Numpy implementation of the observation function:
-        def rotate(vec: np.ndarray, quat: np.ndarray) -> np.ndarray:
-            if len(vec.shape) != 1:
-                raise ValueError('vec must have no batch dimensions.')
-            s, u = quat[0], quat[1:]
-            r = 2 * (np.dot(u, vec) * u) + (s * s - np.dot(u, u)) * vec
-            r = r + 2 * s * np.cross(u, vec)
-            return r
-
-        def quat_inv(q: np.ndarray) -> np.ndarray:
-            return q * np.array([1, -1, -1, -1])
-
-        base_w = mj_data.qpos[3:7]
-        q = mj_data.qpos[7:]
-        qd = mj_data.qvel[6:]
-
-        gyroscope = self.get_gyro(mj_data)
-
-        inverse_trunk_rotation = quat_inv(base_w)
-        projected_gravity = rotate(
-            np.array([0, 0, -1]), inverse_trunk_rotation,
-        )
-
-        if add_noise:
-            gyroscope = gyroscope + np.random.uniform(
-                low=-self.noise_config.gyroscope,
-                high=self.noise_config.gyroscope,
-                size=gyroscope.shape,
-            )
-            projected_gravity = projected_gravity + np.random.uniform(
-                low=-self.noise_config.gravity_vector,
-                high=self.noise_config.gravity_vector,
-                size=projected_gravity.shape,
-            )
-            q = q + np.random.uniform(
-                low=-self.noise_config.joint_position,
-                high=self.noise_config.joint_position,
-                size=q.shape,
-            )
-            qd = qd + np.random.uniform(
-                low=-self.noise_config.joint_velocity,
-                high=self.noise_config.joint_velocity,
-                size=qd.shape,
-            )
-
-        observation = np.concatenate([
-            gyroscope,
-            projected_gravity,
-            q - self.default_ctrl,
-            qd,
-            previous_action,
-            command,
-        ])
-
-        return {
-            'state': observation,
-            'privileged_state': np.zeros((self.num_privileged_observations,)),
-        }
-
-
-def main(argv=None):
-    env = UnitreeGo2Env()
-    rng = jax.random.PRNGKey(0)
-
-    reset_fn = jax.jit(env.reset)
-    step_fn = jax.jit(env.step)
-
-    state = reset_fn(rng)
-
-    num_steps = 100
-    states = []
-    for i in range(num_steps):
-        print(f"Step: {i}")
-        state = step_fn(state, jnp.zeros_like(env.default_ctrl))
-        states.append(state.data)
-
-    html_string = html.render(
-        sys=env.sys.tree_replace({'opt.timestep': env.step_dt}),
-        states=states,
-        height="100vh",
-        colab=False,
-    )
-    html_path = os.path.join(
-        os.path.join(
-            os.path.dirname(
-                os.path.dirname(
-                    os.path.dirname(__file__),
-                ),
-            ),
-        ),
-        "visualization/visualization.html",
-    )
-
-    with open(html_path, "w") as f:
-        f.writelines(html_string)
-
-
-if __name__ == '__main__':
-    app.run(main)

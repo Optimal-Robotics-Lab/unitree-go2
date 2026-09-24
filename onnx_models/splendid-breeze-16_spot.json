@@ -1,0 +1,291 @@
+{
+  "model": {
+    "file": "splendid-breeze-16_spot.onnx",
+    "sha256": "c4959b8c374cd22f1d93fb3885123483b3180eacc5b2ff9b3454e353b6311274",
+    "export_id": "8ddbb699d134d86c37f12b8e34aaba37",
+    "opset": 17
+  },
+  "policy": {
+    "checkpoint": "splendid-breeze-16",
+    "iteration": "latest",
+    "control_timestep_s": 0.02,
+    "control_rate_hz": 50.0,
+    "command_range": {
+      "vx": 1.5,
+      "vy": 1.0,
+      "yaw_rate": 1.2,
+      "note": "velocity commands were sampled uniformly in [-range, +range]; stay inside it"
+    },
+    "settings_source": "EnvironmentConfig defaults (no environment.json)"
+  },
+  "inputs": [
+    {
+      "name": "sensors",
+      "shape": [
+        1,
+        50
+      ],
+      "fields": [
+        {
+          "name": "base_linear_velocity",
+          "size": 3,
+          "unit": "m/s",
+          "note": "body frame, at the body origin",
+          "offset": 0
+        },
+        {
+          "name": "base_angular_velocity",
+          "size": 3,
+          "unit": "rad/s",
+          "note": "body frame",
+          "offset": 3
+        },
+        {
+          "name": "projected_gravity",
+          "size": 3,
+          "unit": "",
+          "note": "body frame unit vector, (0,0,-1) when level",
+          "offset": 6
+        },
+        {
+          "name": "velocity_command",
+          "size": 3,
+          "unit": "m/s, m/s, rad/s",
+          "note": "vx, vy, yaw rate",
+          "offset": 9
+        },
+        {
+          "name": "joint_position",
+          "size": 19,
+          "unit": "rad",
+          "note": "absolute; 12 legs then 7 arm",
+          "offset": 12
+        },
+        {
+          "name": "joint_velocity",
+          "size": 19,
+          "unit": "rad/s",
+          "note": "12 legs then 7 arm",
+          "offset": 31
+        }
+      ]
+    },
+    {
+      "name": "state",
+      "shape": [
+        1,
+        24
+      ],
+      "initial_value": "zeros",
+      "fed_from_output": "next_state",
+      "fields": [
+        {
+          "name": "previous_action",
+          "size": 12,
+          "unit": "",
+          "note": "raw policy output, before any filter",
+          "offset": 0
+        },
+        {
+          "name": "filter_state",
+          "size": 12,
+          "unit": "",
+          "note": "last filtered action",
+          "offset": 12
+        }
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "name": "joint_position_targets",
+      "shape": [
+        1,
+        19
+      ],
+      "fields": [
+        {
+          "name": "leg_position_target",
+          "size": 12,
+          "unit": "rad",
+          "note": "from the policy",
+          "offset": 0
+        },
+        {
+          "name": "arm_position_target",
+          "size": 7,
+          "unit": "rad",
+          "note": "the arm default pose the policy was trained with",
+          "offset": 12
+        }
+      ]
+    },
+    {
+      "name": "next_state",
+      "shape": [
+        1,
+        24
+      ],
+      "feeds_input": "state",
+      "fields": [
+        {
+          "name": "previous_action",
+          "size": 12,
+          "unit": "",
+          "note": "raw policy output, before any filter",
+          "offset": 0
+        },
+        {
+          "name": "filter_state",
+          "size": 12,
+          "unit": "",
+          "note": "last filtered action",
+          "offset": 12
+        }
+      ]
+    }
+  ],
+  "joints": {
+    "names": [
+      "front_left_hip_joint",
+      "front_left_thigh_joint",
+      "front_left_calf_joint",
+      "front_right_hip_joint",
+      "front_right_thigh_joint",
+      "front_right_calf_joint",
+      "rear_left_hip_joint",
+      "rear_left_thigh_joint",
+      "rear_left_calf_joint",
+      "rear_right_hip_joint",
+      "rear_right_thigh_joint",
+      "rear_right_calf_joint",
+      "arm_sh0",
+      "arm_sh1",
+      "arm_el0",
+      "arm_el1",
+      "arm_wr0",
+      "arm_wr1",
+      "arm_f1x"
+    ],
+    "default_pose": [
+      0.0,
+      1.0399999618530273,
+      -1.7999999523162842,
+      0.0,
+      1.0399999618530273,
+      -1.7999999523162842,
+      0.0,
+      1.0399999618530273,
+      -1.7999999523162842,
+      0.0,
+      1.0399999618530273,
+      -1.7999999523162842,
+      0.0,
+      -3.140000104904175,
+      3.059999942779541,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "pd_gains": {
+    "kp": [
+      60.0,
+      34.0,
+      152.0,
+      60.0,
+      34.0,
+      152.0,
+      60.0,
+      34.0,
+      152.0,
+      60.0,
+      34.0,
+      152.0,
+      1020.0,
+      255.0,
+      204.0,
+      102.0,
+      102.0,
+      102.0,
+      16.0
+    ],
+    "kv": [
+      4.6,
+      3.5,
+      5.9,
+      4.6,
+      3.5,
+      5.9,
+      4.6,
+      3.5,
+      5.9,
+      4.6,
+      3.5,
+      5.9,
+      10.199999809265137,
+      15.300000190734863,
+      10.199999809265137,
+      2.0399999618530273,
+      2.0399999618530273,
+      2.0399999618530273,
+      0.3199999928474426
+    ],
+    "note": "position command with zero velocity setpoint: torque = kp*(q_target - q) - kv*qdot"
+  },
+  "baked_into_graph": {
+    "default_pose_subtraction": true,
+    "action_scale": [
+      0.5600000023841858,
+      0.9900000095367432,
+      0.5600000023841858,
+      0.5600000023841858,
+      0.9900000095367432,
+      0.5600000023841858,
+      0.5600000023841858,
+      0.9900000095367432,
+      0.5600000023841858,
+      0.5600000023841858,
+      0.9900000095367432,
+      0.5600000023841858
+    ],
+    "leg_position_limits": {
+      "lower": [
+        -0.785398006439209,
+        -0.8988450169563293,
+        -2.7929000854492188,
+        -0.785398006439209,
+        -0.8988450169563293,
+        -2.7929000854492188,
+        -0.785398006439209,
+        -0.8988450169563293,
+        -2.7929000854492188,
+        -0.785398006439209,
+        -0.8988450169563293,
+        -2.7929000854492188
+      ],
+      "upper": [
+        0.785398006439209,
+        2.2951080799102783,
+        -0.24709999561309814,
+        0.785398006439209,
+        2.2951080799102783,
+        -0.24709999561309814,
+        0.785398006439209,
+        2.2951080799102783,
+        -0.24709999561309814,
+        0.785398006439209,
+        2.2951080799102783,
+        -0.24709999561309814
+      ],
+      "note": "leg targets are clipped to these, as in training"
+    },
+    "action_filter": {
+      "type": "first_order",
+      "cutoff_hz": 8.0,
+      "alpha": 0.501323897571377,
+      "equation": "y[n] = alpha*x[n] + (1-alpha)*y[n-1]"
+    }
+  }
+}
