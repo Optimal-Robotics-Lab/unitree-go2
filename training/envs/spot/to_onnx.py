@@ -228,7 +228,7 @@ def build_policy_step(
         previous_action = state[..., :n]
         previous_filtered = state[..., n:2 * n]
 
-        # Rebuild the network's own observation order.
+        # Observation Order:
         parts = [
             linear, angular, gravity, joint_position - default_pose,
             joint_velocity, previous_action, command,
@@ -240,6 +240,8 @@ def build_policy_step(
         action, _ = model.get_actions(
             observation, jax.random.key(0), deterministic=True,
         )
+
+        # State Update
         if filter_alpha is None:
             filtered, next_state = action, action
         else:

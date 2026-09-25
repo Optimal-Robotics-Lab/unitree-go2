@@ -187,7 +187,7 @@ class PolicySpec:
             f'"{self.checkpoint}". Do not edit.',
             '#pragma once', '',
             '#include <array>', '#include <cstddef>', '#include <string_view>', '',
-            'namespace spot_drivers::driver::policy_spec {', '',
+            'namespace spot_drivers::driver::mujoco_spec {', '',
             f'inline constexpr std::string_view onnx_file = "{self.onnx_file}";',
             f'inline constexpr std::string_view onnx_sha256 = "{self.onnx_sha256}";',
             '// Also stored inside the .onnx as metadata key "export_id"; compare at load.',
@@ -225,7 +225,7 @@ class PolicySpec:
             array('policy_default_pose', self.default_pose),
             array('policy_kp', self.kp), array('policy_kv', self.kv),
             '',
-            '}  // namespace spot_drivers::driver::policy_spec', '',
+            '}  // namespace spot_drivers::driver::mujoco_spec', '',
         ]
         return '\n'.join(lines)
 
